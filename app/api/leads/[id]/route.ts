@@ -71,7 +71,7 @@ export async function GET(
       );
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data: lead, error: leadError } = await supabaseAdmin
       .from("leads")
       .select(
         `
@@ -93,8 +93,8 @@ export async function GET(
       .eq("company_id", companyId)
       .single();
 
-    if (error || !data) {
-      console.error("Lead lekérési hiba:", error);
+    if (leadError || !lead) {
+      console.error("Lead lekérési hiba:", leadError);
 
       return NextResponse.json(
         { error: "A lead nem található." },
@@ -102,9 +102,22 @@ export async function GET(
       );
     }
 
+    const { data: settings, error: settingsError } = await supabaseAdmin
+      .from("company_settings")
+      .select("auto_reply_mode")
+      .eq("company_id", companyId)
+      .maybeSingle();
+
+    if (settingsError) {
+      console.error("Company settings lekérési hiba:", settingsError);
+    }
+
     return NextResponse.json({
       success: true,
-      lead: data,
+      lead,
+      settings: {
+        auto_reply_mode: settings?.auto_reply_mode || "manual",
+      },
     });
   } catch (error) {
     console.error("Lead API hiba:", error);
