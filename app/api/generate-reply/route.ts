@@ -1,25 +1,58 @@
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SECRET_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  }
+);
+
+async function isAuthorized(request: Request) {
+  const apiSecret = process.env.MAKE_API_SECRET;
+  const receivedSecret = request.headers.get("x-leadflow-secret");
+
+  // 1. Make.com hitelesítés
+  if (apiSecret && receivedSecret === apiSecret) {
+    return true;
+  }
+
+  // 2. LeadFlow bejelentkezett felhasználó hitelesítés
+  const authorization = request.headers.get("authorization");
+
+  if (!authorization?.startsWith("Bearer ")) {
+    return false;
+  }
+
+  const accessToken = authorization.slice(7);
+
+  const {
+    data: { user },
+    error,
+  } = await supabaseAdmin.auth.getUser(accessToken);
+
+  if (error || !user) {
+    return false;
+  }
+
+  return true;
+}
+
 export async function POST(request: Request) {
   try {
-    const apiSecret = process.env.MAKE_API_SECRET;
-    const receivedSecret = request.headers.get("x-leadflow-secret");
+    const authorized = await isAuthorized(request);
 
-    if (!apiSecret) {
-      console.error("MAKE_API_SECRET nincs beállítva.");
-
-      return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
-      );
-    }
-
-    if (!receivedSecret || receivedSecret !== apiSecret) {
+    if (!authorized) {
       return NextResponse.json(
         { error: "Nincs jogosultság." },
         { status: 401 }
