@@ -13,28 +13,42 @@ const supabaseAdmin = createClient(
   }
 );
 
+function isAuthorized(request: Request) {
+  const apiSecret = process.env.MAKE_API_SECRET;
+  const receivedSecret = request.headers.get("x-leadflow-secret");
+
+  if (!apiSecret) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Szerver konfigurációs hiba." },
+        { status: 500 }
+      ),
+    };
+  }
+
+  if (!receivedSecret || receivedSecret !== apiSecret) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Nincs jogosultság." },
+        { status: 401 }
+      ),
+    };
+  }
+
+  return { ok: true };
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const apiSecret = process.env.MAKE_API_SECRET;
-    const receivedSecret = request.headers.get("x-leadflow-secret");
+    const auth = isAuthorized(request);
 
-    if (!apiSecret) {
-      console.error("MAKE_API_SECRET nincs beállítva.");
-
-      return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
-      );
-    }
-
-    if (!receivedSecret || receivedSecret !== apiSecret) {
-      return NextResponse.json(
-        { error: "Nincs jogosultság." },
-        { status: 401 }
-      );
+    if (!auth.ok) {
+      return auth.response;
     }
 
     const companyId = process.env.LEADFLOW_COMPANY_ID;
@@ -97,6 +111,79 @@ export async function GET(
 
     return NextResponse.json(
       { error: "Hiba történt a lead lekérése közben." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = isAuthorized(request);
+
+    if (!auth.ok) {
+      return auth.response;
+    }
+
+    const companyId = process.env.LEADFLOW_COMPANY_ID;
+
+    if (!companyId) {
+      console.error("LEADFLOW_COMPANY_ID nincs beállítva.");
+
+      return NextResponse.json(
+        { error: "Szerver konfigurációs hiba." },
+        { status: 500 }
+      );
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { status } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Hiányzó lead azonosító." },
+        { status: 400 }
+      );
+    }
+
+    if (!status?.trim()) {
+      return NextResponse.json(
+        { error: "Hiányzó státusz." },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("leads")
+      .update({
+        status: status.trim(),
+      })
+      .eq("id", id)
+      .eq("company_id", companyId)
+      .select("id, status")
+      .single();
+
+    if (error || !data) {
+      console.error("Lead státusz frissítési hiba:", error);
+
+      return NextResponse.json(
+        { error: "Nem sikerült frissíteni a lead státuszát." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      lead: data,
+    });
+  } catch (error) {
+    console.error("Lead PATCH API hiba:", error);
+
+    return NextResponse.json(
+      { error: "Hiba történt a lead frissítése közben." },
       { status: 500 }
     );
   }
