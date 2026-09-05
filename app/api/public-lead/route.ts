@@ -1,3 +1,4 @@
+```ts
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -80,6 +81,37 @@ export async function POST(request: Request) {
       );
     }
 
+    const webhookUrl = process.env.MAKE_NEW_LEAD_WEBHOOK_URL;
+
+    if (webhookUrl) {
+      try {
+        const webhookResponse = await fetch(webhookUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            event: "lead.created",
+            lead_id: data.id,
+            company_id: companyId,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+
+        if (!webhookResponse.ok) {
+          console.error(
+            "Make webhook HTTP hiba:",
+            webhookResponse.status,
+            webhookResponse.statusText
+          );
+        }
+      } catch (webhookError) {
+        console.error("Make webhook hiba:", webhookError);
+      }
+    } else {
+      console.warn("MAKE_NEW_LEAD_WEBHOOK_URL nincs beállítva.");
+    }
+
     return NextResponse.json({
       success: true,
       leadId: data.id,
@@ -93,3 +125,4 @@ export async function POST(request: Request) {
     );
   }
 }
+```
