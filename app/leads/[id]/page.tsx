@@ -17,6 +17,10 @@ type Lead = {
   status: string | null;
   source: string | null;
   ai_summary: string | null;
+  ai_safe_to_send: boolean | null;
+  ai_requires_human_review: boolean | null;
+  ai_risk_level: string | null;
+  ai_risk_reason: string | null;
 };
 
 type Message = {
@@ -84,7 +88,24 @@ export default function LeadDetailsPage() {
       const { data, error } = await supabase
         .from("leads")
         .select(
-          "id, company_id, name, email, phone, service, description, location, priority, status, source, ai_summary"
+          `
+          id,
+          company_id,
+          name,
+          email,
+          phone,
+          service,
+          description,
+          location,
+          priority,
+          status,
+          source,
+          ai_summary,
+          ai_safe_to_send,
+          ai_requires_human_review,
+          ai_risk_level,
+          ai_risk_reason
+          `
         )
         .eq("id", leadId)
         .single();
@@ -219,8 +240,7 @@ export default function LeadDetailsPage() {
         throw new Error(data.error || "Az AI-feldolgozás sikertelen.");
       }
 
-      const result =
-        data.result || "Az AI nem adott vissza eredményt.";
+      const result = data.result || "Az AI nem adott vissza eredményt.";
 
       const { error: saveAiError } = await supabase
         .from("leads")
@@ -272,9 +292,9 @@ export default function LeadDetailsPage() {
       } = await supabase.auth.getSession();
 
       if (!session) {
-       throw new Error("A felhasználói munkamenet nem érhető el.");
+        throw new Error("A felhasználói munkamenet nem érhető el.");
       }
-      
+
       const response = await fetch("/api/generate-reply", {
         method: "POST",
         headers: {
@@ -390,9 +410,7 @@ export default function LeadDetailsPage() {
     } catch (error) {
       console.error("Piszkozat mentési hiba:", error);
 
-      setDraftSaveError(
-        "Nem sikerült elmenteni a választervezetet."
-      );
+      setDraftSaveError("Nem sikerült elmenteni a választervezetet.");
     } finally {
       setDraftSaving(false);
     }
@@ -475,6 +493,30 @@ export default function LeadDetailsPage() {
     return channel || "—";
   }
 
+  function getRiskLevelLabel(riskLevel: string | null) {
+    if (riskLevel === "low") return "Alacsony";
+    if (riskLevel === "medium") return "Közepes";
+    if (riskLevel === "high") return "Magas";
+
+    return riskLevel || "Nincs értékelés";
+  }
+
+  function getRiskLevelClasses(riskLevel: string | null) {
+    if (riskLevel === "low") {
+      return "border-emerald-200 bg-emerald-50 text-emerald-800";
+    }
+
+    if (riskLevel === "medium") {
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    }
+
+    if (riskLevel === "high") {
+      return "border-red-200 bg-red-50 text-red-800";
+    }
+
+    return "border-slate-200 bg-slate-50 text-slate-700";
+  }
+
   function formatMessageDate(date: string) {
     return new Intl.DateTimeFormat("hu-HU", {
       year: "numeric",
@@ -513,6 +555,12 @@ export default function LeadDetailsPage() {
       </main>
     );
   }
+
+  const hasRiskEvaluation =
+    lead.ai_safe_to_send !== null ||
+    lead.ai_requires_human_review !== null ||
+    Boolean(lead.ai_risk_level) ||
+    Boolean(lead.ai_risk_reason);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -715,7 +763,6 @@ export default function LeadDetailsPage() {
                         <p className="mt-3 text-xs leading-5 text-slate-500">
                           Az „Elküldöttnek jelölés” jelenleg csak a LeadFlow
                           rendszerben rögzíti az üzenetet elküldöttként.
-                          Valódi e-mailt még nem küld.
                         </p>
                       </>
                     )}
@@ -827,6 +874,9 @@ export default function LeadDetailsPage() {
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     >
                       <option value="new">Új</option>
+                      <option value="contacted">
+                        Kapcsolatfelvétel megtörtént
+                      </option>
                       <option value="waiting">Válaszra vár</option>
                       <option value="processed">Feldolgozott</option>
                     </select>
@@ -862,6 +912,103 @@ export default function LeadDetailsPage() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-bold text-slate-900">
+                  AI biztonsági döntés
+                </h2>
+
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  A rendszer értékeli, hogy az AI-válasz emberi ellenőrzés
+                  nélkül elküldhető-e.
+                </p>
+
+                {!hasRiskEvaluation ? (
+                  <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                    Ehhez az érdeklődőhöz még nincs AI kockázati értékelés.
+                  </div>
+                ) : (
+                  <div className="mt-5 space-y-4">
+                    <div
+                      className={`rounded-xl border p-4 ${
+                        lead.ai_requires_human_review
+                          ? "border-amber-200 bg-amber-50"
+                          : "border-emerald-200 bg-emerald-50"
+                      }`}
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        AI döntés
+                      </div>
+
+                      <div
+                        className={`mt-1 font-bold ${
+                          lead.ai_requires_human_review
+                            ? "text-amber-800"
+                            : "text-emerald-800"
+                        }`}
+                      >
+                        {lead.ai_requires_human_review
+                          ? "Kézi ellenőrzés szükséges"
+                          : lead.ai_safe_to_send
+                            ? "Automatikusan küldhető"
+                            : "Automatikus küldés nem javasolt"}
+                      </div>
+                    </div>
+
+                    <div
+                      className={`rounded-xl border p-4 ${getRiskLevelClasses(
+                        lead.ai_risk_level
+                      )}`}
+                    >
+                      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">
+                        Kockázati szint
+                      </div>
+
+                      <div className="mt-1 font-bold">
+                        {getRiskLevelLabel(lead.ai_risk_level)}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Indoklás
+                      </div>
+
+                      <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                        {lead.ai_risk_reason || "Nincs megadott indoklás."}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <div className="text-xs text-slate-500">
+                          Válasz biztonságos
+                        </div>
+                        <div className="mt-1 font-semibold text-slate-900">
+                          {lead.ai_safe_to_send === true
+                            ? "Igen"
+                            : lead.ai_safe_to_send === false
+                              ? "Nem"
+                              : "—"}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-slate-50 p-3">
+                        <div className="text-xs text-slate-500">
+                          Emberi döntés kell
+                        </div>
+                        <div className="mt-1 font-semibold text-slate-900">
+                          {lead.ai_requires_human_review === true
+                            ? "Igen"
+                            : lead.ai_requires_human_review === false
+                              ? "Nem"
+                              : "—"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 p-6 text-white shadow-lg">
