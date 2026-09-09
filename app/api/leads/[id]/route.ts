@@ -86,6 +86,10 @@ export async function GET(
         priority,
         status,
         source,
+        ai_safe_to_send,
+        ai_requires_human_review,
+        ai_risk_level,
+        ai_risk_reason,
         created_at
         `
       )
@@ -153,7 +157,6 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { status } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -162,28 +165,73 @@ export async function PATCH(
       );
     }
 
-    if (!status?.trim()) {
+    const updateData: {
+      status?: string;
+      ai_safe_to_send?: boolean;
+      ai_requires_human_review?: boolean;
+      ai_risk_level?: string;
+      ai_risk_reason?: string;
+      updated_at?: string;
+    } = {};
+
+    if (typeof body.status === "string" && body.status.trim()) {
+      updateData.status = body.status.trim();
+    }
+
+    if (typeof body.ai_safe_to_send === "boolean") {
+      updateData.ai_safe_to_send = body.ai_safe_to_send;
+    }
+
+    if (typeof body.ai_requires_human_review === "boolean") {
+      updateData.ai_requires_human_review =
+        body.ai_requires_human_review;
+    }
+
+    if (
+      typeof body.ai_risk_level === "string" &&
+      body.ai_risk_level.trim()
+    ) {
+      updateData.ai_risk_level = body.ai_risk_level.trim();
+    }
+
+    if (
+      typeof body.ai_risk_reason === "string" &&
+      body.ai_risk_reason.trim()
+    ) {
+      updateData.ai_risk_reason = body.ai_risk_reason.trim();
+    }
+
+    if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
-        { error: "Hiányzó státusz." },
+        { error: "Nincs frissíthető adat megadva." },
         { status: 400 }
       );
     }
 
+    updateData.updated_at = new Date().toISOString();
+
     const { data, error } = await supabaseAdmin
       .from("leads")
-      .update({
-        status: status.trim(),
-      })
+      .update(updateData)
       .eq("id", id)
       .eq("company_id", companyId)
-      .select("id, status")
+      .select(
+        `
+        id,
+        status,
+        ai_safe_to_send,
+        ai_requires_human_review,
+        ai_risk_level,
+        ai_risk_reason
+        `
+      )
       .single();
 
     if (error || !data) {
-      console.error("Lead státusz frissítési hiba:", error);
+      console.error("Lead frissítési hiba:", error);
 
       return NextResponse.json(
-        { error: "Nem sikerült frissíteni a lead státuszát." },
+        { error: "Nem sikerült frissíteni a lead adatait." },
         { status: 500 }
       );
     }
