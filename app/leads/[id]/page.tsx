@@ -416,49 +416,54 @@ export default function LeadDetailsPage() {
     }
   }
 
-  async function handleMarkAsSent() {
-    if (!draftMessageId) return;
+async function handleMarkAsSent() {
+  if (!draftMessageId) return;
 
-    setMarkingSent(true);
-    setMarkSentError("");
-    setDraftSaveSuccess(false);
+  setMarkingSent(true);
+  setMarkSentError("");
+  setDraftSaveSuccess(false);
 
-    try {
-      const { error } = await supabase
-        .from("messages")
-        .update({
-          status: "sent",
-          content: replyDraft,
-        })
-        .eq("id", draftMessageId);
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      if (error) {
-        throw error;
-      }
-
-      setMessageStatus("sent");
-
-      setMessageHistory((current) =>
-        current.map((message) =>
-          message.id === draftMessageId
-            ? {
-                ...message,
-                status: "sent",
-                content: replyDraft,
-              }
-            : message
-        )
-      );
-    } catch (error) {
-      console.error("Elküldöttnek jelölési hiba:", error);
-
-      setMarkSentError(
-        "Nem sikerült elküldöttnek jelölni az üzenetet."
-      );
-    } finally {
-      setMarkingSent(false);
+    if (!session) {
+      throw new Error("A felhasználói munkamenet nem érhető el.");
     }
+
+    const response = await fetch("/api/send-approved-reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        message_id: draftMessageId,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Nem sikerült elindítani az e-mail küldést."
+      );
+    }
+
+    setMessageStatus("sending");
+  } catch (error) {
+    console.error("E-mail küldési hiba:", error);
+
+    setMarkSentError(
+      error instanceof Error
+        ? error.message
+        : "Nem sikerült elindítani az e-mail küldést."
+    );
+  } finally {
+    setMarkingSent(false);
   }
+}
 
   function getSourceLabel(source: string | null) {
     if (source === "manual") return "Kézi felvétel";
