@@ -52,10 +52,21 @@ export async function POST(request: Request) {
       model: "gpt-5-mini",
 
       input: `
-Feladatod annak eldöntése, hogy egy kisvállalkozás AI által generált
-válasza biztonságosan elküldhető-e automatikusan emberi ellenőrzés nélkül.
+Feladatod egy kisvállalkozás beérkező érdeklődésének és az arra AI által
+generált választervezetnek a biztonsági értékelése.
 
-Érdeklődő:
+Két külön kérdésben kell döntened:
+
+1. SAFE_TO_SEND
+Azt jelenti, hogy maga az elkészült AI-válasz biztonságosan elküldhető-e
+emberi ellenőrzés nélkül.
+
+2. REQUIRES_HUMAN_REVIEW
+Azt jelenti, hogy maga az érdeklődő megkeresése olyan üzleti, pénzügyi,
+műszaki, jogi vagy egyéb döntést igényel-e, amelyet embernek kell
+ellenőriznie akkor is, ha az AI válasza önmagában óvatosan fogalmaz.
+
+Érdeklődő adatai:
 
 Név: ${name || "nincs megadva"}
 E-mail: ${email || "nincs megadva"}
@@ -70,31 +81,64 @@ AI által elkészített válasz:
 
 ${reply}
 
-SAFE_TO_SEND = true csak akkor, ha a válasz alacsony kockázatú,
-udvarias és nem vállal a vállalkozás nevében nem ellenőrzött kötelezettséget.
+SAFE_TO_SEND = false például akkor, ha a válasz:
 
-SAFE_TO_SEND = false többek között akkor, ha:
-
-- konkrét árat, kedvezményt vagy fizetési feltételt ígér;
-- konkrét határidőt, időpontot vagy rendelkezésre állást vállal;
+- konkrét árat, kedvezményt vagy fizetési feltételt talál ki vagy ígér;
+- konkrét határidőt vagy időpontot vállal ellenőrzés nélkül;
 - garanciát vagy műszaki teljesítményt ígér;
 - szerződéses vagy jogi kötelezettséget vállal;
-- reklamációt, vitát, kártérítést vagy visszatérítést kezel;
-- olyan műszaki állítást tesz, amelyet a rendelkezésre álló adatok nem támasztanak alá;
-- hiányzó információt tényként talál ki;
-- bizonytalan vagy ellentmondásos a megkeresés;
-- a válasz elküldése emberi döntést igényel;
-- bármilyen más üzleti kockázatot látsz.
+- nem ismert adatot tényként állít;
+- reklamációban, visszatérítésben vagy kártérítésben dönt;
+- olyan műszaki állítást tesz, amelyet az adatok nem támasztanak alá;
+- bizonytalan, félrevezető vagy szakmailag kockázatos.
 
-Általában biztonságos lehet például:
+SAFE_TO_SEND = true lehet például akkor, ha a válasz:
 
-- a megkeresés megköszönése;
-- további adatok vagy fényképek bekérése;
-- pontosító kérdések;
-- általános kapcsolatfelvételi válasz;
-- olyan válasz, amely nem ígér árat, határidőt vagy konkrét teljesítést.
+- megköszöni a megkeresést;
+- további adatot vagy fényképet kér;
+- pontosító kérdéseket tesz fel;
+- általános tájékoztatást ad;
+- nem talál ki árat, határidőt, garanciát vagy műszaki adatot;
+- nem vállal ellenőrizetlen kötelezettséget.
 
-Legyél konzervatív. Ha bizonytalan vagy, SAFE_TO_SEND legyen false.
+REQUIRES_HUMAN_REVIEW = true például akkor, ha az érdeklődő:
+
+- konkrét árat vagy árajánlatot kér;
+- kedvezményt vagy egyedi fizetési feltételt kér;
+- konkrét gyártási, szállítási vagy kivitelezési határidőt kér;
+- garanciáról vagy jótállásról kér konkrét vállalást;
+- reklamációt tesz;
+- visszatérítést, kártérítést vagy kompenzációt kér;
+- jogi vagy szerződéses kérdést vet fel;
+- konkrét műszaki vállalást vagy méretezési döntést kér;
+- biztonságkritikus műszaki kérdést tesz fel;
+- olyan egyedi döntést kér, amelyhez a vállalkozás jóváhagyása szükséges;
+- a megkeresés ellentmondásos vagy lényeges üzleti kockázatot tartalmaz.
+
+REQUIRES_HUMAN_REVIEW = false lehet például akkor, ha az érdeklődő:
+
+- általánosan érdeklődik egy szolgáltatás iránt;
+- alapinformációkat ad meg;
+- fényképet vagy további adatot tud küldeni;
+- olyan kérdést tesz fel, amely további pontosítással biztonságosan
+  kezelhető üzleti döntés nélkül.
+
+FONTOS:
+
+A SAFE_TO_SEND és a REQUIRES_HUMAN_REVIEW két külön döntés.
+
+Előfordulhat például:
+
+SAFE_TO_SEND = true
+REQUIRES_HUMAN_REVIEW = true
+
+ha az AI válasza helyesen csak további információt kér, de az érdeklődő
+konkrét árat, határidőt vagy garanciális vállalást szeretne.
+
+Safe üzemmódban ilyen esetben NEM szabad automatikusan elküldeni a választ.
+
+Legyél konzervatív.
+Ha bizonytalan vagy, inkább állítsd a REQUIRES_HUMAN_REVIEW értékét true-ra.
       `,
 
       text: {
@@ -108,6 +152,9 @@ Legyél konzervatív. Ha bizonytalan vagy, SAFE_TO_SEND legyen false.
               safe_to_send: {
                 type: "boolean",
               },
+              requires_human_review: {
+                type: "boolean",
+              },
               risk_reason: {
                 type: "string",
               },
@@ -118,6 +165,7 @@ Legyél konzervatív. Ha bizonytalan vagy, SAFE_TO_SEND legyen false.
             },
             required: [
               "safe_to_send",
+              "requires_human_review",
               "risk_reason",
               "risk_level",
             ],
@@ -136,6 +184,7 @@ Legyél konzervatív. Ha bizonytalan vagy, SAFE_TO_SEND legyen false.
     return NextResponse.json({
       success: true,
       safe_to_send: evaluation.safe_to_send,
+      requires_human_review: evaluation.requires_human_review,
       risk_reason: evaluation.risk_reason,
       risk_level: evaluation.risk_level,
     });
