@@ -131,21 +131,22 @@ export default function LeadsPage() {
 
   function getStatusLabel(status: string | null) {
     if (status === "new") return "Új";
+    if (status === "contacted") return "Kapcsolatfelvétel megtörtént";
     if (status === "waiting") return "Válaszra vár";
     if (status === "processed") return "Feldolgozott";
 
-  return "—";
+    return status || "—";
   }
 
-    function getSourceLabel(source: string | null) {
+  function getSourceLabel(source: string | null) {
     if (source === "manual") return "Kézi felvétel";
     if (source === "email") return "E-mail";
     if (source === "web") return "Weboldal";
     if (source === "messenger") return "Messenger";
 
-  return source || "—";
+    return source || "—";
   }
-  
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -159,7 +160,6 @@ export default function LeadsPage() {
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-7xl">
-
         <div className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">
@@ -180,7 +180,6 @@ export default function LeadsPage() {
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-
           {/* ÚJ LEAD */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="mb-6 text-xl font-bold">
@@ -268,7 +267,6 @@ export default function LeadsPage() {
 
           {/* LEAD LISTA */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-
             <div className="border-b border-slate-100 p-6">
               <h2 className="text-xl font-bold">
                 Összes érdeklődő
@@ -285,7 +283,6 @@ export default function LeadsPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="px-6 py-3">
