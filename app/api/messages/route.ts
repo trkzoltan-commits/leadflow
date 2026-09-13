@@ -59,13 +59,30 @@ export async function POST(request: Request) {
       );
     }
 
-    const companyId = process.env.LEADFLOW_COMPANY_ID;
+    /*
+     * A company_id-t nem környezeti változóból vesszük,
+     * hanem a lead saját company_id értékéből.
+     */
+    const { data: lead, error: leadError } = await supabaseAdmin
+      .from("leads")
+      .select("id, company_id")
+      .eq("id", lead_id)
+      .single();
 
-    if (!companyId) {
-      console.error("LEADFLOW_COMPANY_ID nincs beállítva.");
+    if (leadError || !lead) {
+      console.error("Lead lekérési hiba:", leadError);
 
       return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
+        { error: "A lead nem található." },
+        { status: 404 }
+      );
+    }
+
+    if (!lead.company_id) {
+      console.error("A leadhez nem tartozik company_id.");
+
+      return NextResponse.json(
+        { error: "A lead vállalkozása nem azonosítható." },
         { status: 500 }
       );
     }
@@ -73,8 +90,8 @@ export async function POST(request: Request) {
     const { data, error } = await supabaseAdmin
       .from("messages")
       .insert({
-        company_id: companyId,
-        lead_id,
+        company_id: lead.company_id,
+        lead_id: lead.id,
         direction: direction || "outgoing",
         sender: sender || "LeadFlow",
         content: content.trim(),

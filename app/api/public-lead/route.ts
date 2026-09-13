@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const {
+      company_slug,
       name,
       email,
       phone,
@@ -25,6 +26,13 @@ export async function POST(request: Request) {
       description,
       location,
     } = body;
+
+    if (!company_slug?.trim()) {
+      return NextResponse.json(
+        { error: "Hiányzó vállalkozásazonosító." },
+        { status: 400 }
+      );
+    }
 
     if (!name?.trim()) {
       return NextResponse.json(
@@ -43,21 +51,32 @@ export async function POST(request: Request) {
       );
     }
 
-    const companyId = process.env.LEADFLOW_COMPANY_ID;
+    /*
+     * A publikus slug alapján azonosítjuk a vállalkozást.
+     */
+    const { data: company, error: companyError } =
+      await supabaseAdmin
+        .from("companies")
+        .select("id, public_slug")
+        .eq("public_slug", company_slug.trim())
+        .single();
 
-    if (!companyId) {
-      console.error("LEADFLOW_COMPANY_ID nincs beállítva.");
+    if (companyError || !company) {
+      console.error(
+        "Publikus vállalkozás lekérési hiba:",
+        companyError
+      );
 
       return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
+        { error: "A vállalkozás nem található." },
+        { status: 404 }
       );
     }
 
     const { data, error } = await supabaseAdmin
       .from("leads")
       .insert({
-        company_id: companyId,
+        company_id: company.id,
         name: name.trim(),
         email: email?.trim() || null,
         phone: phone?.trim() || null,
@@ -80,7 +99,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const webhookUrl = process.env.MAKE_NEW_LEAD_WEBHOOK_URL;
+    const webhookUrl =
+      process.env.MAKE_NEW_LEAD_WEBHOOK_URL;
 
     if (webhookUrl) {
       try {
@@ -92,7 +112,8 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             event: "lead.created",
             lead_id: data.id,
-            company_id: companyId,
+            company_id: company.id,
+            company_slug: company.public_slug,
             timestamp: new Date().toISOString(),
           }),
         });
@@ -105,10 +126,15 @@ export async function POST(request: Request) {
           );
         }
       } catch (webhookError) {
-        console.error("Make webhook hiba:", webhookError);
+        console.error(
+          "Make webhook hiba:",
+          webhookError
+        );
       }
     } else {
-      console.warn("MAKE_NEW_LEAD_WEBHOOK_URL nincs beállítva.");
+      console.warn(
+        "MAKE_NEW_LEAD_WEBHOOK_URL nincs beállítva."
+      );
     }
 
     return NextResponse.json({
@@ -116,10 +142,16 @@ export async function POST(request: Request) {
       leadId: data.id,
     });
   } catch (error) {
-    console.error("Publikus lead API hiba:", error);
+    console.error(
+      "Publikus lead API hiba:",
+      error
+    );
 
     return NextResponse.json(
-      { error: "Hiba történt az érdeklődés feldolgozása közben." },
+      {
+        error:
+          "Hiba történt az érdeklődés feldolgozása közben.",
+      },
       { status: 500 }
     );
   }

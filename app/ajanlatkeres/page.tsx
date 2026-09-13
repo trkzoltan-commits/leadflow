@@ -28,6 +28,7 @@ export default function AjanlatkeresPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          company_slug: "kovacs-kaputechnika",
           name,
           email,
           phone,
