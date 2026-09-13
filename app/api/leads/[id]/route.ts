@@ -60,10 +60,6 @@ export async function GET(
       );
     }
 
-    /*
-     * A lead saját company_id értékét használjuk.
-     * Nincs többé szükség LEADFLOW_COMPANY_ID környezeti változóra.
-     */
     const { data: lead, error: leadError } = await supabaseAdmin
       .from("leads")
       .select(
