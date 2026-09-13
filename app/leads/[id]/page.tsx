@@ -144,14 +144,31 @@ export default function LeadDetailsPage() {
 
       setMessageHistory(messages);
 
-      const latestOutgoing = [...messages]
-        .reverse()
-        .find((message) => message.direction === "outgoing");
+      const reversedMessages = [...messages].reverse();
 
-      if (latestOutgoing) {
-        setDraftMessageId(latestOutgoing.id);
-        setReplyDraft(latestOutgoing.content ?? "");
-        setMessageStatus(latestOutgoing.status ?? "draft");
+      const latestDraft = reversedMessages.find(
+        (message) =>
+          message.direction === "outgoing" &&
+          message.status === "draft"
+      );
+
+      const latestSending = reversedMessages.find(
+        (message) =>
+          message.direction === "outgoing" &&
+          message.status === "sending"
+      );
+
+      const latestOutgoing = reversedMessages.find(
+        (message) => message.direction === "outgoing"
+      );
+
+      const selectedOutgoing =
+        latestDraft ?? latestSending ?? latestOutgoing;
+
+      if (selectedOutgoing) {
+        setDraftMessageId(selectedOutgoing.id);
+        setReplyDraft(selectedOutgoing.content ?? "");
+        setMessageStatus(selectedOutgoing.status ?? "draft");
       }
 
       setLoading(false);
@@ -240,7 +257,8 @@ export default function LeadDetailsPage() {
         throw new Error(data.error || "Az AI-feldolgozás sikertelen.");
       }
 
-      const result = data.result || "Az AI nem adott vissza eredményt.";
+      const result =
+        data.result || "Az AI nem adott vissza eredményt.";
 
       const { error: saveAiError } = await supabase
         .from("leads")
@@ -292,7 +310,9 @@ export default function LeadDetailsPage() {
       } = await supabase.auth.getSession();
 
       if (!session) {
-        throw new Error("A felhasználói munkamenet nem érhető el.");
+        throw new Error(
+          "A felhasználói munkamenet nem érhető el."
+        );
       }
 
       const response = await fetch("/api/generate-reply", {
@@ -319,15 +339,20 @@ export default function LeadDetailsPage() {
 
       if (!response.ok) {
         throw new Error(
-          data.error || "A választervezet elkészítése sikertelen."
+          data.error ||
+            "A választervezet elkészítése sikertelen."
         );
       }
 
       setReplyDraft(
-        data.reply || "Az AI nem adott vissza választervezetet."
+        data.reply ||
+          "Az AI nem adott vissza választervezetet."
       );
 
-      if (messageStatus === "sent") {
+      if (
+        messageStatus === "sent" ||
+        messageStatus === "sending"
+      ) {
         setDraftMessageId(null);
         setMessageStatus(null);
       }
@@ -347,13 +372,23 @@ export default function LeadDetailsPage() {
   async function handleSaveDraft() {
     if (!lead || !replyDraft.trim()) return;
 
+    if (messageStatus === "sending") {
+      setDraftSaveError(
+        "Küldés közben a válasz már nem módosítható."
+      );
+      return;
+    }
+
     setDraftSaving(true);
     setDraftSaveSuccess(false);
     setDraftSaveError("");
     setMarkSentError("");
 
     try {
-      if (draftMessageId && messageStatus === "draft") {
+      if (
+        draftMessageId &&
+        messageStatus === "draft"
+      ) {
         const { error } = await supabase
           .from("messages")
           .update({
@@ -399,7 +434,10 @@ export default function LeadDetailsPage() {
         setDraftMessageId(data.id);
         setMessageStatus("draft");
 
-        setMessageHistory((current) => [...current, data]);
+        setMessageHistory((current) => [
+          ...current,
+          data,
+        ]);
       }
 
       setDraftSaveSuccess(true);
@@ -410,60 +448,154 @@ export default function LeadDetailsPage() {
     } catch (error) {
       console.error("Piszkozat mentési hiba:", error);
 
-      setDraftSaveError("Nem sikerült elmenteni a választervezetet.");
+      setDraftSaveError(
+        "Nem sikerült elmenteni a választervezetet."
+      );
     } finally {
       setDraftSaving(false);
     }
   }
 
-async function handleMarkAsSent() {
-  if (!draftMessageId) return;
-
-  setMarkingSent(true);
-  setMarkSentError("");
-  setDraftSaveSuccess(false);
-
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      throw new Error("A felhasználói munkamenet nem érhető el.");
-    }
-
-    const response = await fetch("/api/send-approved-reply", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        message_id: draftMessageId,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.error || "Nem sikerült elindítani az e-mail küldést."
+  async function waitForSentStatus(messageId: string) {
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000)
       );
+
+      const { data, error } = await supabase
+        .from("messages")
+        .select("status")
+        .eq("id", messageId)
+        .single();
+
+      if (error) {
+        console.error(
+          "Üzenet státusz ellenőrzési hiba:",
+          error
+        );
+        continue;
+      }
+
+      if (data.status === "sent") {
+        setMessageStatus("sent");
+
+        setMessageHistory((current) =>
+          current.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  status: "sent",
+                }
+              : message
+          )
+        );
+
+        setStatus("contacted");
+
+        setLead((currentLead) =>
+          currentLead
+            ? {
+                ...currentLead,
+                status: "contacted",
+              }
+            : currentLead
+        );
+
+        return;
+      }
+
+      if (data.status === "draft") {
+        setMessageStatus("draft");
+
+        setMessageHistory((current) =>
+          current.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  status: "draft",
+                }
+              : message
+          )
+        );
+
+        setMarkSentError(
+          "Az e-mail küldése nem fejeződött be. A piszkozat újra elküldhető."
+        );
+
+        return;
+      }
     }
-
-    setMessageStatus("sending");
-  } catch (error) {
-    console.error("E-mail küldési hiba:", error);
-
-    setMarkSentError(
-      error instanceof Error
-        ? error.message
-        : "Nem sikerült elindítani az e-mail küldést."
-    );
-  } finally {
-    setMarkingSent(false);
   }
-}
+
+  async function handleMarkAsSent() {
+    if (!draftMessageId) return;
+
+    setMarkingSent(true);
+    setMarkSentError("");
+    setDraftSaveSuccess(false);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error(
+          "A felhasználói munkamenet nem érhető el."
+        );
+      }
+
+      const currentMessageId = draftMessageId;
+
+      const response = await fetch(
+        "/api/send-approved-reply",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            message_id: currentMessageId,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            "Nem sikerült elindítani az e-mail küldést."
+        );
+      }
+
+      setMessageStatus("sending");
+
+      setMessageHistory((current) =>
+        current.map((message) =>
+          message.id === currentMessageId
+            ? {
+                ...message,
+                status: "sending",
+              }
+            : message
+        )
+      );
+
+      await waitForSentStatus(currentMessageId);
+    } catch (error) {
+      console.error("E-mail küldési hiba:", error);
+
+      setMarkSentError(
+        error instanceof Error
+          ? error.message
+          : "Nem sikerült elindítani az e-mail küldést."
+      );
+    } finally {
+      setMarkingSent(false);
+    }
+  }
 
   function getSourceLabel(source: string | null) {
     if (source === "manual") return "Kézi felvétel";
@@ -474,8 +606,12 @@ async function handleMarkAsSent() {
     return source || "—";
   }
 
-  function getMessageStatusLabel(messageStatus: string | null) {
+  function getMessageStatusLabel(
+    messageStatus: string | null
+  ) {
     if (messageStatus === "draft") return "Piszkozat";
+    if (messageStatus === "sending")
+      return "Küldés folyamatban";
     if (messageStatus === "sent") return "Elküldött";
     if (messageStatus === "received") return "Beérkezett";
 
@@ -498,7 +634,9 @@ async function handleMarkAsSent() {
     return channel || "—";
   }
 
-  function getRiskLevelLabel(riskLevel: string | null) {
+  function getRiskLevelLabel(
+    riskLevel: string | null
+  ) {
     if (riskLevel === "low") return "Alacsony";
     if (riskLevel === "medium") return "Közepes";
     if (riskLevel === "high") return "Magas";
@@ -506,7 +644,9 @@ async function handleMarkAsSent() {
     return riskLevel || "Nincs értékelés";
   }
 
-  function getRiskLevelClasses(riskLevel: string | null) {
+  function getRiskLevelClasses(
+    riskLevel: string | null
+  ) {
     if (riskLevel === "low") {
       return "border-emerald-200 bg-emerald-50 text-emerald-800";
     }
@@ -567,6 +707,10 @@ async function handleMarkAsSent() {
     Boolean(lead.ai_risk_level) ||
     Boolean(lead.ai_risk_reason);
 
+  const messageLocked =
+    messageStatus === "sent" ||
+    messageStatus === "sending";
+
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
       <div className="mx-auto max-w-5xl">
@@ -604,7 +748,9 @@ async function handleMarkAsSent() {
                     <input
                       type="text"
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={(e) =>
+                        setName(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                       required
                     />
@@ -618,7 +764,9 @@ async function handleMarkAsSent() {
                     <input
                       type="text"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) =>
+                        setPhone(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </div>
@@ -631,7 +779,9 @@ async function handleMarkAsSent() {
                     <input
                       type="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) =>
+                        setEmail(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </div>
@@ -644,7 +794,9 @@ async function handleMarkAsSent() {
                     <input
                       type="text"
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
+                      onChange={(e) =>
+                        setLocation(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </div>
@@ -665,7 +817,9 @@ async function handleMarkAsSent() {
                     <input
                       type="text"
                       value={service}
-                      onChange={(e) => setService(e.target.value)}
+                      onChange={(e) =>
+                        setService(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </div>
@@ -677,7 +831,9 @@ async function handleMarkAsSent() {
 
                     <textarea
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) =>
+                        setDescription(e.target.value)
+                      }
                       className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     />
                   </div>
@@ -700,14 +856,18 @@ async function handleMarkAsSent() {
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Az AI az érdeklődő adatai és a korábbi elemzés alapján
-                  elkészíti a választervezetet.
+                  Az AI az érdeklődő adatai és a korábbi
+                  elemzés alapján elkészíti a
+                  választervezetet.
                 </p>
 
                 <button
                   type="button"
                   onClick={handleGenerateReply}
-                  disabled={replyLoading}
+                  disabled={
+                    replyLoading ||
+                    messageStatus === "sending"
+                  }
                   className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {replyLoading
@@ -735,16 +895,19 @@ async function handleMarkAsSent() {
                         setReplyDraft(e.target.value);
                         setDraftSaveSuccess(false);
                       }}
-                      disabled={messageStatus === "sent"}
+                      disabled={messageLocked}
                       className="min-h-64 w-full rounded-xl border border-slate-200 px-4 py-3 leading-7 outline-none focus:border-violet-400 disabled:bg-slate-50 disabled:text-slate-600"
                     />
 
-                    {messageStatus !== "sent" && (
+                    {!messageLocked && (
                       <>
                         <button
                           type="button"
                           onClick={handleSaveDraft}
-                          disabled={draftSaving || !replyDraft.trim()}
+                          disabled={
+                            draftSaving ||
+                            !replyDraft.trim()
+                          }
                           className="mt-4 w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {draftSaving
@@ -752,24 +915,34 @@ async function handleMarkAsSent() {
                             : "Piszkozat mentése"}
                         </button>
 
-                        {draftMessageId && messageStatus === "draft" && (
-                          <button
-                            type="button"
-                            onClick={handleMarkAsSent}
-                            disabled={markingSent}
-                            className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {markingSent
-                              ? "Rögzítés..."
-                              : "Elküldöttnek jelölés"}
-                          </button>
-                        )}
+                        {draftMessageId &&
+                          messageStatus === "draft" && (
+                            <button
+                              type="button"
+                              onClick={handleMarkAsSent}
+                              disabled={markingSent}
+                              className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {markingSent
+                                ? "Küldés folyamatban..."
+                                : "Válasz elküldése"}
+                            </button>
+                          )}
 
                         <p className="mt-3 text-xs leading-5 text-slate-500">
-                          Az „Elküldöttnek jelölés” jelenleg csak a LeadFlow
-                          rendszerben rögzíti az üzenetet elküldöttként.
+                          A „Válasz elküldése” gomb
+                          ténylegesen elküldi a jóváhagyott
+                          e-mailt az érdeklődőnek.
                         </p>
                       </>
+                    )}
+
+                    {messageStatus === "sending" && (
+                      <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
+                        Küldés folyamatban… Az üzenetet
+                        jelenleg nem lehet módosítani vagy
+                        újra elküldeni.
+                      </div>
                     )}
 
                     {draftSaveSuccess && (
@@ -792,7 +965,7 @@ async function handleMarkAsSent() {
 
                     {messageStatus === "sent" && (
                       <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                        ✓ Az üzenet elküldöttként van rögzítve.
+                        ✓ Az üzenet sikeresen elküldve.
                       </div>
                     )}
                   </div>
@@ -807,7 +980,8 @@ async function handleMarkAsSent() {
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-500">
-                      Az érdeklődőhöz tartozó korábbi üzenetek.
+                      Az érdeklődőhöz tartozó korábbi
+                      üzenetek.
                     </p>
                   </div>
 
@@ -818,7 +992,8 @@ async function handleMarkAsSent() {
 
                 {messageHistory.length === 0 ? (
                   <div className="mt-6 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    Még nincs mentett kommunikáció ehhez az érdeklődőhöz.
+                    Még nincs mentett kommunikáció ehhez
+                    az érdeklődőhöz.
                   </div>
                 ) : (
                   <div className="mt-6 space-y-4">
@@ -834,20 +1009,28 @@ async function handleMarkAsSent() {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                              {getDirectionLabel(message.direction)}
+                              {getDirectionLabel(
+                                message.direction
+                              )}
                             </span>
 
                             <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                              {getMessageStatusLabel(message.status)}
+                              {getMessageStatusLabel(
+                                message.status
+                              )}
                             </span>
 
                             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
-                              {getChannelLabel(message.channel)}
+                              {getChannelLabel(
+                                message.channel
+                              )}
                             </span>
                           </div>
 
                           <div className="text-xs text-slate-500">
-                            {formatMessageDate(message.created_at)}
+                            {formatMessageDate(
+                              message.created_at
+                            )}
                           </div>
                         </div>
 
@@ -875,15 +1058,24 @@ async function handleMarkAsSent() {
 
                     <select
                       value={status}
-                      onChange={(e) => setStatus(e.target.value)}
+                      onChange={(e) =>
+                        setStatus(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     >
                       <option value="new">Új</option>
+
                       <option value="contacted">
                         Kapcsolatfelvétel megtörtént
                       </option>
-                      <option value="waiting">Válaszra vár</option>
-                      <option value="processed">Feldolgozott</option>
+
+                      <option value="waiting">
+                        Válaszra vár
+                      </option>
+
+                      <option value="processed">
+                        Feldolgozott
+                      </option>
                     </select>
                   </div>
 
@@ -894,12 +1086,20 @@ async function handleMarkAsSent() {
 
                     <select
                       value={priority}
-                      onChange={(e) => setPriority(e.target.value)}
+                      onChange={(e) =>
+                        setPriority(e.target.value)
+                      }
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     >
-                      <option value="low">Alacsony</option>
-                      <option value="medium">Közepes</option>
-                      <option value="high">Magas</option>
+                      <option value="low">
+                        Alacsony
+                      </option>
+                      <option value="medium">
+                        Közepes
+                      </option>
+                      <option value="high">
+                        Magas
+                      </option>
                     </select>
                   </div>
 
@@ -908,7 +1108,9 @@ async function handleMarkAsSent() {
                     disabled={saving}
                     className="w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {saving ? "Mentés..." : "Módosítások mentése"}
+                    {saving
+                      ? "Mentés..."
+                      : "Módosítások mentése"}
                   </button>
 
                   {saveSuccess && (
@@ -925,13 +1127,14 @@ async function handleMarkAsSent() {
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  A rendszer értékeli, hogy az AI-válasz emberi ellenőrzés
-                  nélkül elküldhető-e.
+                  A rendszer értékeli, hogy az AI-válasz
+                  emberi ellenőrzés nélkül elküldhető-e.
                 </p>
 
                 {!hasRiskEvaluation ? (
                   <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-                    Ehhez az érdeklődőhöz még nincs AI kockázati értékelés.
+                    Ehhez az érdeklődőhöz még nincs AI
+                    kockázati értékelés.
                   </div>
                 ) : (
                   <div className="mt-5 space-y-4">
@@ -971,7 +1174,9 @@ async function handleMarkAsSent() {
                       </div>
 
                       <div className="mt-1 font-bold">
-                        {getRiskLevelLabel(lead.ai_risk_level)}
+                        {getRiskLevelLabel(
+                          lead.ai_risk_level
+                        )}
                       </div>
                     </div>
 
@@ -981,7 +1186,8 @@ async function handleMarkAsSent() {
                       </div>
 
                       <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                        {lead.ai_risk_reason || "Nincs megadott indoklás."}
+                        {lead.ai_risk_reason ||
+                          "Nincs megadott indoklás."}
                       </div>
                     </div>
 
@@ -990,10 +1196,12 @@ async function handleMarkAsSent() {
                         <div className="text-xs text-slate-500">
                           Válasz biztonságos
                         </div>
+
                         <div className="mt-1 font-semibold text-slate-900">
                           {lead.ai_safe_to_send === true
                             ? "Igen"
-                            : lead.ai_safe_to_send === false
+                            : lead.ai_safe_to_send ===
+                                false
                               ? "Nem"
                               : "—"}
                         </div>
@@ -1003,10 +1211,13 @@ async function handleMarkAsSent() {
                         <div className="text-xs text-slate-500">
                           Emberi döntés kell
                         </div>
+
                         <div className="mt-1 font-semibold text-slate-900">
-                          {lead.ai_requires_human_review === true
+                          {lead.ai_requires_human_review ===
+                          true
                             ? "Igen"
-                            : lead.ai_requires_human_review === false
+                            : lead.ai_requires_human_review ===
+                                false
                               ? "Nem"
                               : "—"}
                         </div>
@@ -1023,9 +1234,10 @@ async function handleMarkAsSent() {
 
                 {!aiResult && !aiError && (
                   <p className="mt-3 leading-7 text-violet-50">
-                    Az AI elemzi az érdeklődőt, összefoglalja az igényt,
-                    megkeresi a hiányzó információkat és javaslatot ad a
-                    következő lépésre.
+                    Az AI elemzi az érdeklődőt,
+                    összefoglalja az igényt, megkeresi a
+                    hiányzó információkat és javaslatot ad
+                    a következő lépésre.
                   </p>
                 )}
 
