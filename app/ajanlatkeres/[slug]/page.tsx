@@ -126,9 +126,7 @@ export default function AjanlatkeresPage() {
             Az ajánlatkérő oldal nem érhető el
           </h1>
 
-          <p className="mt-4 text-slate-500">
-            {companyError}
-          </p>
+          <p className="mt-4 text-slate-500">{companyError}</p>
         </div>
       </main>
     );
@@ -138,11 +136,11 @@ export default function AjanlatkeresPage() {
     <main className="min-h-screen bg-slate-50 px-6 py-12">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 text-center">
-          <div className="text-sm font-semibold uppercase tracking-wide text-violet-600">
+          <div className="inline-block rounded-2xl bg-sky-50 px-5 py-3 text-xl font-bold tracking-wide text-sky-700 md:text-2xl">
             {companyName}
           </div>
 
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">
+          <h1 className="mt-4 text-3xl font-bold text-slate-900">
             Ajánlatkérés
           </h1>
 
@@ -166,7 +164,7 @@ export default function AjanlatkeresPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
               />
             </div>
 
@@ -180,7 +178,7 @@ export default function AjanlatkeresPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
                 />
               </div>
 
@@ -193,7 +191,7 @@ export default function AjanlatkeresPage() {
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
                 />
               </div>
             </div>
@@ -212,7 +210,7 @@ export default function AjanlatkeresPage() {
                 value={service}
                 onChange={(e) => setService(e.target.value)}
                 placeholder="Pl. tolókapu, kerítés, előtető"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
               />
             </div>
 
@@ -226,7 +224,7 @@ export default function AjanlatkeresPage() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Pl. Székesfehérvár"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
               />
             </div>
 
@@ -239,14 +237,14 @@ export default function AjanlatkeresPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Írd le röviden az igényt..."
-                className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Küldés..." : "Ajánlatkérés elküldése"}
             </button>
