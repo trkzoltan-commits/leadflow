@@ -180,7 +180,7 @@ export default function AjanlatkeresPage() {
       <img
         src={company.logo_url}
         alt={`${company.name} logó`}
-        className="h-20 w-20 rounded-xl object-contain sm:h-24 sm:w-24"
+        className="h-25 w-25 rounded-xl object-contain sm:h-24 sm:w-24"
       />
     )}
 
