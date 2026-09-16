@@ -30,7 +30,20 @@ export async function GET(
     const { data: company, error } = await supabaseAdmin
       .from("companies")
       .select(
-        "name, public_slug, logo_url, brand_primary, brand_secondary"
+        `
+        name, 
+        public_slug, 
+        logo_url, 
+        brand_primary, 
+        brand_secondary,
+        branding_mode,
+        logo_size,
+        logo_position,
+        logo_alignment,
+        show_company_name,
+        company_name_size,
+        company_name_weight
+        `
         )
       .eq("public_slug", slug.trim())
       .single();
@@ -52,6 +65,13 @@ export async function GET(
         logo_url: company.logo_url,
         brand_primary: company.brand_primary,
         brand_secondary: company.brand_secondary,
+        branding_mode: company.branding_mode,
+        logo_size: company.logo_size,
+        logo_position: company.logo_position,
+        logo_alignment: company.logo_alignment,
+        show_company_name: company.show_company_name,
+        company_name_size: company.company_name_size,
+        company_name_weight: company.company_name_weight,
       },
     });
   } catch (error) {

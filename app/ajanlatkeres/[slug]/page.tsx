@@ -9,6 +9,13 @@ type PublicCompany = {
   logo_url: string | null;
   brand_primary: string | null;
   brand_secondary: string | null;
+  branding_mode: "logo_and_name" | "combined_image" | null;
+  logo_size: number | null;
+  logo_position: "left" | "top" | "right" | null;
+  logo_alignment: "left" | "center" | "right" | null;
+  show_company_name: boolean | null;
+  company_name_size: number | null;
+  company_name_weight: number | null;
 };
 
 const DEFAULT_PRIMARY = "#5FA8D3";
@@ -163,6 +170,44 @@ export default function AjanlatkeresPage() {
     DEFAULT_SECONDARY
   );
 
+  const brandingMode =
+    company.branding_mode || "logo_and_name";
+
+  const logoSize = company.logo_size || 96;
+
+  const logoPosition =
+    company.logo_position || "left";
+
+  const logoAlignment =
+    company.logo_alignment || "center";
+
+  const showCompanyName =
+    company.show_company_name ?? true;
+
+  const companyNameSize =
+    company.company_name_size || 32;
+
+  const companyNameWeight =
+    company.company_name_weight || 700;
+
+  const alignmentClass =
+    logoAlignment === "left"
+      ? "justify-start"
+      : logoAlignment === "right"
+        ? "justify-end"
+        : "justify-center";
+
+  const brandingDirectionClass =
+    logoPosition === "top"
+      ? "flex-col"
+      : logoPosition === "right"
+        ? "flex-col sm:flex-row-reverse"
+        : "flex-col sm:flex-row";
+
+  const displayCompanyName =
+    brandingMode !== "combined_image" &&
+    showCompanyName;
+
   return (
     <main
       className="min-h-screen px-6 py-12"
@@ -172,37 +217,53 @@ export default function AjanlatkeresPage() {
     >
       <div className="mx-auto max-w-2xl">
 
-        {/* CÉGES FEJLÉC */}
-        <div className="mb-8 text-center">
-  <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-5">
+        {/* CÉGES BRANDING */}
+        <div className="mb-8">
+          <div
+            className={`flex ${alignmentClass}`}
+          >
+            <div
+              className={`flex items-center gap-5 ${brandingDirectionClass}`}
+            >
+              {company.logo_url && (
+                <img
+                  src={company.logo_url}
+                  alt={`${company.name} logó`}
+                  className="shrink-0 object-contain"
+                  style={{
+                    width: `${logoSize}px`,
+                    maxHeight: `${logoSize}px`,
+                  }}
+                />
+              )}
 
-    {company.logo_url && (
-      <img
-        src={company.logo_url}
-        alt={`${company.name} logó`}
-        className="h-25 w-25 rounded-xl object-contain sm:h-24 sm:w-24"
-      />
-    )}
+              {displayCompanyName && (
+                <div
+                  className="rounded-2xl px-6 py-3 tracking-wide"
+                  style={{
+                    color: primaryColor,
+                    backgroundColor: secondaryColor,
+                    fontSize: `${companyNameSize}px`,
+                    fontWeight: companyNameWeight,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {company.name}
+                </div>
+              )}
+            </div>
+          </div>
 
-    <div
-      className="rounded-2xl px-6 py-3 text-2xl font-bold tracking-wide md:text-3xl"
-      style={{
-        color: primaryColor,
-        backgroundColor: secondaryColor,
-      }}
-    >
-      {company.name}
-    </div>
-  </div>
+          <div className="mt-6 text-center">
+            <h1 className="text-3xl font-bold text-slate-900">
+              Ajánlatkérés
+            </h1>
 
-  <h1 className="mt-6 text-3xl font-bold text-slate-900">
-    Ajánlatkérés
-  </h1>
-
-  <p className="mt-3 text-slate-500">
-    Írd meg röviden, miben tudunk segíteni.
-  </p>
-</div>
+            <p className="mt-3 text-slate-500">
+              Írd meg röviden, miben tudunk segíteni.
+            </p>
+          </div>
+        </div>
 
         {/* ŰRLAP */}
         <form
