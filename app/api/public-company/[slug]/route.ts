@@ -29,7 +29,9 @@ export async function GET(
 
     const { data: company, error } = await supabaseAdmin
       .from("companies")
-      .select("name, public_slug")
+      .select(
+        "name, public_slug, logo_url, brand_primary, brand_secondary"
+        )
       .eq("public_slug", slug.trim())
       .single();
 
@@ -47,6 +49,9 @@ export async function GET(
       company: {
         name: company.name,
         slug: company.public_slug,
+        logo_url: company.logo_url,
+        brand_primary: company.brand_primary,
+        brand_secondary: company.brand_secondary,
       },
     });
   } catch (error) {

@@ -3,11 +3,30 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
+type PublicCompany = {
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  brand_primary: string | null;
+  brand_secondary: string | null;
+};
+
+const DEFAULT_PRIMARY = "#5FA8D3";
+const DEFAULT_SECONDARY = "#DCEFF8";
+
+function validColor(color: string | null, fallback: string) {
+  if (color && /^#[0-9A-Fa-f]{6}$/.test(color)) {
+    return color;
+  }
+
+  return fallback;
+}
+
 export default function AjanlatkeresPage() {
   const params = useParams();
   const companySlug = params.slug as string;
 
-  const [companyName, setCompanyName] = useState("");
+  const [company, setCompany] = useState<PublicCompany | null>(null);
   const [companyLoading, setCompanyLoading] = useState(true);
   const [companyError, setCompanyError] = useState("");
 
@@ -40,7 +59,7 @@ export default function AjanlatkeresPage() {
           );
         }
 
-        setCompanyName(data.company?.name || "");
+        setCompany(data.company);
       } catch (error) {
         setCompanyError(
           error instanceof Error
@@ -118,7 +137,7 @@ export default function AjanlatkeresPage() {
     );
   }
 
-  if (companyError) {
+  if (companyError || !company) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
         <div className="w-full max-w-xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
@@ -126,21 +145,57 @@ export default function AjanlatkeresPage() {
             Az ajánlatkérő oldal nem érhető el
           </h1>
 
-          <p className="mt-4 text-slate-500">{companyError}</p>
+          <p className="mt-4 text-slate-500">
+            {companyError || "A vállalkozás nem található."}
+          </p>
         </div>
       </main>
     );
   }
 
+  const primaryColor = validColor(
+    company.brand_primary,
+    DEFAULT_PRIMARY
+  );
+
+  const secondaryColor = validColor(
+    company.brand_secondary,
+    DEFAULT_SECONDARY
+  );
+
   return (
-    <main className="min-h-screen bg-slate-50 px-6 py-12">
+    <main
+      className="min-h-screen px-6 py-12"
+      style={{
+        backgroundColor: `${secondaryColor}55`,
+      }}
+    >
       <div className="mx-auto max-w-2xl">
+
+        {/* CÉGES FEJLÉC */}
         <div className="mb-8 text-center">
-          <div className="inline-block rounded-2xl bg-sky-50 px-5 py-3 text-xl font-bold tracking-wide text-sky-700 md:text-2xl">
-            {companyName}
+
+          {company.logo_url && (
+            <div className="mb-5 flex justify-center">
+              <img
+                src={company.logo_url}
+                alt={`${company.name} logó`}
+                className="max-h-24 max-w-[260px] object-contain"
+              />
+            </div>
+          )}
+
+          <div
+            className="inline-block rounded-2xl px-6 py-3 text-2xl font-bold tracking-wide md:text-3xl"
+            style={{
+              color: primaryColor,
+              backgroundColor: secondaryColor,
+            }}
+          >
+            {company.name}
           </div>
 
-          <h1 className="mt-4 text-3xl font-bold text-slate-900">
+          <h1 className="mt-5 text-3xl font-bold text-slate-900">
             Ajánlatkérés
           </h1>
 
@@ -149,6 +204,7 @@ export default function AjanlatkeresPage() {
           </p>
         </div>
 
+        {/* ŰRLAP */}
         <form
           onSubmit={handleSubmit}
           className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8"
@@ -164,7 +220,13 @@ export default function AjanlatkeresPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "";
+                }}
               />
             </div>
 
@@ -178,7 +240,13 @@ export default function AjanlatkeresPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = primaryColor;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "";
+                  }}
                 />
               </div>
 
@@ -191,7 +259,13 @@ export default function AjanlatkeresPage() {
                   type="text"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = primaryColor;
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = "";
+                  }}
                 />
               </div>
             </div>
@@ -210,7 +284,13 @@ export default function AjanlatkeresPage() {
                 value={service}
                 onChange={(e) => setService(e.target.value)}
                 placeholder="Pl. tolókapu, kerítés, előtető"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "";
+                }}
               />
             </div>
 
@@ -224,7 +304,13 @@ export default function AjanlatkeresPage() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Pl. Székesfehérvár"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "";
+                }}
               />
             </div>
 
@@ -237,16 +323,27 @@ export default function AjanlatkeresPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Írd le röviden az igényt..."
-                className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-sky-400"
+                className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = primaryColor;
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "";
+                }}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-sky-600 px-4 py-3 font-semibold text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="w-full rounded-xl px-4 py-3 font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                backgroundColor: primaryColor,
+              }}
             >
-              {loading ? "Küldés..." : "Ajánlatkérés elküldése"}
+              {loading
+                ? "Küldés..."
+                : "Ajánlatkérés elküldése"}
             </button>
 
             {success && (
@@ -262,6 +359,10 @@ export default function AjanlatkeresPage() {
             )}
           </div>
         </form>
+
+        <div className="mt-6 text-center text-xs text-slate-400">
+          Powered by LeadFlow
+        </div>
       </div>
     </main>
   );
