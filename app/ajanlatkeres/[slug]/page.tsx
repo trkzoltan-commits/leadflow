@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 export default function AjanlatkeresPage() {
   const params = useParams();
   const companySlug = params.slug as string;
+
+  const [companyName, setCompanyName] = useState("");
+  const [companyLoading, setCompanyLoading] = useState(true);
+  const [companyError, setCompanyError] = useState("");
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -16,6 +21,41 @@ export default function AjanlatkeresPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadCompany() {
+      try {
+        setCompanyLoading(true);
+        setCompanyError("");
+
+        const response = await fetch(
+          `/api/public-company/${encodeURIComponent(companySlug)}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || "Nem sikerült betölteni a vállalkozás adatait."
+          );
+        }
+
+        setCompanyName(data.company?.name || "");
+      } catch (error) {
+        setCompanyError(
+          error instanceof Error
+            ? error.message
+            : "Ismeretlen hiba történt."
+        );
+      } finally {
+        setCompanyLoading(false);
+      }
+    }
+
+    if (companySlug) {
+      loadCompany();
+    }
+  }, [companySlug]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -68,11 +108,41 @@ export default function AjanlatkeresPage() {
     }
   }
 
+  if (companyLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <div className="text-lg font-semibold text-slate-600">
+          Betöltés...
+        </div>
+      </main>
+    );
+  }
+
+  if (companyError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
+        <div className="w-full max-w-xl rounded-2xl border border-red-100 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-bold text-slate-900">
+            Az ajánlatkérő oldal nem érhető el
+          </h1>
+
+          <p className="mt-4 text-slate-500">
+            {companyError}
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-12">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl font-bold text-slate-900">
+          <div className="text-sm font-semibold uppercase tracking-wide text-violet-600">
+            {companyName}
+          </div>
+
+          <h1 className="mt-2 text-3xl font-bold text-slate-900">
             Ajánlatkérés
           </h1>
 
