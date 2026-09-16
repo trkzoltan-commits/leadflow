@@ -174,35 +174,35 @@ export default function AjanlatkeresPage() {
 
         {/* CÉGES FEJLÉC */}
         <div className="mb-8 text-center">
+  <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-5">
 
-          {company.logo_url && (
-            <div className="mb-5 flex justify-center">
-              <img
-                src={company.logo_url}
-                alt={`${company.name} logó`}
-                className="max-h-24 max-w-[260px] object-contain"
-              />
-            </div>
-          )}
+    {company.logo_url && (
+      <img
+        src={company.logo_url}
+        alt={`${company.name} logó`}
+        className="h-20 w-20 rounded-xl object-contain sm:h-24 sm:w-24"
+      />
+    )}
 
-          <div
-            className="inline-block rounded-2xl px-6 py-3 text-2xl font-bold tracking-wide md:text-3xl"
-            style={{
-              color: primaryColor,
-              backgroundColor: secondaryColor,
-            }}
-          >
-            {company.name}
-          </div>
+    <div
+      className="rounded-2xl px-6 py-3 text-2xl font-bold tracking-wide md:text-3xl"
+      style={{
+        color: primaryColor,
+        backgroundColor: secondaryColor,
+      }}
+    >
+      {company.name}
+    </div>
+  </div>
 
-          <h1 className="mt-5 text-3xl font-bold text-slate-900">
-            Ajánlatkérés
-          </h1>
+  <h1 className="mt-6 text-3xl font-bold text-slate-900">
+    Ajánlatkérés
+  </h1>
 
-          <p className="mt-3 text-slate-500">
-            Írd meg röviden, miben tudunk segíteni.
-          </p>
-        </div>
+  <p className="mt-3 text-slate-500">
+    Írd meg röviden, miben tudunk segíteni.
+  </p>
+</div>
 
         {/* ŰRLAP */}
         <form
