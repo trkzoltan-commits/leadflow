@@ -1,3 +1,4 @@
+import { authenticateMake, scopeMakeQuery } from "@/lib/make-auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -15,24 +16,8 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   try {
-    const apiSecret = process.env.MAKE_API_SECRET;
-    const receivedSecret = request.headers.get("x-leadflow-secret");
-
-    if (!apiSecret) {
-      console.error("MAKE_API_SECRET nincs beállítva.");
-
-      return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
-      );
-    }
-
-    if (!receivedSecret || receivedSecret !== apiSecret) {
-      return NextResponse.json(
-        { error: "Nincs jogosultság." },
-        { status: 401 }
-      );
-    }
+    const auth = await authenticateMake(request);
+    if (!auth.ok) return auth.response;
 
     const body = await request.json();
 
@@ -63,11 +48,10 @@ export async function POST(request: Request) {
      * A company_id-t nem környezeti változóból vesszük,
      * hanem a lead saját company_id értékéből.
      */
-    const { data: lead, error: leadError } = await supabaseAdmin
-      .from("leads")
-      .select("id, company_id")
-      .eq("id", lead_id)
-      .single();
+    const { data: lead, error: leadError } = await scopeMakeQuery(
+      supabaseAdmin.from("leads").select("id, company_id").eq("id", lead_id),
+      auth.companyId
+    ).single();
 
     if (leadError || !lead) {
       console.error("Lead lekérési hiba:", leadError);

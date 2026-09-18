@@ -1,3 +1,4 @@
+import { authenticateMake } from "@/lib/make-auth";
 import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -19,12 +20,9 @@ const supabaseAdmin = createClient(
 );
 
 async function isAuthorized(request: Request) {
-  const apiSecret = process.env.MAKE_API_SECRET;
-  const receivedSecret = request.headers.get("x-leadflow-secret");
-
-  // 1. Make.com hitelesítés
-  if (apiSecret && receivedSecret === apiSecret) {
-    return true;
+  if (request.headers.has("x-leadflow-secret")) {
+    const auth = await authenticateMake(request);
+    return auth.ok;
   }
 
   // 2. LeadFlow bejelentkezett felhasználó hitelesítés

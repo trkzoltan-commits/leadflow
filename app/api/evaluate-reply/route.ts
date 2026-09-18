@@ -1,3 +1,4 @@
+import { authenticateMake } from "@/lib/make-auth";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -7,25 +8,8 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    // Make.com hitelesítés
-    const apiSecret = process.env.MAKE_API_SECRET;
-    const receivedSecret = request.headers.get("x-leadflow-secret");
-
-    if (!apiSecret) {
-      console.error("MAKE_API_SECRET nincs beállítva.");
-
-      return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
-      );
-    }
-
-    if (!receivedSecret || receivedSecret !== apiSecret) {
-      return NextResponse.json(
-        { error: "Nincs jogosultság." },
-        { status: 401 }
-      );
-    }
+    const auth = await authenticateMake(request);
+    if (!auth.ok) return auth.response;
 
     const body = await request.json();
 

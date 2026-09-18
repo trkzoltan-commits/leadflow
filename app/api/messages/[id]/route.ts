@@ -1,3 +1,4 @@
+import { authenticateMake, scopeMakeQuery } from "@/lib/make-auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
@@ -13,39 +14,12 @@ const supabaseAdmin = createClient(
   }
 );
 
-function isAuthorized(request: Request) {
-  const apiSecret = process.env.MAKE_API_SECRET;
-  const receivedSecret = request.headers.get("x-leadflow-secret");
-
-  if (!apiSecret) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
-      ),
-    };
-  }
-
-  if (!receivedSecret || receivedSecret !== apiSecret) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Nincs jogosultság." },
-        { status: 401 }
-      ),
-    };
-  }
-
-  return { ok: true };
-}
-
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = isAuthorized(request);
+    const auth = await authenticateMake(request);
 
     if (!auth.ok) {
       return auth.response;
@@ -77,11 +51,12 @@ export async function PATCH(
      * a saját company_id értékét.
      */
     const { data: existingMessage, error: existingMessageError } =
-      await supabaseAdmin
-        .from("messages")
+      await scopeMakeQuery(
+        supabaseAdmin.from("messages")
         .select("id, company_id")
-        .eq("id", id)
-        .single();
+        .eq("id", id),
+        auth.companyId
+        ).single();
 
     if (existingMessageError || !existingMessage) {
       console.error(
