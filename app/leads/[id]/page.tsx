@@ -233,12 +233,22 @@ export default function LeadDetailsPage() {
     setAiError("");
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error("A felhasználói munkamenet nem érhető el.");
+      }
+
       const response = await fetch("/api/analyze-lead", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
+          lead_id: lead.id,
           name,
           email,
           phone,

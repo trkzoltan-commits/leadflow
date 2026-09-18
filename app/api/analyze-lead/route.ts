@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 const openai = new OpenAI({
@@ -7,7 +8,72 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const authorization = request.headers.get("authorization");
+    const accessToken = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+
+    if (!accessToken) {
+      return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
+    }
+
+    // A felhasználó tokenjével az adatbázis RLS-szabályai is érvényesülnek.
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: { headers: { Authorization: `Bearer ${accessToken}` } },
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      }
+    );
+
+    const { data: { user }, error: userError } =
+      await supabase.auth.getUser(accessToken);
+
+    if (userError || !user) {
+      return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError || !profile?.company_id) {
+      return NextResponse.json(
+        { error: "A felhasználó vállalkozása nem azonosítható." },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json().catch(() => null);
+    if (
+      !body ||
+      typeof body.lead_id !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.lead_id)
+    ) {
+      return NextResponse.json(
+        { error: "Hiányzó vagy érvénytelen lead azonosító." },
+        { status: 400 }
+      );
+    }
+
+    const { data: lead, error: leadError } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("id", body.lead_id)
+      .eq("company_id", profile.company_id)
+      .single();
+
+    if (leadError || !lead) {
+      return NextResponse.json(
+        { error: "A lead nem található." },
+        { status: 404 }
+      );
+    }
 
     const {
       name,
