@@ -52,6 +52,8 @@ export default function LeadDetailsPage() {
   const [replyLoading, setReplyLoading] = useState(false);
   const [replyDraft, setReplyDraft] = useState("");
   const [replyError, setReplyError] = useState("");
+  const [replyDirty, setReplyDirty] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
   const [draftMessageId, setDraftMessageId] = useState<string | null>(null);
   const [messageStatus, setMessageStatus] = useState<string | null>(null);
@@ -146,24 +148,7 @@ export default function LeadDetailsPage() {
 
       const reversedMessages = [...messages].reverse();
 
-      const latestDraft = reversedMessages.find(
-        (message) =>
-          message.direction === "outgoing" &&
-          message.status === "draft"
-      );
-
-      const latestSending = reversedMessages.find(
-        (message) =>
-          message.direction === "outgoing" &&
-          message.status === "sending"
-      );
-
-      const latestOutgoing = reversedMessages.find(
-        (message) => message.direction === "outgoing"
-      );
-
-      const selectedOutgoing =
-        latestDraft ?? latestSending ?? latestOutgoing;
+      const selectedOutgoing = reversedMessages.find(message => message.direction === "outgoing");
 
       if (selectedOutgoing) {
         setDraftMessageId(selectedOutgoing.id);
@@ -176,6 +161,56 @@ export default function LeadDetailsPage() {
 
     initializePage();
   }, [leadId, router]);
+
+  useEffect(() => {
+    if (loading || !lead || saving || draftSaving || replyLoading || aiLoading || markingSent) return;
+    let cancelled = false;
+    let running = false;
+    async function refresh() {
+      if (running || document.hidden) return;
+      running = true;
+      try {
+        const [leadResult, messagesResult] = await Promise.all([
+          supabase.from("leads").select("status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
+          supabase.from("messages").select("id, direction, sender, content, channel, status, created_at").eq("lead_id", leadId).order("created_at", { ascending: true }),
+        ]);
+        if (cancelled) return;
+        if (leadResult.error || messagesResult.error || !leadResult.data) {
+          setSyncError(true);
+          return;
+        }
+        setSyncError(false);
+        const fresh = leadResult.data;
+        setStatus(current => current === lead!.status ? fresh.status : current);
+        setLead(current => current ? { ...current, ...fresh } : current);
+        setAiResult(fresh.ai_summary ?? "");
+        const messages = messagesResult.data ?? [];
+        setMessageHistory(messages);
+        const outgoing = [...messages].reverse().filter(message => message.direction === "outgoing");
+        const selected = replyDirty
+          ? outgoing.find(message => message.id === draftMessageId)
+          : outgoing[0];
+        if (selected) {
+          // Preserve unsaved text, but still reflect a send completed elsewhere.
+          if (!replyDirty) {
+            setDraftMessageId(selected.id);
+            setReplyDraft(selected.content ?? "");
+          }
+          if (!replyDirty || selected.id === draftMessageId) setMessageStatus(selected.status);
+          if (selected.status === "sent") setMarkSentError("");
+        }
+      } catch {
+        if (!cancelled) setSyncError(true);
+      } finally { running = false; }
+    }
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, markingSent]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -354,6 +389,7 @@ export default function LeadDetailsPage() {
         );
       }
 
+      setReplyDirty(true);
       setReplyDraft(
         data.reply ||
           "Az AI nem adott vissza választervezetet."
@@ -450,6 +486,7 @@ export default function LeadDetailsPage() {
         ]);
       }
 
+      setReplyDirty(false);
       setDraftSaveSuccess(true);
 
       setTimeout(() => {
@@ -466,80 +503,8 @@ export default function LeadDetailsPage() {
     }
   }
 
-  async function waitForSentStatus(messageId: string) {
-    for (let attempt = 0; attempt < 15; attempt += 1) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1000)
-      );
-
-      const { data, error } = await supabase
-        .from("messages")
-        .select("status")
-        .eq("id", messageId)
-        .single();
-
-      if (error) {
-        console.error(
-          "Üzenet státusz ellenőrzési hiba:",
-          error
-        );
-        continue;
-      }
-
-      if (data.status === "sent") {
-        setMessageStatus("sent");
-
-        setMessageHistory((current) =>
-          current.map((message) =>
-            message.id === messageId
-              ? {
-                  ...message,
-                  status: "sent",
-                }
-              : message
-          )
-        );
-
-        setStatus("contacted");
-
-        setLead((currentLead) =>
-          currentLead
-            ? {
-                ...currentLead,
-                status: "contacted",
-              }
-            : currentLead
-        );
-
-        return;
-      }
-
-      if (data.status === "draft") {
-        setMessageStatus("draft");
-
-        setMessageHistory((current) =>
-          current.map((message) =>
-            message.id === messageId
-              ? {
-                  ...message,
-                  status: "draft",
-                }
-              : message
-          )
-        );
-
-        setMarkSentError(
-          "Az e-mail küldése nem fejeződött be. A piszkozat újra elküldhető."
-        );
-
-        return;
-      }
-    }
-    setMarkSentError("A küldés visszaigazolására várunk. Az újraküldés zárolva van. Frissítsd az adatlapot a későbbi állapot megtekintéséhez.");
-  }
-
   async function handleMarkAsSent() {
-    if (!draftMessageId) return;
+    if (!draftMessageId || replyDirty || markingSent) return;
 
     setMarkingSent(true);
     setMarkSentError("");
@@ -594,7 +559,7 @@ export default function LeadDetailsPage() {
         )
       );
 
-      await waitForSentStatus(currentMessageId);
+      // Background refresh keeps following the persisted status.
     } catch (error) {
       // A lost browser response may follow an accepted send request.
       setMessageStatus("sending");
@@ -749,6 +714,19 @@ export default function LeadDetailsPage() {
           </p>
         </div>
 
+        <section aria-label="Aktuális állapot" className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Következő lépés</p>
+          <h2 role="status" className="mt-2 text-xl font-bold text-slate-900">
+            {messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            {messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" ? "Az üzenet elküldöttként van visszaigazolva. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
+          </p>
+          <a href="#reply" className="mt-4 inline-flex rounded-xl bg-violet-600 px-4 py-2 font-semibold text-white">{messageStatus === "sent" ? "Elküldött válasz megtekintése" : "Ugrás a válaszhoz"}</a>
+          <p className={syncError ? "mt-3 text-sm text-amber-700" : "mt-3 text-xs text-slate-500"} role="status">
+            {syncError ? "Az automatikus frissítés átmenetileg nem érhető el. Újrapróbáljuk; a szerkesztett szöveg megmarad." : "Az állapot és az üzenetek 5 másodpercenként automatikusan frissülnek."}
+          </p>
+        </section>
         <form onSubmit={handleSave}>
           <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
             <div className="space-y-6">
@@ -868,9 +846,9 @@ export default function LeadDetailsPage() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div id="reply" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-bold text-slate-900">
-                  AI választervezet
+                  Válasz az érdeklődőnek
                 </h2>
 
                 <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -903,6 +881,7 @@ export default function LeadDetailsPage() {
 
                 {replyDraft && (
                   <div className="mt-5">
+                    <p className="mb-3 text-sm text-slate-600">Címzett: {lead.email || "Nincs e-mail-cím megadva"}{replyDirty ? " · Nem mentett módosítás" : ""}</p>
                     <label className="mb-2 block text-sm font-medium text-slate-700">
                       Válasz
                     </label>
@@ -910,6 +889,7 @@ export default function LeadDetailsPage() {
                     <textarea
                       value={replyDraft}
                       onChange={(e) => {
+                        setReplyDirty(true);
                         setReplyDraft(e.target.value);
                         setDraftSaveSuccess(false);
                       }}
@@ -938,7 +918,7 @@ export default function LeadDetailsPage() {
                             <button
                               type="button"
                               onClick={handleMarkAsSent}
-                              disabled={markingSent}
+                              disabled={markingSent || replyDirty || draftSaving}
                               className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               {markingSent
@@ -959,7 +939,7 @@ export default function LeadDetailsPage() {
                       <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
                         A küldés visszaigazolására várunk. Az üzenetet
                         jelenleg nem lehet módosítani vagy újra elküldeni.
-                        Frissítsd az adatlapot a későbbi állapot megtekintéséhez.
+                        Az állapot automatikusan frissül.
                       </div>
                     )}
 
