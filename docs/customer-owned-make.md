@@ -29,12 +29,30 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 
 ## Még hátravan
 
-- Cégenkénti kimenő webhookcím, kulcskiadás és onboarding.
+- Cégenkénti kulcskiadás és onboarding.
 - Gmail-piszkozat azonosító, küldési napló és atomikus küldésfoglalás a Make előtt.
 - Automatikus státuszegyeztetés és biztonságos retry.
 - Az eredeti küldési bizonytalanság javítása: a draft-visszaállítás még megvan.
 
-A kimenő webhookok jelenleg közös környezeti beállítást használnak. Ezzel az első
-egységgel még nem szabad ügyfél saját Make-fiókját élesben bekötni.
+## Második egység: kimenő webhookok
+
+A `company_make_connections` táblát csak a szerver olvashatja. A két esemény külön
+webhookcímet kap: `new_lead_webhook_url` és `approved_reply_webhook_url`.
+`mode=company` esetén kizárólag a cég saját címe használható; hiányzó, letiltott,
+hibás rekord vagy adatbázishiba nem válthat vissza közös webhookra.
+Az új érdeklődő ilyenkor továbbra is elmentődik, a webhook nem fut le; tartós retry
+és üzemeltetői hibajelzés még nincs. Jóváhagyott küldésnél 503 válasz érkezik,
+még a draft lefoglalása előtt.
+
+A `202609190001_company_make_connections.sql` migráció a már meglévő cégekhez
+explicit `legacy` rekordot készít a pilot folytonossága érdekében. Új céget nem
+kapcsol automatikusan közös Make-fiókhoz. A migrációt a kód telepítése előtt kell
+alkalmazni. A jelenlegi webhookoknak `https://hook.eu1.make.com/…`, eu2, us1 vagy
+us2 címeknek kell lenniük; az ellenőrzést titkok kiírása nélkül kell elvégezni.
+Átirányítást nem követünk, a webhookcímet nem szabad naplózni.
+
+Ügyfél bekötése előtt a saját Make-kulcsot és mindkét scenario-t elő kell készíteni,
+majd az adott cég rekordját `company` módra és engedélyezettre állítani.
+Ügyfél saját Make-fiókjának éles bekötése és a küldési retry még nincs kész.
 Gmail-keresés nulla találata önmagában nem bizonyít sikertelen küldést;
 azonos Message-ID önmagában nem garantál duplikációmentességet.

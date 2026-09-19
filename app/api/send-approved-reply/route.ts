@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { getMakeWebhook } from "@/lib/make-webhook";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -170,17 +171,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const webhookUrl =
-      process.env.MAKE_SEND_APPROVED_REPLY_WEBHOOK_URL;
+    const webhookUrl = await getMakeWebhook(companyId, "approved_reply");
 
     if (!webhookUrl) {
       console.error(
-        "MAKE_SEND_APPROVED_REPLY_WEBHOOK_URL nincs beállítva."
+        "A vállalkozás Make-kapcsolata nem érhető el."
       );
 
       return NextResponse.json(
-        { error: "Szerver konfigurációs hiba." },
-        { status: 500 }
+        { error: "A vállalkozás levélküldése jelenleg nincs beállítva vagy nem érhető el." },
+        { status: 503 }
       );
     }
 
@@ -236,6 +236,7 @@ export async function POST(request: Request) {
 
     const webhookResponse = await fetch(webhookUrl, {
       method: "POST",
+      redirect: "error",
       headers: {
         "Content-Type": "application/json",
       },
@@ -285,8 +286,8 @@ export async function POST(request: Request) {
       status: "sending",
       message: "A jóváhagyott válasz küldése elindult.",
     });
-  } catch (error) {
-    console.error("Send approved reply API hiba:", error);
+  } catch {
+    console.error("Send approved reply API hiba.");
 
     /*
      * Ha már lefoglaltuk az üzenetet, de ezután

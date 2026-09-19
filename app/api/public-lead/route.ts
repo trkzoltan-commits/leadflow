@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { getMakeWebhook } from "@/lib/make-webhook";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -99,13 +100,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const webhookUrl =
-      process.env.MAKE_NEW_LEAD_WEBHOOK_URL;
+    const webhookUrl = await getMakeWebhook(company.id, "new_lead");
 
     if (webhookUrl) {
       try {
         const webhookResponse = await fetch(webhookUrl, {
           method: "POST",
+          redirect: "error",
           headers: {
             "Content-Type": "application/json",
           },
@@ -125,15 +126,14 @@ export async function POST(request: Request) {
             webhookResponse.statusText
           );
         }
-      } catch (webhookError) {
+      } catch {
         console.error(
-          "Make webhook hiba:",
-          webhookError
+          "Make webhook hívási hiba."
         );
       }
     } else {
       console.warn(
-        "MAKE_NEW_LEAD_WEBHOOK_URL nincs beállítva."
+        "A vállalkozás Make-kapcsolata nem érhető el."
       );
     }
 
