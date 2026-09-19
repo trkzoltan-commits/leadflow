@@ -7,9 +7,10 @@ import ts from "typescript";
 const compiled = new Map();
 const urlA = "https://hook.eu1.make.com/test-company-a";
 const urlB = "https://hook.eu2.make.com/test-company-b";
-function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true } = {}) {
+function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null } = {}) {
   const calls = [];
   const claims = [];
+  let messageStatus = "draft";
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: "user-a" } }, error: null }) },
     from(table) {
@@ -30,8 +31,8 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
           if (table === "companies") return { data: { id: "a", public_slug: "company-a" }, error: null };
           if (table === "users") return { data: { company_id: "a" }, error: null };
           if (table === "leads") return { data: { id: "lead-a", company_id: "a", email: "test@example.invalid", ...mutation }, error: null };
-          if (mutation) claims.push(mutation);
-          return { data: { id: "message-a", company_id: "a", lead_id: "lead-a", status: "draft", direction: "outgoing", content: "Test" }, error: null };
+          if (mutation) { claims.push(mutation); messageStatus = mutation.status; }
+          return { data: { id: "message-a", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: "Test" }, error: null };
         },
         async maybeSingle() { return this.single(); },
       };
@@ -46,7 +47,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
     const context = {
       exports: {}, URL, console: { error() {}, warn() {} },
       process: { env: { MAKE_NEW_LEAD_WEBHOOK_URL: "https://hook.us1.make.com/legacy-new", MAKE_SEND_APPROVED_REPLY_WEBHOOK_URL: "https://hook.us1.make.com/legacy-reply" } },
-      fetch: async (url, options) => { calls.push({ url, options }); return { ok: true }; },
+      fetch: async (url, options) => { calls.push({ url, options }); if (sendFailure === "network") throw new Error("timeout"); return { ok: sendFailure !== "http" }; },
       require(name) {
         if (name === "@/lib/make-webhook") return load("lib/make-webhook.ts");
         if (name === "@supabase/supabase-js") return { createClient: () => client };
@@ -113,3 +114,17 @@ test("URL validation rejects unexpected origins and credential-bearing URL compo
   }
   assert.equal(validMakeWebhook(urlA), urlA);
 });
+
+for (const sendFailure of ["network", "http"]) {
+  test(`uncertain ${sendFailure} outcome stays locked and rejects retry`, async () => {
+    const state = setup({ sendFailure });
+    const route = state.load("app/api/send-approved-reply/route.ts");
+    const request = () => new Request("https://example.invalid", { method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({message_id: "message-a"}) });
+    const first = await route.POST(request());
+    assert.equal(first.status, 502);
+    assert.equal((await first.json()).status, "sending");
+    assert.equal((await route.POST(request())).status, 409);
+    assert.equal(state.calls.length, 1);
+    assert.deepEqual(state.claims.map(x => x.status), ["sending"]);
+  });
+}

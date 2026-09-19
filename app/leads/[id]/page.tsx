@@ -535,6 +535,7 @@ export default function LeadDetailsPage() {
         return;
       }
     }
+    setMarkSentError("A küldés visszaigazolására várunk. Az újraküldés zárolva van. Frissítsd az adatlapot a későbbi állapot megtekintéséhez.");
   }
 
   async function handleMarkAsSent() {
@@ -595,6 +596,13 @@ export default function LeadDetailsPage() {
 
       await waitForSentStatus(currentMessageId);
     } catch (error) {
+      // A lost browser response may follow an accepted send request.
+      setMessageStatus("sending");
+      try {
+        const { data: currentMessage } = await supabase
+          .from("messages").select("status").eq("id", draftMessageId).single();
+        if (currentMessage) setMessageStatus(currentMessage.status);
+      } catch { /* Keep locked until the persisted state is available. */ }
       console.error("E-mail küldési hiba:", error);
 
       setMarkSentError(
@@ -949,9 +957,9 @@ export default function LeadDetailsPage() {
 
                     {messageStatus === "sending" && (
                       <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                        Küldés folyamatban… Az üzenetet
-                        jelenleg nem lehet módosítani vagy
-                        újra elküldeni.
+                        A küldés visszaigazolására várunk. Az üzenetet
+                        jelenleg nem lehet módosítani vagy újra elküldeni.
+                        Frissítsd az adatlapot a későbbi állapot megtekintéséhez.
                       </div>
                     )}
 

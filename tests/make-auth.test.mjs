@@ -9,7 +9,7 @@ const tokenA = `lfmk_${"a".repeat(64)}`;
 const tokenB = `lfmk_${"b".repeat(64)}`;
 const hash = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const compiled = new Map();
-function setup({ revoked = false, dbError = false, legacy = "operator-test-only" } = {}) {
+function setup({ revoked = false, dbError = false, legacy = "operator-test-only", messageStatus = "draft" } = {}) {
   const writes = [];
   let aiCalls = 0;
   const records = {
@@ -18,7 +18,7 @@ function setup({ revoked = false, dbError = false, legacy = "operator-test-only"
       { token_hash: hash(tokenB), company_id: "b", revoked_at: null },
     ],
     leads: [{ id: "lead-a", company_id: "a" }, { id: "lead-b", company_id: "b" }],
-    messages: [{ id: "message-a", company_id: "a" }, { id: "message-b", company_id: "b" }],
+    messages: [{ id: "message-a", company_id: "a", status: messageStatus, direction: "outgoing" }, { id: "message-b", company_id: "b" }],
     company_settings: [{ company_id: "a", auto_reply_mode: "manual" }],
   };
   const client = {
@@ -135,4 +135,14 @@ for (const path of ["app/api/generate-reply/route.ts", "app/api/evaluate-reply/r
       assert.equal(context.aiCalls(), expected === 200 ? 1 : 0);
     }
   });
+}
+
+for (const [before, after, expected] of [["sending","sent",200],["sent","sent",200],["sent","draft",409],["sending","draft",409],["sent","sending",409],["draft","failed",409]]) {
+ test(`callback ${before} -> ${after}: ${expected}`, async () => {
+   const {load,writes}=setup({messageStatus:before});
+   const response=await load("app/api/messages/[id]/route.ts").PATCH(request(tokenA,"PATCH",{status:after}),{params:Promise.resolve({id:"message-a"})});
+   assert.equal(response.status,expected);
+   assert.equal(writes.length,expected===200?1:0);
+   if(expected===200) assert.ok(writes[0].filters.some(([k,v])=>k==="status"&&v===before));
+ });
 }

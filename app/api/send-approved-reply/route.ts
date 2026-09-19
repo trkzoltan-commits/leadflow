@@ -252,33 +252,8 @@ export async function POST(request: Request) {
       }),
     });
 
-    /*
-     * Ha a Make webhook nem fogadta el a kérést,
-     * visszaállítjuk draft állapotba, hogy később
-     * újra lehessen próbálni.
-     */
     if (!webhookResponse.ok) {
-      console.error(
-        "Make approved reply webhook HTTP hiba:",
-        webhookResponse.status,
-        webhookResponse.statusText
-      );
-
-      await supabaseAdmin
-        .from("messages")
-        .update({
-          status: "draft",
-        })
-        .eq("id", message.id)
-        .eq("company_id", companyId)
-        .eq("status", "sending");
-
-      claimedMessageId = null;
-
-      return NextResponse.json(
-        { error: "Nem sikerült elindítani az e-mail küldést." },
-        { status: 502 }
-      );
+      return NextResponse.json({ status: "sending", error: "A küldés visszaigazolására várunk. Az újraküldés zárolva van." }, { status: 502 });
     }
 
     return NextResponse.json({
@@ -289,25 +264,8 @@ export async function POST(request: Request) {
   } catch {
     console.error("Send approved reply API hiba.");
 
-    /*
-     * Ha már lefoglaltuk az üzenetet, de ezután
-     * váratlan szerverhiba történt, visszaállítjuk.
-     */
     if (claimedMessageId) {
-      const { error: rollbackError } = await supabaseAdmin
-        .from("messages")
-        .update({
-          status: "draft",
-        })
-        .eq("id", claimedMessageId)
-        .eq("status", "sending");
-
-      if (rollbackError) {
-        console.error(
-          "Üzenet rollback hiba:",
-          rollbackError
-        );
-      }
+      return NextResponse.json({ status: "sending", error: "A küldés visszaigazolására várunk. Az újraküldés zárolva van." }, { status: 502 });
     }
 
     return NextResponse.json(

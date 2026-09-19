@@ -32,7 +32,7 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 - Cégenkénti kulcskiadás és onboarding.
 - Gmail-piszkozat azonosító, küldési napló és atomikus küldésfoglalás a Make előtt.
 - Automatikus státuszegyeztetés és biztonságos retry.
-- Az eredeti küldési bizonytalanság javítása: a draft-visszaállítás még megvan.
+- Tartósan elmaradó küldési visszaigazolás automatikus rendezése.
 
 ## Második egység: kimenő webhookok
 
@@ -56,3 +56,13 @@ majd az adott cég rekordját `company` módra és engedélyezettre állítani.
 Ügyfél saját Make-fiókjának éles bekötése és a küldési retry még nincs kész.
 Gmail-keresés nulla találata önmagában nem bizonyít sikertelen küldést;
 azonos Message-ID önmagában nem garantál duplikációmentességet.
+
+## Bizonytalan jóváhagyott küldés
+
+A Make HTTP- vagy hálózati hibája után az üzenet sending állapotban marad;
+a szerver nem állítja vissza piszkozatra. A felület zárolja az újraküldést,
+és visszaigazolásra várást jelez. Későbbi állapothoz az adatlap frissíthető.
+A Make PATCH csak outgoing draft/sending → sending/sent átmenetet és
+sent → sent ismétlést enged; a frissítés a korábbi státuszra is szűr.
+A meglévő automatikus draft → sent visszajelzés továbbra is működik.
+Ez nem teljes Gmail-deduplikáció és nem automatikus hibaegyeztetés.

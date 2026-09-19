@@ -53,7 +53,7 @@ export async function PATCH(
     const { data: existingMessage, error: existingMessageError } =
       await scopeMakeQuery(
         supabaseAdmin.from("messages")
-        .select("id, company_id")
+        .select("id, company_id, status, direction")
         .eq("id", id),
         auth.companyId
         ).single();
@@ -77,12 +77,22 @@ export async function PATCH(
       );
     }
 
+    const nextStatus = status.trim();
+    // Automatic flows may confirm draft directly; never reopen a sent message.
+    if (existingMessage.direction !== "outgoing" ||
+        !["sending", "sent"].includes(nextStatus) ||
+        !["draft", "sending", "sent"].includes(existingMessage.status) ||
+        (existingMessage.status === "sent" && nextStatus !== "sent")) {
+      return NextResponse.json({ error: "Nem engedélyezett státuszváltás." }, { status: 409 });
+    }
+
     const { data, error } = await supabaseAdmin
       .from("messages")
       .update({
-        status: status.trim(),
+        status: nextStatus,
       })
       .eq("id", id)
+      .eq("status", existingMessage.status)
       .eq(
         "company_id",
         existingMessage.company_id
