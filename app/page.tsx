@@ -1,489 +1,65 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
-const activities = [
-  ["🟢", "Új érdeklődő érkezett", "Szabó Éva – Kerti előtető", "10:42"],
-  ["💬", "AI válasz elkészült", "Kovács Péter részére", "10:15"],
-  ["🕒", "Válasz érkezett az ügyféltől", "Nagy János – Kerítés", "09:58"],
-  ["📄", "Ajánlat megnyitva", "Tóth Gábor – Tolókapu", "09:21"],
-];
-
-type Lead = {
-  id: string;
-  name: string | null;
-  phone: string | null;
-  service: string | null;
-  source: string | null;
-  priority: string | null;
-  status: string | null;
-};
+import { useLeadOverview } from "@/lib/use-lead-overview";
+import { dailyCounts, displayDate, leadLabel, replyLabel } from "@/lib/lead-overview";
 
 export default function Home() {
   const router = useRouter();
-
-  const [dbLeads, setDbLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function initializeDashboard() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id, name, phone, service, source, priority, status")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Supabase hiba:", error);
-      } else {
-        setDbLeads(data ?? []);
-      }
-
-      setLoading(false);
-    }
-
-    initializeDashboard();
-  }, [router]);
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
-
-  function getStatusLabel(status: string | null) {
-    if (status === "new") return "Új";
-    if (status === "contacted") return "Kapcsolatfelvétel megtörtént";
-    if (status === "waiting") return "Válaszra vár";
-    if (status === "processed") return "Feldolgozott";
-
-    return status || "—";
-  }
-
-  function getPriorityLabel(priority: string | null) {
-    if (priority === "low") return "Alacsony";
-    if (priority === "medium") return "Közepes";
-    if (priority === "high") return "Magas";
-
-    return priority || "—";
-  }
-
-  function getSourceLabel(source: string | null) {
-    if (source === "manual") return "Kézi";
-    if (source === "email") return "E-mail";
-    if (source === "web") return "Weboldal";
-    if (source === "messenger") return "Messenger";
-
-    return source || "—";
-  }
-
-  const totalLeads = dbLeads.length;
-
-  const newLeads = dbLeads.filter(
-    (lead) => lead.status === "new"
-  ).length;
-
-  const waitingLeads = dbLeads.filter(
-    (lead) => lead.status === "waiting"
-  ).length;
-
-  const processedLeads = dbLeads.filter(
-    (lead) => lead.status === "processed"
-  ).length;
-
+  const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
+  if (loading) return <main className="flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
+  const attention = leads.filter(lead => ["draft", "sending"].includes(replies.get(lead.id)?.status ?? ""));
+  const days = dailyCounts(leads);
+  const max = Math.max(1, ...days.map(day => day.count));
+  const leadMap = new Map(leads.map(lead => [lead.id, lead]));
+  const activities = [
+    ...leads.map(lead => ({ id: "lead-" + lead.id, leadId: lead.id, title: "Új érdeklődő érkezett", date: lead.created_at })),
+    ...messages.filter(message => leadMap.has(message.lead_id)).map(message => ({ id: "message-" + message.id, leadId: message.lead_id, title: "Kimenő üzenet létrehozva", date: message.created_at })),
+  ].sort((a,b) => b.date.localeCompare(a.date)).slice(0,6);
   const kpis = [
-    {
-      icon: "👥",
-      number: totalLeads,
-      title: "Összes érdeklődő",
-      sub: "Adatbázisban",
-    },
-    {
-      icon: "✨",
-      number: newLeads,
-      title: "Új érdeklődő",
-      sub: "Feldolgozásra vár",
-    },
-    {
-      icon: "🕒",
-      number: waitingLeads,
-      title: "Válaszra vár",
-      sub: "Folyamatban",
-    },
-    {
-      icon: "✅",
-      number: processedLeads,
-      title: "Feldolgozott",
-      sub: "Lezárt feldolgozás",
-    },
+    ["Összes érdeklődő", leads.length],
+    ["Új érdeklődő", leads.filter(lead => lead.status === "new").length],
+    ["Ellenőrizendő piszkozat", attention.filter(lead => replies.get(lead.id)?.status === "draft").length],
+    ["Küldési visszaigazolásra vár", attention.filter(lead => replies.get(lead.id)?.status === "sending").length],
   ];
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#f7f8fc]">
-        <div className="text-lg font-semibold text-slate-600">
-          Betöltés...
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <main className="min-h-screen bg-[#f7f8fc] text-slate-900">
-      <div className="flex min-h-screen">
-
-        {/* SIDEBAR */}
-        <aside className="hidden w-64 flex-col border-r border-slate-200 bg-white p-5 lg:flex">
-          <div className="mb-10 flex items-center gap-3 text-2xl font-bold">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white">
-              ✦
-            </div>
-
-            LeadFlow
-          </div>
-
-          <nav className="space-y-2 text-sm font-medium">
-            <div className="rounded-xl bg-violet-50 px-4 py-3 text-violet-700">
-              🏠 &nbsp; Dashboard
-            </div>
-
-            <button
-              onClick={() => router.push("/leads")}
-              className="w-full rounded-xl px-4 py-3 text-left hover:bg-slate-50"
-            >
-              👥 &nbsp; Érdeklődők
-            </button>
-
-            <div className="flex justify-between px-4 py-3">
-              <span>💬 &nbsp; Üzenetek</span>
-
-              <span className="rounded-full bg-violet-600 px-2 text-xs text-white">
-                5
-              </span>
-            </div>
-
-            <div className="px-4 py-3">
-              📄 &nbsp; Ajánlatok
-            </div>
-
-            <div className="px-4 py-3">
-              📊 &nbsp; Statisztikák
-            </div>
-
-            <div className="px-4 py-3">
-              📅 &nbsp; Naptár
-            </div>
-
-            <div className="my-4 border-t border-slate-200" />
-
-            <button
-              onClick={() => router.push("/settings")}
-              className="w-full rounded-xl px-4 py-3 text-left hover:bg-slate-50"
-            >
-              ⚙️ &nbsp; Beállítások
-            </button>
-
-            <div className="px-4 py-3">
-              🔌 &nbsp; Integrációk
-            </div>
-
-            <div className="px-4 py-3">
-              ❔ &nbsp; Súgó
-            </div>
-          </nav>
-
-          <div className="mt-auto rounded-xl bg-slate-50 p-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-600 text-white">
-                P
-              </div>
-
-              <div>
-                <div className="text-sm font-semibold">
-                  Péter Kovács
-                </div>
-
-                <div className="text-xs text-slate-500">
-                  Kovács Kaputechnika Kft.
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="mt-4 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium hover:bg-slate-100"
-            >
-              Kijelentkezés
-            </button>
-          </div>
-        </aside>
-
-        {/* CONTENT */}
-        <section className="flex-1 p-5 md:p-8 xl:p-10">
-
-          {/* HEADER */}
-          <header className="mb-8 flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold">
-                Jó reggelt, Péter! 👋
-              </h1>
-
-              <p className="mt-2 text-slate-500">
-                Áttekintés az érdeklődőkről és feladatokról
-              </p>
-            </div>
-
-            <div className="hidden gap-3 sm:flex">
-              <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm">
-                🔔
-              </button>
-
-              <button
-                onClick={() => router.push("/settings")}
-                className="rounded-xl border border-slate-200 bg-white px-4 py-2 shadow-sm"
-              >
-                ⚙️
-              </button>
-            </div>
-          </header>
-
-          {/* KPI */}
-          <div className="mb-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {kpis.map((kpi) => (
-              <div
-                key={kpi.title}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-xl">
-                    {kpi.icon}
-                  </div>
-
-                  <div>
-                    <div className="text-3xl font-bold">
-                      {kpi.number}
-                    </div>
-
-                    <div className="font-semibold">
-                      {kpi.title}
-                    </div>
-
-                    <div className="text-sm text-slate-500">
-                      {kpi.sub}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
-
-            {/* LEFT */}
-            <div className="space-y-6">
-
-              {/* CHART */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="mb-6 flex justify-between">
-                  <h2 className="font-bold">
-                    Érdeklődők áttekintése
-                  </h2>
-
-                  <button className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                    Utolsó 7 nap
-                  </button>
-                </div>
-
-                <div className="flex h-52 items-end gap-3">
-                  {[48, 62, 42, 78, 51, 66, 82].map((height, i) => (
-                    <div
-                      key={i}
-                      className="flex flex-1 flex-col items-center gap-2"
-                    >
-                      <div className="text-xs font-semibold">
-                        {[6, 7, 5, 8, 6, 7, 8][i]}
-                      </div>
-
-                      <div
-                        className="w-full rounded-t-lg bg-gradient-to-t from-violet-100 to-violet-500"
-                        style={{ height: `${height}%` }}
-                      />
-
-                      <div className="text-xs text-slate-400">
-                        {["14", "15", "16", "17", "18", "19", "20"][i]}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* LEADS */}
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between p-6">
-                  <h2 className="font-bold">
-                    Legújabb érdeklődők
-                  </h2>
-
-                  <button
-                    onClick={() => router.push("/leads")}
-                    className="text-sm font-medium text-violet-600"
-                  >
-                    Összes megtekintése →
-                  </button>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead className="border-y border-slate-100 bg-slate-50 text-xs uppercase text-slate-500">
-                      <tr>
-                        <th className="px-6 py-3">
-                          Név
-                        </th>
-
-                        <th className="px-6 py-3">
-                          Szolgáltatás
-                        </th>
-
-                        <th className="px-6 py-3">
-                          Érték
-                        </th>
-
-                        <th className="px-6 py-3">
-                          Forrás
-                        </th>
-
-                        <th className="px-6 py-3">
-                          Érkezett
-                        </th>
-
-                        <th className="px-6 py-3">
-                          Állapot
-                        </th>
-                      </tr>
-                    </thead>
-
-                    <tbody>
-                      {dbLeads.map((lead) => (
-                        <tr
-                          key={lead.id}
-                          onClick={() => router.push(`/leads/${lead.id}`)}
-                          className="cursor-pointer border-b border-slate-100 hover:bg-slate-50"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="font-semibold">
-                              {lead.name || "Névtelen érdeklődő"}
-                            </div>
-
-                            <div className="text-xs text-slate-400">
-                              {lead.phone || "—"}
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4">
-                            <div className="font-medium">
-                              {lead.service || "—"}
-                            </div>
-
-                            <div className="text-xs text-slate-400">
-                              {getSourceLabel(lead.source)}
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4">
-                            <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold">
-                              {getPriorityLabel(lead.priority)}
-                            </span>
-                          </td>
-
-                          <td className="px-6 py-4">
-                            {getSourceLabel(lead.source)}
-                          </td>
-
-                          <td className="px-6 py-4">
-                            —
-                          </td>
-
-                          <td className="px-6 py-4">
-                            <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold">
-                              {getStatusLabel(lead.status)}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT */}
-            <div className="space-y-6">
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-5 font-bold">
-                  Legutóbbi tevékenységek
-                </h2>
-
-                <div className="space-y-5">
-                  {activities.map(
-                    ([icon, title, description, time]) => (
-                      <div
-                        key={title}
-                        className="flex gap-3"
-                      >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50">
-                          {icon}
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold">
-                            {title}
-                          </div>
-
-                          <div className="text-sm text-slate-500">
-                            {description}
-                          </div>
-                        </div>
-
-                        <div className="text-xs text-slate-400">
-                          {time}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 p-6 text-white shadow-lg">
-                <div className="mb-4 text-lg font-bold">
-                  ✨ AI tipp a mai napra
-                </div>
-
-                <p className="leading-7 text-violet-50">
-                  3 érdeklődőnél hiányosak az adatok. Küldj automatikus
-                  kérdéseket, hogy gyorsabban tudj ajánlatot adni.
-                </p>
-
-                <button
-                  onClick={() => router.push("/leads")}
-                  className="mt-6 rounded-xl bg-white px-4 py-3 font-semibold text-violet-700"
-                >
-                  Érdeklődők megtekintése
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
+  return <main className="min-h-screen bg-slate-50 p-5 text-slate-900 md:p-8">
+    <div className="mx-auto max-w-7xl">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div><p className="font-semibold text-violet-600">LeadFlow</p><h1 className="mt-1 text-3xl font-bold">Áttekintés</h1><p className="mt-2 text-slate-600">Érdeklődők, válaszok és következő teendők.</p></div>
+        <nav aria-label="Fő navigáció" className="flex flex-wrap gap-3 text-sm font-semibold">
+          <Link href="/leads" className="rounded-xl bg-violet-600 px-4 py-3 text-white">Érdeklődők</Link>
+          <Link href="/settings" className="rounded-xl border border-slate-200 bg-white px-4 py-3">Beállítások</Link>
+          <button onClick={async () => { await supabase.auth.signOut(); router.replace("/login"); }} className="rounded-xl border border-slate-200 bg-white px-4 py-3">Kijelentkezés</button>
+        </nav>
+      </header>
+      <div role="status" className={error ? "mb-6 rounded-xl bg-amber-50 p-4 text-amber-800" : "mb-6 text-sm text-slate-500"}>
+        {error ? (updatedAt ? "A frissítés nem sikerült. Az utolsó sikeresen betöltött adatokat látod." : "Az adatokat nem sikerült betölteni.") : "Automatikus frissítés 10 másodpercenként."}
+        {updatedAt && <span> Utolsó frissítés: {displayDate(updatedAt)}.</span>}
+        {error && <button onClick={() => void refresh()} className="ml-3 font-semibold underline">Újrapróbálás</button>}
       </div>
-    </main>
-  );
+      {updatedAt && <>
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{kpis.map(([label,count]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-600">{label}</p><p className="mt-2 text-3xl font-bold">{count}</p></div>)}</div>
+        <section className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Figyelmet igénylő válaszok</h2>
+          <p className="mt-2 text-sm text-slate-500">A legutóbbi válasz állapota alapján. A piszkozatot az automatizálás még feldolgozhatja.</p>
+          {attention.length === 0 ? <p className="mt-4 text-slate-600">Nincs ellenőrizendő piszkozat vagy visszaigazolásra váró küldés.</p> : <ul className="mt-4 divide-y divide-slate-100">{attention.map(lead => <li key={lead.id}><Link href={`/leads/${lead.id}`} className="flex flex-wrap justify-between gap-2 rounded-lg py-3 hover:bg-violet-50"><span className="font-semibold">{lead.name || "Névtelen érdeklődő"} <span className="font-normal text-slate-500">· {lead.service || "Nincs szolgáltatás"}</span></span><span className="text-sm text-amber-800">{replyLabel(replies.get(lead.id)?.status)} →</span></Link></li>)}</ul>}
+        </section>
+        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+          <div className="min-w-0 space-y-6">
+            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-bold">Érdeklődők az elmúlt 7 napban</h2><p className="mt-1 text-sm text-slate-500">Érkezési dátum szerint, magyarországi időzónában.</p>
+              <div className="mt-6 flex h-44 items-end gap-2" aria-label="Napi érdeklődőszám">{days.map(day => <div key={day.day} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2 text-center"><span className="text-sm font-semibold">{day.count}</span><div className="rounded-t-lg bg-violet-500" style={{height: `${day.count / max * 105}px`}} /><span className="text-xs text-slate-500">{day.label}</span></div>)}</div>
+            </section>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-wrap justify-between gap-3 p-6"><h2 className="text-xl font-bold">Legújabb érdeklődők</h2><Link className="font-semibold text-violet-600" href="/leads">Összes megtekintése →</Link></div>
+              {leads.length === 0 ? <p className="px-6 pb-6 text-slate-500">Még nincs érdeklődő.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Név / szolgáltatás","Érkezett","Állapot","Válasz"].map(label => <th key={label} className="px-5 py-3">{label}</th>)}</tr></thead><tbody>{leads.slice(0,10).map(lead => <tr key={lead.id} className="border-t border-slate-100"><td className="px-5 py-4"><Link href={`/leads/${lead.id}`} className="font-semibold text-violet-700 underline-offset-4 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link><p className="mt-1 text-slate-500">{lead.service || "—"}</p></td><td className="px-5 py-4">{displayDate(lead.created_at)}</td><td className="px-5 py-4">{leadLabel(lead.status)}</td><td className="px-5 py-4">{replyLabel(replies.get(lead.id)?.status)}</td></tr>)}</tbody></table></div>}
+            </section>
+          </div>
+          <section className="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Legutóbbi események</h2><p className="mt-2 text-sm text-slate-500">Az érdeklődők és üzenetek létrehozási időpontja szerint.</p><ul className="mt-5 space-y-5">{activities.map(activity => <li key={activity.id}><Link href={`/leads/${activity.leadId}`} className="block rounded-lg hover:bg-violet-50"><p className="font-semibold">{activity.title}</p><p className="text-sm text-slate-600">{leadMap.get(activity.leadId)?.name || "Névtelen érdeklődő"}</p><p className="mt-1 text-xs text-slate-500">{displayDate(activity.date)}</p></Link></li>)}</ul>{activities.length === 0 && <p className="mt-4 text-slate-500">Még nincs megjeleníthető esemény.</p>}</section>
+        </div>
+      </>}
+    </div>
+  </main>;
 }

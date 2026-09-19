@@ -1,27 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-
-type Lead = {
-  id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  service: string | null;
-  description: string | null;
-  location: string | null;
-  priority: string | null;
-  status: string | null;
-  source: string | null;
-};
+import Link from "next/link";
+import { useLeadOverview } from "@/lib/use-lead-overview";
+import { replyLabel } from "@/lib/lead-overview";
 
 export default function LeadsPage() {
   const router = useRouter();
 
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,40 +19,6 @@ export default function LeadsPage() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
-
-  useEffect(() => {
-    async function initializePage() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        router.replace("/login");
-        return;
-      }
-
-      await loadLeads();
-      setLoading(false);
-    }
-
-    initializePage();
-  }, [router]);
-
-  async function loadLeads() {
-    const { data, error } = await supabase
-      .from("leads")
-      .select(
-        "id, name, email, phone, service, description, location, priority, status, source"
-      )
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("Lead betöltési hiba:", error);
-      return;
-    }
-
-    setLeads(data ?? []);
-  }
 
   async function handleAddLead(e: React.FormEvent) {
     e.preventDefault();
@@ -114,7 +69,7 @@ export default function LeadsPage() {
     setDescription("");
     setPriority("medium");
 
-    await loadLeads();
+    await refresh();
   }
 
   function openLead(leadId: string) {
@@ -179,6 +134,10 @@ export default function LeadsPage() {
           </button>
         </div>
 
+        <p role="status" className={loadError ? "mb-5 text-amber-700" : "mb-5 text-sm text-slate-500"}>
+          {loadError ? "A frissítés nem sikerült. Újrapróbáljuk; a kitöltött űrlap megmarad." : "A lista és a válaszállapotok 10 másodpercenként automatikusan frissülnek."}
+          {loadError && <button onClick={() => void refresh()} className="ml-3 underline">Újrapróbálás</button>}
+        </p>
         <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
           {/* ÚJ LEAD */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -273,7 +232,7 @@ export default function LeadsPage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                {leads.length} érdeklődő az adatbázisban
+                {updatedAt ? `${leads.length} érdeklődő az adatbázisban` : "Az adatok nem érhetők el"}
               </p>
 
               <p className="mt-2 text-xs text-slate-400">
@@ -308,10 +267,12 @@ export default function LeadsPage() {
                     <th className="px-6 py-3">
                       Forrás
                     </th>
+                    <th className="px-6 py-3">Válasz</th>
                   </tr>
                 </thead>
 
                 <tbody>
+                  {updatedAt && leads.length === 0 && <tr><td colSpan={7} className="p-6 text-slate-500">Még nincs érdeklődő.</td></tr>}
                   {leads.map((lead) => (
                     <tr
                       key={lead.id}
@@ -320,7 +281,7 @@ export default function LeadsPage() {
                     >
                       <td className="px-6 py-4">
                         <div className="font-semibold text-slate-900">
-                          {lead.name || "Névtelen érdeklődő"}
+                          <Link href={`/leads/${lead.id}`} className="text-violet-700 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link>
                         </div>
 
                         <div className="text-xs text-slate-400">
@@ -351,6 +312,7 @@ export default function LeadsPage() {
                       <td className="px-6 py-4">
                         {getSourceLabel(lead.source)}
                       </td>
+                      <td className="px-6 py-4">{replyLabel(replies.get(lead.id)?.status)}</td>
                     </tr>
                   ))}
                 </tbody>
