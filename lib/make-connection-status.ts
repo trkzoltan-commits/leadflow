@@ -11,12 +11,13 @@ type Connection = {
 
 export function makeConnectionStatus(
   connection: Connection | null,
+  hasCompanyCredential: boolean,
   legacyNewLeadUrl?: string,
   legacyApprovedReplyUrl?: string
 ): MakeConnectionStatus {
   if (!connection?.enabled) return "setup_required";
   if (connection.mode === "company") {
-    return validMakeWebhook(connection.new_lead_webhook_url) &&
+    return hasCompanyCredential && validMakeWebhook(connection.new_lead_webhook_url) &&
       validMakeWebhook(connection.approved_reply_webhook_url)
       ? "company_active" : "setup_required";
   }

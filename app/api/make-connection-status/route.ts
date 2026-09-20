@@ -35,8 +35,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "A Make-kapcsolat állapota nem érhető el." }, { status: 503 });
     }
 
+    let hasCompanyCredential = false;
+    if (connection?.mode === "company" && connection.enabled) {
+      const { data: credential, error: credentialError } = await admin
+        .from("make_credentials")
+        .select("id")
+        .eq("company_id", profile.company_id)
+        .is("revoked_at", null)
+        .limit(1)
+        .maybeSingle();
+      if (credentialError) {
+        return NextResponse.json({ error: "A Make-kapcsolat állapota nem érhető el." }, { status: 503 });
+      }
+      hasCompanyCredential = Boolean(credential);
+    }
+
     const status = makeConnectionStatus(
       connection,
+      hasCompanyCredential,
       process.env.MAKE_NEW_LEAD_WEBHOOK_URL,
       process.env.MAKE_SEND_APPROVED_REPLY_WEBHOOK_URL
     );

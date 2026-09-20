@@ -255,11 +255,11 @@ export default function SettingsPage() {
             </p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               {makeStatus === "company_active"
-                ? "A saját Make webhookok be vannak állítva. Ez nem ellenőrzi a Make-forgatókönyv vagy a Gmail-küldés működését."
+                ? "A saját Make webhookok és a céges kulcs be vannak állítva. Ez nem ellenőrzi a Make-forgatókönyv vagy a Gmail-küldés működését."
                 : makeStatus === "legacy"
                   ? "A pilot jelenleg a LeadFlow átmeneti Make-kapcsolatát használja."
                   : makeStatus === "setup_required"
-                    ? "A Make-kapcsolat nincs teljesen beállítva; az automatikus feldolgozás és küldés nem biztosított."
+                    ? "A Make-kapcsolat, a két webhook vagy a céges kulcs hiányzik; az automatikus feldolgozás és küldés nem biztosított."
                     : makeStatusError ? "Próbáld meg később újratölteni az oldalt." : ""}
             </p>
           </div>
