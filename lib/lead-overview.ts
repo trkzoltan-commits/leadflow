@@ -45,6 +45,14 @@ export function displayDate(value: string) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("hu-HU", {timeZone:"Europe/Budapest",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).format(date);
 }
+export function displayReceivedAt(value: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("hu-HU", {
+    timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
 export function dailyCounts(leads: OverviewLead[], now = new Date()) {
   const key = (date: Date) => new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Budapest",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
   const today = key(now);

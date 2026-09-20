@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { filterLeads, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
+import { displayReceivedAt, filterLeads, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -266,6 +266,8 @@ export default function LeadsPage() {
                       Név
                     </th>
 
+                    <th className="px-6 py-3">Érkezett</th>
+
                     <th className="px-6 py-3">
                       Szolgáltatás
                     </th>
@@ -290,7 +292,7 @@ export default function LeadsPage() {
                 </thead>
 
                 <tbody>
-                  {updatedAt && visibleLeads.length === 0 && <tr><td colSpan={7} className="p-6 text-slate-500">Ebben a nézetben nincs érdeklődő.</td></tr>}
+                  {updatedAt && visibleLeads.length === 0 && <tr><td colSpan={8} className="p-6 text-slate-500">Ebben a nézetben nincs érdeklődő.</td></tr>}
                   {visibleLeads.map((lead) => (
                     <tr
                       key={lead.id}
@@ -306,6 +308,8 @@ export default function LeadsPage() {
                           {lead.phone || lead.email || "—"}
                         </div>
                       </td>
+
+                      <td className="whitespace-nowrap px-6 py-4">{displayReceivedAt(lead.created_at)}</td>
 
                       <td className="px-6 py-4">
                         {lead.service || "—"}

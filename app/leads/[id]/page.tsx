@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { displayReceivedAt } from "@/lib/lead-overview";
 
 type Lead = {
   id: string;
@@ -16,6 +17,7 @@ type Lead = {
   priority: string | null;
   status: string | null;
   source: string | null;
+  created_at: string;
   ai_summary: string | null;
   ai_safe_to_send: boolean | null;
   ai_requires_human_review: boolean | null;
@@ -102,6 +104,7 @@ export default function LeadDetailsPage() {
           priority,
           status,
           source,
+          created_at,
           ai_summary,
           ai_safe_to_send,
           ai_requires_human_review,
@@ -711,6 +714,9 @@ export default function LeadDetailsPage() {
 
           <p className="mt-2 text-slate-500">
             Érdeklődő adatlap és szerkesztés
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            Érkezett: <time dateTime={lead.created_at}>{displayReceivedAt(lead.created_at)}</time>
           </p>
         </div>
 
