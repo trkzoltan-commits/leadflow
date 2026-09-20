@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { displayReceivedAt, filterLeads, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
+import { displayReceivedAt, filterLeads, isDelayedSending, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -78,7 +78,7 @@ export default function LeadsPage() {
         </div>
 
         <p role="status" className={loadError ? "mb-5 text-amber-700" : "mb-5 text-sm text-slate-500"}>
-          {loadError ? "A frissítés nem sikerült. Újrapróbáljuk; a kitöltött űrlap megmarad." : "A lista és a válaszállapotok 10 másodpercenként automatikusan frissülnek."}
+          {loadError ? "A frissítés nem sikerült. Újrapróbáljuk; az utolsó betöltött adatokat látod." : "A lista és a válaszállapotok 10 másodpercenként automatikusan frissülnek."}
           {loadError && <button onClick={() => void refresh()} className="ml-3 underline">Újrapróbálás</button>}
         </p>
         <div>
@@ -98,6 +98,7 @@ export default function LeadsPage() {
                   ["active", "Aktív", leads.filter(lead => lead.status !== "processed").length],
                   ["closed", "Lezártak", leads.filter(lead => lead.status === "processed").length],
                   ["draft", "Ellenőrizendő", filterLeads(leads, replies, "draft").length],
+                  ["delayed", "Késő visszaigazolás", filterLeads(leads, replies, "delayed").length],
                   ["sending", "Visszaigazolásra vár", filterLeads(leads, replies, "sending").length],
                   ["all", "Mind", leads.length],
                 ] as const).map(([value, label, count]) => (
@@ -189,7 +190,9 @@ export default function LeadsPage() {
                       <td className="px-6 py-4">
                         {getSourceLabel(lead.source)}
                       </td>
-                      <td className="px-6 py-4">{replyLabel(replies.get(lead.id)?.status)}</td>
+                      <td className={isDelayedSending(replies.get(lead.id)) ? "px-6 py-4 font-semibold text-red-700" : "px-6 py-4"}>
+                        {replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

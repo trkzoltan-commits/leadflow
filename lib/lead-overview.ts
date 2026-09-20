@@ -11,13 +11,22 @@ export type OverviewLead = {
   source: string | null;
   created_at: string;
 };
-export type OverviewMessage = { id: string; lead_id: string; status: string | null; created_at: string };
+export type OverviewMessage = { id: string; lead_id: string; status: string | null; created_at: string; sending_started_at: string | null };
 
-export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending";
+export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "delayed";
+
+export const DELAYED_SEND_MINUTES = 60;
+
+export function isDelayedSending(message?: Pick<OverviewMessage, "status" | "sending_started_at"> | null, now = new Date()) {
+  if (message?.status !== "sending" || !message.sending_started_at) return false;
+  const startedAt = new Date(message.sending_started_at).getTime();
+  return Number.isFinite(startedAt) && now.getTime() - startedAt >= DELAYED_SEND_MINUTES * 60_000;
+}
 
 export function filterLeads(leads: OverviewLead[], replies: Map<string, OverviewMessage>, filter: LeadListFilter) {
   if (filter === "active") return leads.filter(lead => lead.status !== "processed");
   if (filter === "closed") return leads.filter(lead => lead.status === "processed");
+  if (filter === "delayed") return leads.filter(lead => lead.status !== "processed" && isDelayedSending(replies.get(lead.id)));
   if (filter === "draft" || filter === "sending") {
     return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);
   }
@@ -33,8 +42,9 @@ export function latestReplies(messages: OverviewMessage[]) {
   }
   return result;
 }
-export function replyLabel(status?: string | null) {
+export function replyLabel(status?: string | null, sendingStartedAt?: string | null) {
   if (status === "draft") return "Ellenőrizendő piszkozat";
+  if (isDelayedSending({ status: status ?? null, sending_started_at: sendingStartedAt ?? null })) return "Küldési visszaigazolás késik";
   if (status === "sending") return "Küldési visszaigazolásra vár";
   if (status === "sent") return "Válasz elküldve";
   return status ? "Válasz állapota: " + status : "Még nincs válasz";

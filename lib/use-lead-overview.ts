@@ -48,7 +48,7 @@ export function useLeadOverview() {
           const rows: OverviewMessage[] = [];
           for (let offset = 0; !cancelled; offset += 500) {
             const { data, error } = await supabase.from("messages")
-              .select("id, lead_id, status, created_at")
+              .select("id, lead_id, status, created_at, sending_started_at")
               .eq("direction", "outgoing")
               .order("created_at", { ascending: false }).order("id", { ascending: false })
               .range(offset, offset + 499);

@@ -5,7 +5,15 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending}=context.exports;
+test("sending delay starts at the send claim, and never marks a confirmed email late",()=>{
+ const now=new Date("2026-09-20T12:00:00Z");
+ assert.equal(isDelayedSending({status:"sending",sending_started_at:"2026-09-20T11:00:01Z"},now),false);
+ assert.equal(isDelayedSending({status:"sending",sending_started_at:"2026-09-20T11:00:00Z"},now),true);
+ assert.equal(isDelayedSending({status:"sent",sending_started_at:"2026-09-20T09:00:00Z"},now),false);
+ assert.equal(isDelayedSending({status:"sending",sending_started_at:null},now),false);
+ assert.equal(replyLabel("sending",new Date(Date.now()-61*60_000).toISOString()),"Küldési visszaigazolás késik");
+});
 test("closed leads remain available without appearing in active or attention views",()=>{
  const leads=[
    {id:"a",status:"new"},
@@ -22,6 +30,13 @@ test("closed leads remain available without appearing in active or attention vie
  assert.deepEqual(filterLeads(leads,replies,"draft").map(lead=>lead.id),["a"]);
  assert.deepEqual(filterLeads(leads,replies,"sending").map(lead=>lead.id),["c"]);
  assert.deepEqual(filterLeads(leads,replies,"all").map(lead=>lead.id),["a","b","c"]);
+});
+test("delayed filter hides closed leads and recently started sends",()=>{
+ const old=new Date(Date.now()-61*60_000).toISOString();
+ const recent=new Date(Date.now()-10*60_000).toISOString();
+ const leads=[{id:"a",status:"contacted"},{id:"b",status:"processed"},{id:"c",status:"new"}];
+ const replies=new Map([["a",{status:"sending",sending_started_at:old}],["b",{status:"sending",sending_started_at:old}],["c",{status:"sending",sending_started_at:recent}]]);
+ assert.deepEqual(filterLeads(leads,replies,"delayed").map(lead=>lead.id),["a"]);
 });
 test("latest reply does not count an old draft after a newer sent reply",()=>{
  const result=latestReplies([

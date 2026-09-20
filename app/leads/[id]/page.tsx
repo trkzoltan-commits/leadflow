@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { displayReceivedAt } from "@/lib/lead-overview";
+import { displayReceivedAt, isDelayedSending } from "@/lib/lead-overview";
 
 type Lead = {
   id: string;
@@ -34,6 +34,7 @@ type Message = {
   channel: string | null;
   status: string | null;
   created_at: string;
+  sending_started_at: string | null;
 };
 
 export default function LeadDetailsPage() {
@@ -141,7 +142,7 @@ export default function LeadDetailsPage() {
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
         .select(
-          "id, direction, sender, content, channel, status, created_at"
+          "id, direction, sender, content, channel, status, created_at, sending_started_at"
         )
         .eq("lead_id", leadId)
         .order("created_at", { ascending: true });
@@ -180,7 +181,7 @@ export default function LeadDetailsPage() {
       try {
         const [leadResult, messagesResult] = await Promise.all([
           supabase.from("leads").select("status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
-          supabase.from("messages").select("id, direction, sender, content, channel, status, created_at").eq("lead_id", leadId).order("created_at", { ascending: true }),
+          supabase.from("messages").select("id, direction, sender, content, channel, status, created_at, sending_started_at").eq("lead_id", leadId).order("created_at", { ascending: true }),
         ]);
         if (cancelled) return;
         if (leadResult.error || messagesResult.error || !leadResult.data) {
@@ -487,7 +488,7 @@ export default function LeadDetailsPage() {
             status: "draft",
           })
           .select(
-            "id, direction, sender, content, channel, status, created_at"
+            "id, direction, sender, content, channel, status, created_at, sending_started_at"
           )
           .single();
 
@@ -711,6 +712,8 @@ export default function LeadDetailsPage() {
   const messageLocked =
     messageStatus === "sent" ||
     messageStatus === "sending";
+  const sendingStartedAt = messageHistory.find(message => message.id === draftMessageId)?.sending_started_at;
+  const delayedSending = isDelayedSending({ status: messageStatus, sending_started_at: sendingStartedAt ?? null });
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -735,13 +738,13 @@ export default function LeadDetailsPage() {
           </p>
         </div>
 
-        <section aria-label="Aktuális állapot" className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
+        <section aria-label="Aktuális állapot" className={delayedSending ? "mb-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm" : "mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm"}>
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Következő lépés</p>
           <h2 role="status" className="mt-2 text-xl font-bold text-slate-900">
-            {messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
+            {delayedSending ? "A küldési visszaigazolás késik" : messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            {messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" ? "Az üzenet elküldöttként van visszaigazolva. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
+            {delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" ? "Az üzenet elküldöttként van visszaigazolva. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
           </p>
           <a href="#reply" className="mt-4 inline-flex rounded-xl bg-violet-600 px-4 py-2 font-semibold text-white">{messageStatus === "sent" ? "Elküldött válasz megtekintése" : "Ugrás a válaszhoz"}</a>
           <p className={syncError ? "mt-3 text-sm text-amber-700" : "mt-3 text-xs text-slate-500"} role="status">
@@ -957,10 +960,8 @@ export default function LeadDetailsPage() {
                     )}
 
                     {messageStatus === "sending" && (
-                      <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
-                        A küldés visszaigazolására várunk. Az üzenetet
-                        jelenleg nem lehet módosítani vagy újra elküldeni.
-                        Az állapot automatikusan frissül.
+                      <div className={delayedSending ? "mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" : "mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"}>
+                        {delayedSending ? "A küldési visszaigazolás késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Az újraküldés továbbra is zárolva van." : "A küldés visszaigazolására várunk. Az üzenetet jelenleg nem lehet módosítani vagy újra elküldeni. Az állapot automatikusan frissül."}
                       </div>
                     )}
 

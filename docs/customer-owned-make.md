@@ -66,3 +66,13 @@ A Make PATCH csak outgoing draft/sending → sending/sent átmenetet és
 sent → sent ismétlést enged; a frissítés a korábbi státuszra is szűr.
 A meglévő automatikus draft → sent visszajelzés továbbra is működik.
 Ez nem teljes Gmail-deduplikáció és nem automatikus hibaegyeztetés.
+
+## Késő visszaigazolás jelzése
+
+A `202609200002_message_sending_started_at.sql` migrációt a hozzá tartozó kód
+telepítése előtt kell alkalmazni. A `sending_started_at` mezőt adatbázis-trigger
+rögzíti a `sending` állapotba váltáskor. A már `sending` állapotú üzeneteknél a
+migráció ideje lesz a figyelmeztetés kezdőpontja, mert a korábbi pontos idő nem ismert.
+60 perc elteltével a partner dashboardján, listájában és az adatlapon kiemelt jelzés
+jelenik meg. A jelzés nem engedélyez újraküldést és nem minősíti sikertelennek a
+küldést; a partner a saját Make-futást és Gmail Elküldött levelek mappát ellenőrzi.
