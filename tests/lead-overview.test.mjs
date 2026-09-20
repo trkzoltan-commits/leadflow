@@ -5,7 +5,18 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel}=context.exports;
+test("closed outcome filter includes only matching closed leads and handles legacy missing outcomes",()=>{
+ const leads=[{id:"a",status:"processed",outcome:"won"},{id:"b",status:"processed",outcome:"lost"},{id:"c",status:"processed",outcome:null},{id:"d",status:"new",outcome:"won"}];
+ const replies=new Map();
+ assert.deepEqual(filterLeads(leads,replies,"closed","won").map(lead=>lead.id),["a"]);
+ assert.deepEqual(filterLeads(leads,replies,"closed","lost").map(lead=>lead.id),["b"]);
+ assert.deepEqual(filterLeads(leads,replies,"closed","unknown").map(lead=>lead.id),["c"]);
+ assert.deepEqual(filterLeads(leads,replies,"closed").map(lead=>lead.id),["a","b","c"]);
+ assert.equal(outcomeLabel("won"),"Megvalósult");
+ assert.equal(outcomeLabel("lost"),"Nem valósult meg");
+ assert.equal(outcomeLabel(null),"Eredmény nincs rögzítve");
+});
 test("search matches accents and multiple fields within the selected lead set",()=>{
  const leads=[
    {id:"a",name:"Nagy Sándor",email:"sandor@example.com",phone:"+36 70 123 4567",service:"Előtető",location:"Nagykanizsa"},

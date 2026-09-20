@@ -14,6 +14,7 @@ export type OverviewLead = {
 export type OverviewMessage = { id: string; lead_id: string; status: string | null; created_at: string; sending_started_at: string | null };
 
 export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "delayed";
+export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
 
 export const DELAYED_SEND_MINUTES = 60;
 
@@ -23,14 +24,21 @@ export function isDelayedSending(message?: Pick<OverviewMessage, "status" | "sen
   return Number.isFinite(startedAt) && now.getTime() - startedAt >= DELAYED_SEND_MINUTES * 60_000;
 }
 
-export function filterLeads(leads: OverviewLead[], replies: Map<string, OverviewMessage>, filter: LeadListFilter) {
+export function filterLeads(leads: OverviewLead[], replies: Map<string, OverviewMessage>, filter: LeadListFilter, closedOutcome: ClosedOutcomeFilter = "all") {
   if (filter === "active") return leads.filter(lead => lead.status !== "processed");
-  if (filter === "closed") return leads.filter(lead => lead.status === "processed");
+  if (filter === "closed") return leads.filter(lead => lead.status === "processed" &&
+    (closedOutcome === "all" || (closedOutcome === "unknown" ? !lead.outcome : lead.outcome === closedOutcome)));
   if (filter === "delayed") return leads.filter(lead => lead.status !== "processed" && isDelayedSending(replies.get(lead.id)));
   if (filter === "draft" || filter === "sending") {
     return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);
   }
   return leads;
+}
+
+export function outcomeLabel(outcome: string | null) {
+  if (outcome === "won") return "Megvalósult";
+  if (outcome === "lost") return "Nem valósult meg";
+  return "Eredmény nincs rögzítve";
 }
 
 function normalizeSearchText(value: string) {

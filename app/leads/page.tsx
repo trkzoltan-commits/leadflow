@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { displayReceivedAt, filterLeads, isDelayedSending, replyLabel, searchLeads, type LeadListFilter } from "@/lib/lead-overview";
+import { displayReceivedAt, filterLeads, isDelayedSending, outcomeLabel, replyLabel, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -12,8 +12,9 @@ export default function LeadsPage() {
   const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview();
 
   const [listFilter, setListFilter] = useState<LeadListFilter>("active");
+  const [closedOutcome, setClosedOutcome] = useState<ClosedOutcomeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const visibleLeads = searchLeads(filterLeads(leads, replies, listFilter), searchQuery);
+  const visibleLeads = searchLeads(filterLeads(leads, replies, listFilter, closedOutcome), searchQuery);
 
   function openLead(leadId: string) {
     router.push(`/leads/${leadId}`);
@@ -112,6 +113,18 @@ export default function LeadsPage() {
                   </button>
                 ))}
               </div>
+              {listFilter === "closed" && (
+                <div className="mt-4">
+                  <label htmlFor="closed-outcome" className="mb-2 block text-sm font-medium text-slate-700">Lezárás eredménye</label>
+                  <select id="closed-outcome" value={closedOutcome} onChange={event => setClosedOutcome(event.target.value as ClosedOutcomeFilter)}
+                    className="w-full max-w-xs rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-violet-400">
+                    <option value="all">Minden lezárt ({filterLeads(leads, replies, "closed").length})</option>
+                    <option value="won">Megvalósult ({filterLeads(leads, replies, "closed", "won").length})</option>
+                    <option value="lost">Nem valósult meg ({filterLeads(leads, replies, "closed", "lost").length})</option>
+                    <option value="unknown">Eredmény nélkül ({filterLeads(leads, replies, "closed", "unknown").length})</option>
+                  </select>
+                </div>
+              )}
               <p className="mt-3 text-xs text-slate-500">A lezárt érdeklődők megmaradnak a riportokhoz, és a „Lezártak” vagy „Mind” nézetben elérhetők.</p>
               <div className="mt-5 flex flex-wrap items-end gap-3">
                 <div className="min-w-64 flex-1">
@@ -196,6 +209,7 @@ export default function LeadsPage() {
                         <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold">
                           {getStatusLabel(lead.status)}
                         </span>
+                        {lead.status === "processed" && <div className="mt-2 text-xs font-medium text-slate-600">{outcomeLabel(lead.outcome)}</div>}
                       </td>
 
                       <td className="px-6 py-4">
