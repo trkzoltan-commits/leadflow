@@ -32,12 +32,24 @@ beállítását kéri. Meghíváskor a `redirectTo` értéke a végleges LeadFlo
 Redirect URL-ek között. Ha a cím nincs engedélyezve, a Supabase a Site URL-re
 irányíthat vissza külön hiba nélkül.
 
-Az üzemeltetőnek a meghívott Supabase Auth-azonosítót az adott cég `users` rekordjához
-kell rendelnie, mielőtt a meghívott jelszót állíthat be. A meghívás és a hozzárendelés
-biztonságos sorrendjének automatizálása külön fejlesztési egység; ez a változtatás
-nem küld e-mailt. A meghívó és a jelszó
-nem kerülhet Gitbe vagy chatbe. Az első valódi ügyfél előtt a teljes meghívás →
-jelszóbeállítás → kétcéges RLS-próba folyamatot tesztelni kell.
+Az üzemeltetői parancs először ellenőrzi a céges slugot és hogy van-e már tulajdonos;
+alapesetben nem küld levelet:
+
+```powershell
+node --env-file=.env.local scripts/invite-company-owner.mjs pelda-kft owner@example.com
+```
+
+Csak az engedélyezett Redirect URL és a meghívó sablon ellenőrzése után, egy
+**külön, szándékos** `--send` kapcsolóval hívja a Supabase meghívó API-ját. A visszakapott
+Auth-azonosítót a cég `users` rekordjához rendeli. A parancsot csak az üzemeltető
+futtathatja; a Supabase titkos kulcs nem kerülhet böngészőbe, Gitbe vagy chatbe.
+Valódi ügyfélnek most még ne küldjünk meghívót: a teljes meghívás → jelszóbeállítás
+→ kétcéges RLS-próba folyamatot előbb tesztcímmel kell kipróbálni.
+
+Ha a meghívó elküldése után a céges hozzárendelés hibázik, a script külön hibát jelez.
+Ilyenkor a meghívott nem állíthat be jelszót az oldalon; az üzemeltetőnek az
+Auth-azonosítót és a `users` rekordot kell egyeztetnie. A meghívó linkjét és a jelszót
+nem szabad naplózni vagy továbbítani.
 
 ## Első egység: bejövő Make-hitelesítés
 
