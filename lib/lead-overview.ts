@@ -9,11 +9,12 @@ export type OverviewLead = {
   status: string | null;
   outcome: string | null;
   source: string | null;
+  new_lead_dispatch_status: string | null;
   created_at: string;
 };
 export type OverviewMessage = { id: string; lead_id: string; status: string | null; created_at: string; sending_started_at: string | null };
 
-export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "delayed";
+export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "delayed" | "make";
 export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
 
 export const DELAYED_SEND_MINUTES = 60;
@@ -38,6 +39,7 @@ export function filterLeads(leads: OverviewLead[], replies: Map<string, Overview
   if (filter === "active") return leads.filter(lead => lead.status !== "processed");
   if (filter === "closed") return leads.filter(lead => lead.status === "processed" &&
     (closedOutcome === "all" || (closedOutcome === "unknown" ? !lead.outcome : lead.outcome === closedOutcome)));
+  if (filter === "make") return leads.filter(lead => newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) !== null);
   if (filter === "delayed") return leads.filter(lead => lead.status !== "processed" && isDelayedSending(replies.get(lead.id)));
   if (filter === "draft" || filter === "sending") {
     return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);

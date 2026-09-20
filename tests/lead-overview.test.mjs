@@ -15,6 +15,18 @@ test("new lead Make dispatch warnings preserve uncertain delivery and ignore his
  assert.match(newLeadDispatchWarning("unconfigured","2026-09-20T12:00:00Z",now),/nem indult el/);
  assert.match(newLeadDispatchWarning("uncertain","2026-09-20T12:00:00Z",now),/nem igazolta vissza/);
 });
+test("Make attention filter matches the warning shown on the dashboard and lead list",()=>{
+ const recent=new Date(Date.now()-30_000).toISOString();
+ const old=new Date(Date.now()-61_000).toISOString();
+ const leads=[
+   {id:"a",status:"new",new_lead_dispatch_status:"unconfigured",created_at:recent},
+   {id:"b",status:"new",new_lead_dispatch_status:"uncertain",created_at:recent},
+   {id:"c",status:"new",new_lead_dispatch_status:"pending",created_at:old},
+   {id:"d",status:"new",new_lead_dispatch_status:"pending",created_at:recent},
+   {id:"e",status:"processed",new_lead_dispatch_status:null,created_at:old},
+ ];
+ assert.deepEqual(filterLeads(leads,new Map(),"make").map(lead=>lead.id),["a","b","c"]);
+});
 test("closed outcome filter includes only matching closed leads and handles legacy missing outcomes",()=>{
  const leads=[{id:"a",status:"processed",outcome:"won"},{id:"b",status:"processed",outcome:"lost"},{id:"c",status:"processed",outcome:null},{id:"d",status:"new",outcome:"won"}];
  const replies=new Map();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { dailyCounts, displayDate, isDelayedSending, leadLabel, replyLabel } from "@/lib/lead-overview";
+import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, newLeadDispatchWarning, replyLabel } from "@/lib/lead-overview";
 
 export default function Home() {
   const router = useRouter();
@@ -13,6 +13,7 @@ export default function Home() {
   const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending"].includes(replies.get(lead.id)?.status ?? ""))
     .sort((a, b) => Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
   const delayedCount = attention.filter(lead => isDelayedSending(replies.get(lead.id))).length;
+  const makeAttention = filterLeads(leads, replies, "make");
   const days = dailyCounts(leads);
   const max = Math.max(1, ...days.map(day => day.count));
   const leadMap = new Map(leads.map(lead => [lead.id, lead]));
@@ -26,6 +27,7 @@ export default function Home() {
     ["Ellenőrizendő piszkozat", attention.filter(lead => replies.get(lead.id)?.status === "draft").length],
     ["Küldési visszaigazolásra vár", attention.filter(lead => replies.get(lead.id)?.status === "sending").length],
     ["Késő visszaigazolás", delayedCount],
+    ["Make-indítás ellenőrizendő", makeAttention.length],
   ];
   return <main className="min-h-screen bg-slate-50 p-5 text-slate-900 md:p-8">
     <div className="mx-auto max-w-7xl">
@@ -44,7 +46,12 @@ export default function Home() {
         {error && <button onClick={() => void refresh()} className="ml-3 font-semibold underline">Újrapróbálás</button>}
       </div>
       {updatedAt && <>
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{kpis.map(([label,count]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-600">{label}</p><p className="mt-2 text-3xl font-bold">{count}</p></div>)}</div>
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{kpis.map(([label,count]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-600">{label}</p><p className="mt-2 text-3xl font-bold">{count}</p></div>)}</div>
+        {makeAttention.length > 0 && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <h2 className="font-bold">{makeAttention.length} érdeklődő Make-indítása figyelmet igényel</h2>
+          <p className="mt-2 text-sm">Ellenőrizd a saját Make-futást, mielőtt bármit újraindítasz.</p>
+          <Link href="/leads?filter=make" className="mt-3 inline-block text-sm font-semibold underline">Érintett érdeklődők megnyitása →</Link>
+        </section>}
         <section className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold">Figyelmet igénylő válaszok</h2>
           <p className="mt-2 text-sm text-slate-500">A legutóbbi válasz állapota alapján. A piszkozatot az automatizálás még feldolgozhatja.</p>
@@ -59,7 +66,7 @@ export default function Home() {
             </section>
             <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-wrap justify-between gap-3 p-6"><h2 className="text-xl font-bold">Legújabb érdeklődők</h2><Link className="font-semibold text-violet-600" href="/leads">Összes megtekintése →</Link></div>
-              {leads.length === 0 ? <p className="px-6 pb-6 text-slate-500">Még nincs érdeklődő.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Név / szolgáltatás","Érkezett","Állapot","Válasz"].map(label => <th key={label} className="px-5 py-3">{label}</th>)}</tr></thead><tbody>{leads.slice(0,10).map(lead => <tr key={lead.id} className="border-t border-slate-100"><td className="px-5 py-4"><Link href={`/leads/${lead.id}`} className="font-semibold text-violet-700 underline-offset-4 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link><p className="mt-1 text-slate-500">{lead.service || "—"}</p></td><td className="px-5 py-4">{displayDate(lead.created_at)}</td><td className="px-5 py-4">{leadLabel(lead.status)}</td><td className="px-5 py-4">{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)}</td></tr>)}</tbody></table></div>}
+              {leads.length === 0 ? <p className="px-6 pb-6 text-slate-500">Még nincs érdeklődő.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Név / szolgáltatás","Érkezett","Állapot","Válasz"].map(label => <th key={label} className="px-5 py-3">{label}</th>)}</tr></thead><tbody>{leads.slice(0,10).map(lead => <tr key={lead.id} className="border-t border-slate-100"><td className="px-5 py-4"><Link href={`/leads/${lead.id}`} className="font-semibold text-violet-700 underline-offset-4 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link><p className="mt-1 text-slate-500">{lead.service || "—"}</p></td><td className="px-5 py-4">{displayDate(lead.created_at)}</td><td className="px-5 py-4">{leadLabel(lead.status)}{newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) && <p className="mt-1 text-xs font-semibold text-amber-800">Make-indítás ellenőrizendő</p>}</td><td className="px-5 py-4">{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)}</td></tr>)}</tbody></table></div>}
             </section>
           </div>
           <section className="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Legutóbbi események</h2><p className="mt-2 text-sm text-slate-500">Az érdeklődők és üzenetek létrehozási időpontja szerint.</p><ul className="mt-5 space-y-5">{activities.map(activity => <li key={activity.id}><Link href={`/leads/${activity.leadId}`} className="block rounded-lg hover:bg-violet-50"><p className="font-semibold">{activity.title}</p><p className="text-sm text-slate-600">{leadMap.get(activity.leadId)?.name || "Névtelen érdeklődő"}</p><p className="mt-1 text-xs text-slate-500">{displayDate(activity.date)}</p></Link></li>)}</ul>{activities.length === 0 && <p className="mt-4 text-slate-500">Még nincs megjeleníthető esemény.</p>}</section>
