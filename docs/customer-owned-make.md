@@ -76,3 +76,16 @@ migráció ideje lesz a figyelmeztetés kezdőpontja, mert a korábbi pontos id�
 60 perc elteltével a partner dashboardján, listájában és az adatlapon kiemelt jelzés
 jelenik meg. A jelzés nem engedélyez újraküldést és nem minősíti sikertelennek a
 küldést; a partner a saját Make-futást és Gmail Elküldött levelek mappát ellenőrzi.
+
+## Új érdeklődő Make-indításának jelzése
+
+A `202609200003_new_lead_dispatch_status.sql` migrációt a hozzá tartozó kód
+telepítése előtt kell alkalmazni. A publikus ajánlatkérés először elmenti az
+érdeklődőt `pending` állapottal, majd rögzíti, hogy a Make-webhook HTTP-válasza
+elfogadott (`accepted`), a kapcsolat nem volt beállítva (`unconfigured`), vagy az
+indítás eredménye bizonytalan (`uncertain`). A régi rekordok mezője üres marad.
+
+Az adatlap csak az `unconfigured` és `uncertain` eseteket, illetve az egy percnél
+régebbi `pending` állapotot emeli ki. Egyik sem indít automatikus újrapróbálást.
+Az `accepted` csak a webhook fogadását igazolja, a Make-folyamat és az AI-tervezet
+sikerét nem. Az esetleges feldolgozási hibák külön státuszkövetést igényelnek.

@@ -5,7 +5,16 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning}=context.exports;
+test("new lead Make dispatch warnings preserve uncertain delivery and ignore historical leads",()=>{
+ const now=new Date("2026-09-20T12:00:00Z");
+ assert.equal(newLeadDispatchWarning(null,"2026-09-20T10:00:00Z",now),null);
+ assert.equal(newLeadDispatchWarning("accepted","2026-09-20T10:00:00Z",now),null);
+ assert.equal(newLeadDispatchWarning("pending","2026-09-20T11:59:30Z",now),null);
+ assert.match(newLeadDispatchWarning("pending","2026-09-20T11:59:00Z",now),/visszaigazolása késik/);
+ assert.match(newLeadDispatchWarning("unconfigured","2026-09-20T12:00:00Z",now),/nem indult el/);
+ assert.match(newLeadDispatchWarning("uncertain","2026-09-20T12:00:00Z",now),/nem igazolta vissza/);
+});
 test("closed outcome filter includes only matching closed leads and handles legacy missing outcomes",()=>{
  const leads=[{id:"a",status:"processed",outcome:"won"},{id:"b",status:"processed",outcome:"lost"},{id:"c",status:"processed",outcome:null},{id:"d",status:"new",outcome:"won"}];
  const replies=new Map();

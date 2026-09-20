@@ -18,6 +18,16 @@ export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
 
 export const DELAYED_SEND_MINUTES = 60;
 
+export function newLeadDispatchWarning(status: string | null, createdAt: string, now = new Date()) {
+  if (status === "unconfigured") return "A Make-kapcsolat nem érhető el, ezért az automatizálás nem indult el. Az érdeklődő adatai el vannak mentve; ellenőrizd a cég Make-beállításait.";
+  if (status === "uncertain") return "A Make nem igazolta vissza az automatizálás indítását. Az érdeklődő adatai el vannak mentve. Ellenőrizd a saját Make-futást, mielőtt bármit újraindítasz.";
+  const created = new Date(createdAt).getTime();
+  if (status === "pending" && Number.isFinite(created) && now.getTime() - created >= 60_000) {
+    return "Az automatizálás indításának visszaigazolása késik. Ellenőrizd a saját Make-futást, mielőtt bármit újraindítasz.";
+  }
+  return null;
+}
+
 export function isDelayedSending(message?: Pick<OverviewMessage, "status" | "sending_started_at"> | null, now = new Date()) {
   if (message?.status !== "sending" || !message.sending_started_at) return false;
   const startedAt = new Date(message.sending_started_at).getTime();

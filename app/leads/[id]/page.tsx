@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { displayReceivedAt, isDelayedSending } from "@/lib/lead-overview";
+import { displayReceivedAt, isDelayedSending, newLeadDispatchWarning } from "@/lib/lead-overview";
 
 type Lead = {
   id: string;
@@ -18,6 +18,7 @@ type Lead = {
   status: string | null;
   outcome: string | null;
   source: string | null;
+  new_lead_dispatch_status: string | null;
   created_at: string;
   ai_summary: string | null;
   ai_safe_to_send: boolean | null;
@@ -109,6 +110,7 @@ export default function LeadDetailsPage() {
           status,
           outcome,
           source,
+          new_lead_dispatch_status,
           created_at,
           ai_summary,
           ai_safe_to_send,
@@ -180,7 +182,7 @@ export default function LeadDetailsPage() {
       running = true;
       try {
         const [leadResult, messagesResult] = await Promise.all([
-          supabase.from("leads").select("status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
+          supabase.from("leads").select("status, new_lead_dispatch_status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
           supabase.from("messages").select("id, direction, sender, content, channel, status, created_at, sending_started_at").eq("lead_id", leadId).order("created_at", { ascending: true }),
         ]);
         if (cancelled) return;
@@ -714,6 +716,7 @@ export default function LeadDetailsPage() {
     messageStatus === "sending";
   const sendingStartedAt = messageHistory.find(message => message.id === draftMessageId)?.sending_started_at;
   const delayedSending = isDelayedSending({ status: messageStatus, sending_started_at: sendingStartedAt ?? null });
+  const dispatchWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at);
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -737,6 +740,11 @@ export default function LeadDetailsPage() {
             Érkezett: <time dateTime={lead.created_at}>{displayReceivedAt(lead.created_at)}</time>
           </p>
         </div>
+
+        {dispatchWarning && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <h2 className="font-bold">Az automatizálás indítása figyelmet igényel</h2>
+          <p className="mt-2 text-sm leading-6">{dispatchWarning}</p>
+        </section>}
 
         <section aria-label="Aktuális állapot" className={delayedSending ? "mb-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm" : "mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm"}>
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Következő lépés</p>

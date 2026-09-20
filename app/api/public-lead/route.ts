@@ -87,6 +87,7 @@ export async function POST(request: Request) {
         priority: "medium",
         status: "new",
         source: "web",
+        new_lead_dispatch_status: "pending",
       })
       .select("id")
       .single();
@@ -98,6 +99,16 @@ export async function POST(request: Request) {
         { error: "Nem sikerült elmenteni az érdeklődést." },
         { status: 500 }
       );
+    }
+
+    const savedLeadId = data.id;
+    const savedCompanyId = company.id;
+    async function recordDispatchStatus(status: "accepted" | "unconfigured" | "uncertain") {
+      const { error: updateError } = await supabaseAdmin.from("leads")
+        .update({ new_lead_dispatch_status: status })
+        .eq("id", savedLeadId)
+        .eq("company_id", savedCompanyId);
+      if (updateError) console.error("Új érdeklődő Make-indítási állapotának mentése sikertelen.");
     }
 
     const webhookUrl = await getMakeWebhook(company.id, "new_lead");
@@ -125,16 +136,21 @@ export async function POST(request: Request) {
             webhookResponse.status,
             webhookResponse.statusText
           );
+          await recordDispatchStatus("uncertain");
+        } else {
+          await recordDispatchStatus("accepted");
         }
       } catch {
         console.error(
           "Make webhook hívási hiba."
         );
+        await recordDispatchStatus("uncertain");
       }
     } else {
       console.warn(
         "A vállalkozás Make-kapcsolata nem érhető el."
       );
+      await recordDispatchStatus("unconfigured");
     }
 
     return NextResponse.json({
