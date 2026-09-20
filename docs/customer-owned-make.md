@@ -3,6 +3,26 @@
 Elfogadott modell: központi LeadFlow, ügyfelenként saját Make- és Gmail-fiók.
 A partner napi munkáját a LeadFlow-ban végzi. Ez nem jelent GDPR-mentességet.
 
+## Pilot: új cég előkészítése
+
+Az első ügyfeleket az üzemeltető az ügyféllel közösen állítja be. A cég alaprekordjait
+titkok nélkül, egy tranzakcióban lehet létrehozni:
+
+```powershell
+node scripts/generate-company-onboarding-sql.mjs "Példa Kft." pelda-kft
+```
+
+A parancs csak SQL-t ír ki, adatbázist nem módosít. A kimenetet a **megfelelő Supabase
+projekt** SQL Editorában kell ellenőrzés után futtatni. Ha a slug már foglalt, a
+tranzakció hibával leáll, és nem hoz létre részleges céget. Az új cég kézi AI-móddal
+és letiltott, saját Make-kapcsolattal indul; nem kerül a közös pilot webhookra.
+
+Ez csak az első előkészítő egység. A tulajdonos Supabase Auth-fiókját és `users`
+kapcsolatát, a céges Make-kulcsot, a két ügyfél-webhookot és a Gmail-kapcsolatot
+külön kell beállítani és kétcéges izolációs próbával ellenőrizni. A Make-kapcsolatot
+csak ezután szabad engedélyezni. Valódi ügyféladatot, webhookcímet vagy kulcsot ne
+mentsünk a generált SQL-lekérdezéssel együtt a repositoryba.
+
 ## Első egység: bejövő Make-hitelesítés
 
 - Fejléc: x-leadflow-secret. Céges kulcs: lfmk_ + 32 kriptográfiailag véletlen bájt hex formában.
