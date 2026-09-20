@@ -7,6 +7,7 @@ export type OverviewLead = {
   location: string | null;
   priority: string | null;
   status: string | null;
+  outcome: string | null;
   source: string | null;
   created_at: string;
 };

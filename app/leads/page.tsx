@@ -74,6 +74,7 @@ export default function LeadsPage() {
           >
             ← Dashboard
           </button>
+          <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-50">Riportok</Link>
         </div>
 
         <p role="status" className={loadError ? "mb-5 text-amber-700" : "mb-5 text-sm text-slate-500"}>
