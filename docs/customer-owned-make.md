@@ -106,6 +106,17 @@ Windows alatt a fájl jogosultságai a szülőmappából is öröklődhetnek; v�
 számodra hozzáférhető helyet. Kulcsrotációhoz és elveszett kulcs pótlásához külön
 eljárás kell, ez a script új aktív kulcsot nem ad ki meglévő mellé.
 
+Az üzemeltető a bekötés után csak olvasó ellenőrzést futtathat. Az eredmény
+igen/nem állapotokat mutat; nem írja ki az e-mail-címet, kulcsot vagy webhookcímeket:
+
+```powershell
+node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft
+```
+
+Az „alapbeállítások teljesek” üzenet nem bizonyítja a Make-folyamatok működését,
+a Gmail-küldést vagy a két cég közti élő adatizolációt. Ezeket külön próbával kell
+ellenőrizni, mielőtt ügyfél használja a rendszert.
+
 ## Második egység: kimenő webhookok
 
 A `company_make_connections` táblát csak a szerver olvashatja. A két esemény külön
