@@ -16,6 +16,7 @@ type Lead = {
   location: string | null;
   priority: string | null;
   status: string | null;
+  outcome: string | null;
   source: string | null;
   created_at: string;
   ai_summary: string | null;
@@ -76,6 +77,8 @@ export default function LeadDetailsPage() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [status, setStatus] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [priority, setPriority] = useState("");
 
   useEffect(() => {
@@ -103,6 +106,7 @@ export default function LeadDetailsPage() {
           location,
           priority,
           status,
+          outcome,
           source,
           created_at,
           ai_summary,
@@ -130,6 +134,7 @@ export default function LeadDetailsPage() {
       setDescription(data.description ?? "");
       setLocation(data.location ?? "");
       setStatus(data.status ?? "new");
+      setOutcome(data.outcome ?? "");
       setPriority(data.priority ?? "medium");
       setAiResult(data.ai_summary ?? "");
 
@@ -222,6 +227,13 @@ export default function LeadDetailsPage() {
 
     setSaving(true);
     setSaveSuccess(false);
+    setSaveError("");
+
+    if (status === "processed" && !outcome) {
+      setSaveError("A lezáráshoz válaszd ki, hogy az ügylet megvalósult-e.");
+      setSaving(false);
+      return;
+    }
 
     const { error } = await supabase
       .from("leads")
@@ -233,6 +245,7 @@ export default function LeadDetailsPage() {
         description,
         location,
         status,
+        outcome: status === "processed" ? outcome : null,
         priority,
         updated_at: new Date().toISOString(),
       })
@@ -240,6 +253,7 @@ export default function LeadDetailsPage() {
 
     if (error) {
       console.error("Mentési hiba:", error);
+      setSaveError("A módosítások mentése nem sikerült. Próbáld újra.");
       setSaving(false);
       return;
     }
@@ -253,6 +267,7 @@ export default function LeadDetailsPage() {
       description,
       location,
       status,
+      outcome: status === "processed" ? outcome : null,
       priority,
     });
 
@@ -1062,9 +1077,11 @@ export default function LeadDetailsPage() {
 
                     <select
                       value={status}
-                      onChange={(e) =>
-                        setStatus(e.target.value)
-                      }
+                      onChange={(e) => {
+                        setStatus(e.target.value);
+                        if (e.target.value !== "processed") setOutcome("");
+                        setSaveError("");
+                      }}
                       className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
                     >
                       <option value="new">Új</option>
@@ -1082,6 +1099,24 @@ export default function LeadDetailsPage() {
                       </option>
                     </select>
                   </div>
+
+                  {status === "processed" && (
+                    <div>
+                      <label htmlFor="lead-outcome" className="mb-2 block text-sm font-medium text-slate-700">
+                        Eredmény
+                      </label>
+                      <select id="lead-outcome" value={outcome}
+                        onChange={(e) => { setOutcome(e.target.value); setSaveError(""); }}
+                        required
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      >
+                        <option value="">Válassz eredményt</option>
+                        <option value="won">Megvalósult</option>
+                        <option value="lost">Nem valósult meg</option>
+                      </select>
+                      {!lead.outcome && <p className="mt-2 text-xs text-slate-500">A korábban lezárt ügyek eredménye csak rögzítés után jelenik meg a riportokban.</p>}
+                    </div>
+                  )}
 
                   <div>
                     <label className="mb-2 block text-sm font-medium text-slate-700">
@@ -1122,6 +1157,7 @@ export default function LeadDetailsPage() {
                       ✓ A módosítások elmentve.
                     </div>
                   )}
+                  {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
                 </div>
               </div>
 
