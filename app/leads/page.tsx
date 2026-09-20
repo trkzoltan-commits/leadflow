@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { replyLabel } from "@/lib/lead-overview";
+import { filterLeads, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -19,6 +19,8 @@ export default function LeadsPage() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
+  const [listFilter, setListFilter] = useState<LeadListFilter>("active");
+  const visibleLeads = filterLeads(leads, replies, listFilter);
 
   async function handleAddLead(e: React.FormEvent) {
     e.preventDefault();
@@ -227,9 +229,7 @@ export default function LeadsPage() {
           {/* LEAD LISTA */}
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
-              <h2 className="text-xl font-bold">
-                Összes érdeklődő
-              </h2>
+              <h2 className="text-xl font-bold">Érdeklődők</h2>
 
               <p className="mt-1 text-sm text-slate-500">
                 {updatedAt ? `${leads.length} érdeklődő az adatbázisban` : "Az adatok nem érhetők el"}
@@ -238,6 +238,24 @@ export default function LeadsPage() {
               <p className="mt-2 text-xs text-slate-400">
                 Kattints egy érdeklődőre az adatlap megnyitásához.
               </p>
+              <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Érdeklődők szűrése">
+                {([
+                  ["active", "Aktív", leads.filter(lead => lead.status !== "processed").length],
+                  ["closed", "Lezártak", leads.filter(lead => lead.status === "processed").length],
+                  ["draft", "Ellenőrizendő", filterLeads(leads, replies, "draft").length],
+                  ["sending", "Visszaigazolásra vár", filterLeads(leads, replies, "sending").length],
+                  ["all", "Mind", leads.length],
+                ] as const).map(([value, label, count]) => (
+                  <button key={value} type="button" onClick={() => setListFilter(value)}
+                    aria-pressed={listFilter === value}
+                    className={listFilter === value
+                      ? "rounded-xl bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
+                      : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"}>
+                    {label} ({count})
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-slate-500">A lezárt érdeklődők megmaradnak a riportokhoz, és a „Lezártak” vagy „Mind” nézetben elérhetők.</p>
             </div>
 
             <div className="overflow-x-auto">
@@ -272,8 +290,8 @@ export default function LeadsPage() {
                 </thead>
 
                 <tbody>
-                  {updatedAt && leads.length === 0 && <tr><td colSpan={7} className="p-6 text-slate-500">Még nincs érdeklődő.</td></tr>}
-                  {leads.map((lead) => (
+                  {updatedAt && visibleLeads.length === 0 && <tr><td colSpan={7} className="p-6 text-slate-500">Ebben a nézetben nincs érdeklődő.</td></tr>}
+                  {visibleLeads.map((lead) => (
                     <tr
                       key={lead.id}
                       onClick={() => openLead(lead.id)}

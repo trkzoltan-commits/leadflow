@@ -12,6 +12,17 @@ export type OverviewLead = {
 };
 export type OverviewMessage = { id: string; lead_id: string; status: string | null; created_at: string };
 
+export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending";
+
+export function filterLeads(leads: OverviewLead[], replies: Map<string, OverviewMessage>, filter: LeadListFilter) {
+  if (filter === "active") return leads.filter(lead => lead.status !== "processed");
+  if (filter === "closed") return leads.filter(lead => lead.status === "processed");
+  if (filter === "draft" || filter === "sending") {
+    return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);
+  }
+  return leads;
+}
+
 export function latestReplies(messages: OverviewMessage[]) {
   const result = new Map<string, OverviewMessage>();
   for (const message of messages) {

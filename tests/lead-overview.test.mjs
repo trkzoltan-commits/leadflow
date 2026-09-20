@@ -5,7 +5,24 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads}=context.exports;
+test("closed leads remain available without appearing in active or attention views",()=>{
+ const leads=[
+   {id:"a",status:"new"},
+   {id:"b",status:"processed"},
+   {id:"c",status:"contacted"},
+ ];
+ const replies=new Map([
+   ["a",{status:"draft"}],
+   ["b",{status:"sending"}],
+   ["c",{status:"sending"}],
+ ]);
+ assert.deepEqual(filterLeads(leads,replies,"active").map(lead=>lead.id),["a","c"]);
+ assert.deepEqual(filterLeads(leads,replies,"closed").map(lead=>lead.id),["b"]);
+ assert.deepEqual(filterLeads(leads,replies,"draft").map(lead=>lead.id),["a"]);
+ assert.deepEqual(filterLeads(leads,replies,"sending").map(lead=>lead.id),["c"]);
+ assert.deepEqual(filterLeads(leads,replies,"all").map(lead=>lead.id),["a","b","c"]);
+});
 test("latest reply does not count an old draft after a newer sent reply",()=>{
  const result=latestReplies([
  {id:"1",lead_id:"a",status:"draft",created_at:"2026-09-19T09:00:00Z"},
