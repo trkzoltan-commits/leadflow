@@ -89,3 +89,12 @@ Az adatlap csak az `unconfigured` és `uncertain` eseteket, illetve az egy percn
 régebbi `pending` állapotot emeli ki. Egyik sem indít automatikus újrapróbálást.
 Az `accepted` csak a webhook fogadását igazolja, a Make-folyamat és az AI-tervezet
 sikerét nem. Az esetleges feldolgozási hibák külön státuszkövetést igényelnek.
+
+## Elmaradt AI-választervezet
+
+Az `accepted` állapotú, még nyitott érdeklődőknél az érkezéstől számított 15 perc
+után figyelmeztetés jelenik meg, ha nincs kimenő üzenet. A jelzés az adatlapon,
+az érdeklődők listájában és a dashboardon is látszik. Bármely kimenő üzenet
+(piszkozat, küldés alatt vagy elküldött) megszünteti ezt a jelzést. A régi,
+ismeretlen Make-indítású rekordokra nem vonatkozik. Ez a tervezet hiányát
+észleli, nem állapítja meg a Make-futás pontos hibáját, és nem indít újra semmit.

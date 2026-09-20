@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { displayReceivedAt, filterLeads, isDelayedSending, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
+import { displayReceivedAt, filterLeads, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
 import { filterReportLeads, parseReportSelection, type ReportSegment } from "@/lib/lead-report";
 
 const reportMonthNames = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
@@ -116,7 +116,7 @@ function LeadsContent() {
                   ["active", "Aktív", scopedLeads.filter(lead => lead.status !== "processed").length],
                   ["closed", "Lezártak", scopedLeads.filter(lead => lead.status === "processed").length],
                   ["draft", "Ellenőrizendő", filterLeads(scopedLeads, replies, "draft").length],
-                  ["make", "Make-indítás figyelmet igényel", filterLeads(scopedLeads, replies, "make").length],
+                  ["make", "Automatizálás ellenőrizendő", filterLeads(scopedLeads, replies, "make").length],
                   ["delayed", "Késő visszaigazolás", filterLeads(scopedLeads, replies, "delayed").length],
                   ["sending", "Visszaigazolásra vár", filterLeads(scopedLeads, replies, "sending").length],
                   ["all", "Mind", scopedLeads.length],
@@ -228,6 +228,7 @@ function LeadsContent() {
                         </span>
                         {lead.status === "processed" && <div className="mt-2 text-xs font-medium text-slate-600">{outcomeLabel(lead.outcome)}</div>}
                         {newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) && <div className="mt-2 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">Make-indítás ellenőrizendő</div>}
+                        {missingAiDraftWarning(lead, replies.has(lead.id)) && <div className="mt-2 rounded-md bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">AI-választervezet késik</div>}
                       </td>
 
                       <td className="px-6 py-4">

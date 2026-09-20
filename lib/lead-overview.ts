@@ -18,6 +18,7 @@ export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" |
 export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
 
 export const DELAYED_SEND_MINUTES = 60;
+export const MISSING_AI_DRAFT_MINUTES = 15;
 
 export function newLeadDispatchWarning(status: string | null, createdAt: string, now = new Date()) {
   if (status === "unconfigured") return "A Make-kapcsolat nem érhető el, ezért az automatizálás nem indult el. Az érdeklődő adatai el vannak mentve; ellenőrizd a cég Make-beállításait.";
@@ -27,6 +28,17 @@ export function newLeadDispatchWarning(status: string | null, createdAt: string,
     return "Az automatizálás indításának visszaigazolása késik. Ellenőrizd a saját Make-futást, mielőtt bármit újraindítasz.";
   }
   return null;
+}
+
+export function missingAiDraftWarning(
+  lead: Pick<OverviewLead, "new_lead_dispatch_status" | "status" | "created_at">,
+  hasOutgoingReply: boolean,
+  now = new Date()
+) {
+  if (lead.new_lead_dispatch_status !== "accepted" || lead.status === "processed" || hasOutgoingReply) return null;
+  const created = new Date(lead.created_at).getTime();
+  if (!Number.isFinite(created) || now.getTime() - created < MISSING_AI_DRAFT_MINUTES * 60_000) return null;
+  return "A Make fogadta az érdeklődőt, de 15 perc után sincs választervezet. Ellenőrizd a saját Make-futást. Ne indítsd újra a feldolgozást, amíg nem tisztázott, mi történt.";
 }
 
 export function isDelayedSending(message?: Pick<OverviewMessage, "status" | "sending_started_at"> | null, now = new Date()) {
@@ -39,7 +51,9 @@ export function filterLeads(leads: OverviewLead[], replies: Map<string, Overview
   if (filter === "active") return leads.filter(lead => lead.status !== "processed");
   if (filter === "closed") return leads.filter(lead => lead.status === "processed" &&
     (closedOutcome === "all" || (closedOutcome === "unknown" ? !lead.outcome : lead.outcome === closedOutcome)));
-  if (filter === "make") return leads.filter(lead => newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) !== null);
+  if (filter === "make") return leads.filter(lead =>
+    newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) !== null ||
+    missingAiDraftWarning(lead, replies.has(lead.id)) !== null);
   if (filter === "delayed") return leads.filter(lead => lead.status !== "processed" && isDelayedSending(replies.get(lead.id)));
   if (filter === "draft" || filter === "sending") {
     return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);

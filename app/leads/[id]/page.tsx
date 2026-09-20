@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { displayReceivedAt, isDelayedSending, newLeadDispatchWarning } from "@/lib/lead-overview";
+import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning } from "@/lib/lead-overview";
 
 type Lead = {
   id: string;
@@ -717,6 +717,7 @@ export default function LeadDetailsPage() {
   const sendingStartedAt = messageHistory.find(message => message.id === draftMessageId)?.sending_started_at;
   const delayedSending = isDelayedSending({ status: messageStatus, sending_started_at: sendingStartedAt ?? null });
   const dispatchWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at);
+  const draftWarning = missingAiDraftWarning(lead, messageHistory.some(message => message.direction === "outgoing"));
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 md:p-10">
@@ -744,6 +745,10 @@ export default function LeadDetailsPage() {
         {dispatchWarning && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
           <h2 className="font-bold">Az automatizálás indítása figyelmet igényel</h2>
           <p className="mt-2 text-sm leading-6">{dispatchWarning}</p>
+        </section>}
+        {draftWarning && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <h2 className="font-bold">Az AI-választervezet késik</h2>
+          <p className="mt-2 text-sm leading-6">{draftWarning}</p>
         </section>}
 
         <section aria-label="Aktuális állapot" className={delayedSending ? "mb-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm" : "mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm"}>
