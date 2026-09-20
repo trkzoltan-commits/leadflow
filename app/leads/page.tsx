@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { displayReceivedAt, filterLeads, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
@@ -12,67 +11,8 @@ export default function LeadsPage() {
 
   const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [service, setService] = useState("");
-  const [location, setLocation] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("medium");
   const [listFilter, setListFilter] = useState<LeadListFilter>("active");
   const visibleLeads = filterLeads(leads, replies, listFilter);
-
-  async function handleAddLead(e: React.FormEvent) {
-    e.preventDefault();
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      router.replace("/login");
-      return;
-    }
-
-    const { data: userProfile, error: profileError } = await supabase
-      .from("users")
-      .select("company_id")
-      .eq("id", session.user.id)
-      .single();
-
-    if (profileError || !userProfile?.company_id) {
-      console.error("Cégazonosító hiba:", profileError);
-      return;
-    }
-
-    const { error } = await supabase.from("leads").insert({
-      company_id: userProfile.company_id,
-      name,
-      email,
-      phone,
-      service,
-      description,
-      location,
-      priority,
-      status: "new",
-      source: "manual",
-    });
-
-    if (error) {
-      console.error("Lead mentési hiba:", error);
-      return;
-    }
-
-    setName("");
-    setEmail("");
-    setPhone("");
-    setService("");
-    setLocation("");
-    setDescription("");
-    setPriority("medium");
-
-    await refresh();
-  }
 
   function openLead(leadId: string) {
     router.push(`/leads/${leadId}`);
@@ -124,7 +64,7 @@ export default function LeadsPage() {
             </h1>
 
             <p className="mt-2 text-slate-500">
-              Új érdeklődők felvétele és kezelése
+              Beérkezett érdeklődők kezelése
             </p>
           </div>
 
@@ -140,93 +80,7 @@ export default function LeadsPage() {
           {loadError ? "A frissítés nem sikerült. Újrapróbáljuk; a kitöltött űrlap megmarad." : "A lista és a válaszállapotok 10 másodpercenként automatikusan frissülnek."}
           {loadError && <button onClick={() => void refresh()} className="ml-3 underline">Újrapróbálás</button>}
         </p>
-        <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-          {/* ÚJ LEAD */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-6 text-xl font-bold">
-              Új érdeklődő
-            </h2>
-
-            <form
-              onSubmit={handleAddLead}
-              className="space-y-4"
-            >
-              <input
-                type="text"
-                placeholder="Név"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                required
-              />
-
-              <input
-                type="email"
-                placeholder="E-mail"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-              />
-
-              <input
-                type="text"
-                placeholder="Telefonszám"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-              />
-
-              <input
-                type="text"
-                placeholder="Szolgáltatás"
-                value={service}
-                onChange={(e) => setService(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-              />
-
-              <input
-                type="text"
-                placeholder="Helyszín"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-              />
-
-              <textarea
-                placeholder="Leírás"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="min-h-28 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-              />
-
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-              >
-                <option value="low">
-                  Alacsony prioritás
-                </option>
-
-                <option value="medium">
-                  Közepes prioritás
-                </option>
-
-                <option value="high">
-                  Magas prioritás
-                </option>
-              </select>
-
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700"
-              >
-                Érdeklődő mentése
-              </button>
-            </form>
-          </div>
-
-          {/* LEAD LISTA */}
+        <div>
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 p-6">
               <h2 className="text-xl font-bold">Érdeklődők</h2>
