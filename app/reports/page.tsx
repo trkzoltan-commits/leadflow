@@ -13,6 +13,11 @@ const columns: { key: keyof ReportCounts; label: string }[] = [
   { key: "active", label: "Aktív" },
   { key: "unknown", label: "Eredmény nélkül lezárt" },
 ];
+function leadListHref(year: number, month: number | null, segment: keyof ReportCounts) {
+  const params = new URLSearchParams({ year: String(year), segment });
+  if (month !== null) params.set("month", String(month));
+  return `/leads?${params.toString()}`;
+}
 
 export default function ReportsPage() {
   const { leads, loading, error, updatedAt, refresh } = useLeadOverview();
@@ -51,7 +56,7 @@ export default function ReportsPage() {
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {columns.map(({ key, label }) => <div key={key} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-600">{label}</p><p className="mt-2 text-3xl font-bold">{report.total[key]}</p>
+            <p className="text-sm text-slate-600">{label}</p><Link href={leadListHref(year, null, key)} className="mt-2 inline-block text-3xl font-bold text-violet-700 hover:underline" aria-label={`${year}. év – ${label}: ${report.total[key]} érdeklődő megnyitása`}>{report.total[key]}</Link>
           </div>)}
         </div>
 
@@ -65,9 +70,9 @@ export default function ReportsPage() {
               <thead className="bg-slate-50 text-slate-600"><tr><th className="px-5 py-3">Hónap</th>{columns.map(({ key, label }) => <th key={key} className="px-5 py-3">{label}</th>)}</tr></thead>
               <tbody>{report.months.map((month, index) => <tr key={monthNames[index]} className="border-t border-slate-100">
                 <th scope="row" className="px-5 py-3 font-medium">{monthNames[index]}</th>
-                {columns.map(({ key }) => <td key={key} className="px-5 py-3">{month[key]}</td>)}
+                {columns.map(({ key, label }) => <td key={key} className="px-5 py-3"><Link href={leadListHref(year, index + 1, key)} className="font-medium text-violet-700 hover:underline" aria-label={`${year}. ${monthNames[index]} – ${label}: ${month[key]} érdeklődő megnyitása`}>{month[key]}</Link></td>)}
               </tr>)}</tbody>
-              <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-bold"><th scope="row" className="px-5 py-3">Éves összesen</th>{columns.map(({ key }) => <td key={key} className="px-5 py-3">{report.total[key]}</td>)}</tr></tfoot>
+              <tfoot><tr className="border-t-2 border-slate-200 bg-slate-50 font-bold"><th scope="row" className="px-5 py-3">Éves összesen</th>{columns.map(({ key, label }) => <td key={key} className="px-5 py-3"><Link href={leadListHref(year, null, key)} className="text-violet-700 hover:underline" aria-label={`${year}. év – ${label}: ${report.total[key]} érdeklődő megnyitása`}>{report.total[key]}</Link></td>)}</tr></tfoot>
             </table>
           </div>
         </section>

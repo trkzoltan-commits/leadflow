@@ -1,20 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { displayReceivedAt, filterLeads, isDelayedSending, outcomeLabel, replyLabel, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
+import { filterReportLeads, parseReportSelection, type ReportSegment } from "@/lib/lead-report";
+
+const reportMonthNames = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
+const reportSegmentLabels: Record<ReportSegment, string> = { total: "Összes", won: "Megvalósult", lost: "Nem valósult meg", active: "Aktív", unknown: "Eredmény nélkül lezárt" };
 
 export default function LeadsPage() {
+  return <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-slate-50">Betöltés...</main>}><LeadsContent /></Suspense>;
+}
+
+function LeadsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const reportSelection = parseReportSelection(searchParams);
 
   const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview();
 
-  const [listFilter, setListFilter] = useState<LeadListFilter>("active");
+  const [listFilter, setListFilter] = useState<LeadListFilter | null>(null);
   const [closedOutcome, setClosedOutcome] = useState<ClosedOutcomeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const visibleLeads = searchLeads(filterLeads(leads, replies, listFilter, closedOutcome), searchQuery);
+  const selectedFilter = listFilter ?? (reportSelection ? "all" : "active");
+  const scopedLeads = reportSelection ? filterReportLeads(leads, reportSelection) : leads;
+  const visibleLeads = searchLeads(filterLeads(scopedLeads, replies, selectedFilter, closedOutcome), searchQuery);
 
   function openLead(leadId: string) {
     router.push(`/leads/${leadId}`);
@@ -95,33 +107,37 @@ export default function LeadsPage() {
               <p className="mt-2 text-xs text-slate-400">
                 Kattints egy érdeklődőre az adatlap megnyitásához.
               </p>
+              {reportSelection && <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-violet-50 p-4 text-sm text-violet-900">
+                <span className="font-semibold">Riport: {reportSelection.year}. év{reportSelection.month !== null ? `, ${reportMonthNames[reportSelection.month - 1]}` : ""} – {reportSegmentLabels[reportSelection.segment]} ({scopedLeads.length})</span>
+                <Link href="/leads" className="font-medium underline">Riportszűrő törlése</Link>
+              </div>}
               <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Érdeklődők szűrése">
                 {([
-                  ["active", "Aktív", leads.filter(lead => lead.status !== "processed").length],
-                  ["closed", "Lezártak", leads.filter(lead => lead.status === "processed").length],
-                  ["draft", "Ellenőrizendő", filterLeads(leads, replies, "draft").length],
-                  ["delayed", "Késő visszaigazolás", filterLeads(leads, replies, "delayed").length],
-                  ["sending", "Visszaigazolásra vár", filterLeads(leads, replies, "sending").length],
-                  ["all", "Mind", leads.length],
+                  ["active", "Aktív", scopedLeads.filter(lead => lead.status !== "processed").length],
+                  ["closed", "Lezártak", scopedLeads.filter(lead => lead.status === "processed").length],
+                  ["draft", "Ellenőrizendő", filterLeads(scopedLeads, replies, "draft").length],
+                  ["delayed", "Késő visszaigazolás", filterLeads(scopedLeads, replies, "delayed").length],
+                  ["sending", "Visszaigazolásra vár", filterLeads(scopedLeads, replies, "sending").length],
+                  ["all", "Mind", scopedLeads.length],
                 ] as const).map(([value, label, count]) => (
                   <button key={value} type="button" onClick={() => setListFilter(value)}
-                    aria-pressed={listFilter === value}
-                    className={listFilter === value
+                    aria-pressed={selectedFilter === value}
+                    className={selectedFilter === value
                       ? "rounded-xl bg-violet-600 px-3 py-2 text-sm font-semibold text-white"
                       : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"}>
                     {label} ({count})
                   </button>
                 ))}
               </div>
-              {listFilter === "closed" && (
+              {selectedFilter === "closed" && (
                 <div className="mt-4">
                   <label htmlFor="closed-outcome" className="mb-2 block text-sm font-medium text-slate-700">Lezárás eredménye</label>
                   <select id="closed-outcome" value={closedOutcome} onChange={event => setClosedOutcome(event.target.value as ClosedOutcomeFilter)}
                     className="w-full max-w-xs rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 focus:border-violet-400">
-                    <option value="all">Minden lezárt ({filterLeads(leads, replies, "closed").length})</option>
-                    <option value="won">Megvalósult ({filterLeads(leads, replies, "closed", "won").length})</option>
-                    <option value="lost">Nem valósult meg ({filterLeads(leads, replies, "closed", "lost").length})</option>
-                    <option value="unknown">Eredmény nélkül ({filterLeads(leads, replies, "closed", "unknown").length})</option>
+                    <option value="all">Minden lezárt ({filterLeads(scopedLeads, replies, "closed").length})</option>
+                    <option value="won">Megvalósult ({filterLeads(scopedLeads, replies, "closed", "won").length})</option>
+                    <option value="lost">Nem valósult meg ({filterLeads(scopedLeads, replies, "closed", "lost").length})</option>
+                    <option value="unknown">Eredmény nélkül ({filterLeads(scopedLeads, replies, "closed", "unknown").length})</option>
                   </select>
                 </div>
               )}
