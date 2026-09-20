@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
+type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -15,6 +16,8 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
 
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [makeStatus, setMakeStatus] = useState<MakeConnectionStatus | null>(null);
+  const [makeStatusError, setMakeStatusError] = useState(false);
   const [autoReplyMode, setAutoReplyMode] =
     useState<AutoReplyMode>("manual");
 
@@ -65,6 +68,20 @@ export default function SettingsPage() {
       );
 
       setLoading(false);
+      try {
+        const response = await fetch("/api/make-connection-status", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Make status unavailable");
+        const result: { status?: MakeConnectionStatus } = await response.json();
+        if (!["company_active", "legacy", "setup_required"].includes(result.status || "")) {
+          throw new Error("Unknown Make status");
+        }
+        setMakeStatus(result.status!);
+      } catch {
+        setMakeStatusError(true);
+      }
     }
 
     loadSettings();
@@ -225,6 +242,27 @@ export default function SettingsPage() {
               {error}
             </div>
           )}
+        </div>
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold text-slate-900">Make-kapcsolat</h2>
+          <p className="mt-2 text-sm text-slate-500">A vállalkozás automatizálási kapcsolatának állapota.</p>
+          <div className="mt-4 rounded-xl bg-slate-50 p-4">
+            <p className="font-semibold text-slate-900">
+              {makeStatusError ? "Az állapot most nem érhető el" :
+                makeStatus === "company_active" ? "Saját Make-kapcsolat beállítva" :
+                makeStatus === "legacy" ? "Átmeneti LeadFlow-kapcsolat" :
+                makeStatus === "setup_required" ? "Beállítás szükséges" : "Állapot betöltése..."}
+            </p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              {makeStatus === "company_active"
+                ? "A saját Make webhookok be vannak állítva. Ez nem ellenőrzi a Make-forgatókönyv vagy a Gmail-küldés működését."
+                : makeStatus === "legacy"
+                  ? "A pilot jelenleg a LeadFlow átmeneti Make-kapcsolatát használja."
+                  : makeStatus === "setup_required"
+                    ? "A Make-kapcsolat nincs teljesen beállítva; az automatikus feldolgozás és küldés nem biztosított."
+                    : makeStatusError ? "Próbáld meg később újratölteni az oldalt." : ""}
+            </p>
+          </div>
         </div>
       </div>
     </main>
