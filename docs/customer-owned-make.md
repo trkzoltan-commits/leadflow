@@ -77,10 +77,34 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 
 ## Még hátravan
 
-- Cégenkénti kulcskiadás és onboarding.
+- A cégenkénti kulcskiadás élő tesztje és a teljes ügyfél-onboarding.
 - Gmail-piszkozat azonosító, küldési napló és atomikus küldésfoglalás a Make előtt.
 - Automatikus státuszegyeztetés és biztonságos retry.
 - Tartósan elmaradó küldési visszaigazolás automatikus rendezése.
+
+## Céges Make-kulcs kiadása a pilotban
+
+Az üzemeltető először ellenőrzi a cég slugját, a letiltott saját Make-kapcsolatot
+és hogy nincs aktív kulcs. Ez nem módosít adatot:
+
+```powershell
+node --env-file=.env.local scripts/issue-company-make-key.mjs pelda-kft
+```
+
+Az első valódi kulcs kiadása külön `--issue` kapcsolóval történik. A kimeneti fájl
+abszolút útvonalú, a projektmappán kívüli, új helyi fájl legyen. A script kizárólag
+ebbe írja a titkot, az adatbázisba csak a SHA-256 lenyomatát menti. Létező fájlt
+nem ír felül; aktív kulcs esetén leáll. A titok nem jelenik meg a terminálon.
+
+```powershell
+node --env-file=.env.local scripts/issue-company-make-key.mjs pelda-kft --issue C:\Users\User\Documents\make-key-pelda.txt
+```
+
+A fájlt csak az ügyfél saját Make-scenario-jának `x-leadflow-secret` fejlécébe
+másoláshoz használd, majd töröld. Ne szinkronizált vagy megosztott mappát válassz.
+Windows alatt a fájl jogosultságai a szülőmappából is öröklődhetnek; válassz csak
+számodra hozzáférhető helyet. Kulcsrotációhoz és elveszett kulcs pótlásához külön
+eljárás kell, ez a script új aktív kulcsot nem ad ki meglévő mellé.
 
 ## Második egység: kimenő webhookok
 
