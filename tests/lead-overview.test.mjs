@@ -5,7 +5,18 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads}=context.exports;
+test("search matches accents and multiple fields within the selected lead set",()=>{
+ const leads=[
+   {id:"a",name:"Nagy Sándor",email:"sandor@example.com",phone:"+36 70 123 4567",service:"Előtető",location:"Nagykanizsa"},
+   {id:"b",name:"Teszt Elek",email:"elek@example.com",phone:null,service:"Kerítés",location:"Budapest"},
+ ];
+ assert.deepEqual(searchLeads(leads,"nagy sandor eloteto").map(lead=>lead.id),["a"]);
+ assert.deepEqual(searchLeads(leads,"123 4567").map(lead=>lead.id),["a"]);
+ assert.deepEqual(searchLeads(leads,"BUDAPEST teszt").map(lead=>lead.id),["b"]);
+ assert.deepEqual(searchLeads(leads,"nagy budapest").map(lead=>lead.id),[]);
+ assert.equal(searchLeads(leads,"  "),leads);
+});
 test("sending delay starts at the send claim, and never marks a confirmed email late",()=>{
  const now=new Date("2026-09-20T12:00:00Z");
  assert.equal(isDelayedSending({status:"sending",sending_started_at:"2026-09-20T11:00:01Z"},now),false);

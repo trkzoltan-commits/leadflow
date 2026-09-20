@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { displayReceivedAt, filterLeads, isDelayedSending, replyLabel, type LeadListFilter } from "@/lib/lead-overview";
+import { displayReceivedAt, filterLeads, isDelayedSending, replyLabel, searchLeads, type LeadListFilter } from "@/lib/lead-overview";
 
 export default function LeadsPage() {
   const router = useRouter();
@@ -12,7 +12,8 @@ export default function LeadsPage() {
   const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview();
 
   const [listFilter, setListFilter] = useState<LeadListFilter>("active");
-  const visibleLeads = filterLeads(leads, replies, listFilter);
+  const [searchQuery, setSearchQuery] = useState("");
+  const visibleLeads = searchLeads(filterLeads(leads, replies, listFilter), searchQuery);
 
   function openLead(leadId: string) {
     router.push(`/leads/${leadId}`);
@@ -112,6 +113,16 @@ export default function LeadsPage() {
                 ))}
               </div>
               <p className="mt-3 text-xs text-slate-500">A lezárt érdeklődők megmaradnak a riportokhoz, és a „Lezártak” vagy „Mind” nézetben elérhetők.</p>
+              <div className="mt-5 flex flex-wrap items-end gap-3">
+                <div className="min-w-64 flex-1">
+                  <label htmlFor="lead-search" className="mb-2 block text-sm font-medium text-slate-700">Keresés az érdeklődők között</label>
+                  <input id="lead-search" type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)}
+                    placeholder="Név, e-mail, telefonszám, szolgáltatás vagy helyszín"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400" />
+                </div>
+                {searchQuery && <button type="button" onClick={() => setSearchQuery("")} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium hover:bg-slate-50">Keresés törlése</button>}
+              </div>
+              {searchQuery.trim() && <p role="status" className="mt-3 text-sm text-slate-600">{visibleLeads.length} találat az aktuális nézetben.</p>}
             </div>
 
             <div className="overflow-x-auto">
@@ -148,7 +159,7 @@ export default function LeadsPage() {
                 </thead>
 
                 <tbody>
-                  {updatedAt && visibleLeads.length === 0 && <tr><td colSpan={8} className="p-6 text-slate-500">Ebben a nézetben nincs érdeklődő.</td></tr>}
+                  {updatedAt && visibleLeads.length === 0 && <tr><td colSpan={8} className="p-6 text-slate-500">{searchQuery.trim() ? "Nincs találat ebben a nézetben. Próbálj másik keresést vagy válts a Mind nézetre." : "Ebben a nézetben nincs érdeklődő."}</td></tr>}
                   {visibleLeads.map((lead) => (
                     <tr
                       key={lead.id}

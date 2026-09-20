@@ -33,6 +33,21 @@ export function filterLeads(leads: OverviewLead[], replies: Map<string, Overview
   return leads;
 }
 
+function normalizeSearchText(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("hu-HU");
+}
+
+export function searchLeads(leads: OverviewLead[], query: string) {
+  const terms = normalizeSearchText(query.trim()).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return leads;
+  return leads.filter(lead => {
+    const searchable = normalizeSearchText([
+      lead.name, lead.email, lead.phone, lead.service, lead.location,
+    ].filter(Boolean).join(" "));
+    return terms.every(term => searchable.includes(term));
+  });
+}
+
 export function latestReplies(messages: OverviewMessage[]) {
   const result = new Map<string, OverviewMessage>();
   for (const message of messages) {
