@@ -23,6 +23,22 @@ külön kell beállítani és kétcéges izolációs próbával ellenőrizni. A 
 csak ezután szabad engedélyezni. Valódi ügyféladatot, webhookcímet vagy kulcsot ne
 mentsünk a generált SQL-lekérdezéssel együtt a repositoryba.
 
+### Meghívott tulajdonos belépése
+
+A `/meghivas` oldal fogadja a Supabase Auth meghívó visszairányítását. Ellenőrzi a
+hitelesített felhasználót és a `users.company_id` hozzárendelést, majd saját jelszó
+beállítását kéri. Meghíváskor a `redirectTo` értéke a végleges LeadFlow domain
+`/meghivas` oldala legyen, és ugyanez a cím szerepeljen a Supabase Auth engedélyezett
+Redirect URL-ek között. Ha a cím nincs engedélyezve, a Supabase a Site URL-re
+irányíthat vissza külön hiba nélkül.
+
+Az üzemeltetőnek a meghívott Supabase Auth-azonosítót az adott cég `users` rekordjához
+kell rendelnie, mielőtt a meghívott jelszót állíthat be. A meghívás és a hozzárendelés
+biztonságos sorrendjének automatizálása külön fejlesztési egység; ez a változtatás
+nem küld e-mailt. A meghívó és a jelszó
+nem kerülhet Gitbe vagy chatbe. Az első valódi ügyfél előtt a teljes meghívás →
+jelszóbeállítás → kétcéges RLS-próba folyamatot tesztelni kell.
+
 ## Első egység: bejövő Make-hitelesítés
 
 - Fejléc: x-leadflow-secret. Céges kulcs: lfmk_ + 32 kriptográfiailag véletlen bájt hex formában.
