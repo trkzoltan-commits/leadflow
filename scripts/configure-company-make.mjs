@@ -22,7 +22,7 @@ export function validateConfigPath(configPath, projectRoot = process.cwd()) {
   }
 }
 
-export async function configureCompanyMake(client, slug, config, apply = false) {
+export async function configureCompanyMake(client, slug, config, action = "check") {
   if (typeof slug !== "string" || slug.length < 3 || slug.length > 63 || !slugPattern.test(slug)) {
     throw new Error("Érvénytelen céges slug.");
   }
@@ -42,22 +42,23 @@ export async function configureCompanyMake(client, slug, config, apply = false) 
   const { data: credential, error: credentialError } = await client.from("make_credentials")
     .select("id").eq("company_id", company.id).is("revoked_at", null).limit(1).maybeSingle();
   if (credentialError || !credential) throw new Error("A cég aktív Make-kulcsa hiányzik vagy nem ellenőrizhető.");
-  if (!apply) return { applied: false };
+  if (!new Set(["check", "stage", "enable"]).has(action)) throw new Error("Érvénytelen művelet.");
+  if (action === "check") return { action: "checked" };
 
   const { data: updated, error: updateError } = await client.from("company_make_connections")
     .update({ new_lead_webhook_url: config.newLeadWebhookUrl,
-      approved_reply_webhook_url: config.approvedReplyWebhookUrl, enabled: true })
+      approved_reply_webhook_url: config.approvedReplyWebhookUrl, enabled: action === "enable" })
     .eq("company_id", company.id).eq("mode", "company").eq("enabled", false)
     .select("company_id").maybeSingle();
   if (updateError || !updated) throw new Error("A Make-kapcsolat nem állítható be biztonságosan.");
-  return { applied: true };
+  return { action: action === "enable" ? "enabled" : "staged" };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [slug, configPath, flag, extra] = process.argv.slice(2);
   try {
-    if (!slug || !configPath || extra || (flag !== undefined && flag !== "--apply")) {
-      throw new Error("Használat: node --env-file=.env.local scripts/configure-company-make.mjs ceg-slug ABSZOLUT-KONFIG-FAJL [--apply]");
+    if (!slug || !configPath || extra || ![undefined, "--stage", "--enable"].includes(flag)) {
+      throw new Error("Használat: node --env-file=.env.local scripts/configure-company-make.mjs ceg-slug ABSZOLUT-KONFIG-FAJL [--stage|--enable]");
     }
     validateConfigPath(configPath);
     const config = JSON.parse(await readFile(configPath, "utf8"));
@@ -68,10 +69,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
-    const result = await configureCompanyMake(client, slug, config, flag === "--apply");
-    process.stdout.write(result.applied
+    const action = flag === "--stage" ? "stage" : flag === "--enable" ? "enable" : "check";
+    const result = await configureCompanyMake(client, slug, config, action);
+    process.stdout.write(result.action === "enabled"
       ? "A saját Make-kapcsolat beállítva és engedélyezve. A helyi konfigurációs fájlt töröld.\n"
-      : "Az ellenőrzés sikeres. Nem történt módosítás; alkalmazáshoz add meg a --apply kapcsolót.\n");
+      : result.action === "staged"
+        ? "A két webhook elmentve; a Make-kapcsolat letiltva maradt az élő próba előtt.\n"
+        : "Az ellenőrzés sikeres. Nem történt módosítás; előkészítéshez add meg a --stage kapcsolót.\n");
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "A művelet sikertelen."}\n`);
     process.exitCode = 1;

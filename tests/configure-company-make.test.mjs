@@ -45,28 +45,35 @@ test("accepts only secret-free Make webhook shapes", () => {
 
 test("preflight validates setup without changing the connection", async () => {
   const client = fakeClient();
-  assert.deepEqual(await configureCompanyMake(client, "pelda-kft", config), { applied: false });
+  assert.deepEqual(await configureCompanyMake(client, "pelda-kft", config), { action: "checked" });
   assert.equal(client.writes.length, 0);
 });
 
-test("apply sets both webhooks and enables only the disabled company connection", async () => {
+test("stage stores both webhooks while keeping the company connection disabled", async () => {
   const client = fakeClient();
-  assert.deepEqual(await configureCompanyMake(client, "pelda-kft", config, true), { applied: true });
+  assert.deepEqual(await configureCompanyMake(client, "pelda-kft", config, "stage"), { action: "staged" });
   assert.deepEqual(client.writes[0].mutation, {
     new_lead_webhook_url: config.newLeadWebhookUrl,
     approved_reply_webhook_url: config.approvedReplyWebhookUrl,
-    enabled: true,
+    enabled: false,
   });
+  assert.ok(client.writes[0].filters.some(([key, value]) => key === "enabled" && value === false));
+});
+
+test("enable atomically stores both webhooks and enables only a disabled connection", async () => {
+  const client = fakeClient();
+  assert.deepEqual(await configureCompanyMake(client, "pelda-kft", config, "enable"), { action: "enabled" });
+  assert.equal(client.writes[0].mutation.enabled, true);
   assert.ok(client.writes[0].filters.some(([key, value]) => key === "enabled" && value === false));
 });
 
 test("missing key, enabled connection and database failure block all writes", async () => {
   for (const client of [fakeClient({ credential: null }), fakeClient({ connection: { mode: "company", enabled: true } }),
     fakeClient({ connection: { mode: "legacy", enabled: false } }), fakeClient({ errorTable: "make_credentials" })]) {
-    await assert.rejects(configureCompanyMake(client, "pelda-kft", config, true));
+    await assert.rejects(configureCompanyMake(client, "pelda-kft", config, "enable"));
     assert.equal(client.writes.length, 0);
   }
-  await assert.rejects(configureCompanyMake(fakeClient({ updateFails: true }), "pelda-kft", config, true));
+  await assert.rejects(configureCompanyMake(fakeClient({ updateFails: true }), "pelda-kft", config, "enable"));
 });
 
 test("configuration file must be absolute and outside the repository", () => {

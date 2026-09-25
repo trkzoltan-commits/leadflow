@@ -136,15 +136,23 @@ kapcsolatot, az aktív céges kulcsot és a két szabályos Make-webhookot:
 node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json
 ```
 
-Az ellenőrzés után a külön `--apply` kapcsoló atomikusan menti mindkét webhookot
-és engedélyezi a kapcsolatot. Már engedélyezett kapcsolatot nem módosít:
+Az ellenőrzés után a `--stage` kapcsoló elmenti mindkét webhookot, de a kapcsolatot
+letiltva hagyja. Így a Make-scenario-k beállíthatók és ellenőrizhetők éles forgalom nélkül:
 
 ```powershell
-node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json --apply
+node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json --stage
 ```
 
-Sikeres beállítás után töröld a helyi JSON-fájlt. Ezután futtasd újra a csak olvasó
-onboarding-ellenőrzőt, majd végezd el az élő bejövő és kimenő izolációs próbát.
+Csak a két kikapcsolt scenario ellenőrzése és az élő próba előkészítése után használd
+a `--enable` kapcsolót. Ez atomikusan menti a címeket és engedélyezi a LeadFlow
+útválasztását. Már engedélyezett kapcsolatot egyik művelet sem módosít:
+
+```powershell
+node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json --enable
+```
+
+Sikeres engedélyezés után töröld a helyi JSON-fájlt. Ezután futtasd újra a csak
+olvasó onboarding-ellenőrzőt, majd végezd el a bejövő és kimenő izolációs próbát.
 
 ## Második egység: kimenő webhookok
 
