@@ -117,6 +117,35 @@ Az „alapbeállítások teljesek” üzenet nem bizonyítja a Make-folyamatok m
 a Gmail-küldést vagy a két cég közti élő adatizolációt. Ezeket külön próbával kell
 ellenőrizni, mielőtt ügyfél használja a rendszert.
 
+### Webhookok beállítása és engedélyezés
+
+A két Make-webhook cím titoknak számít, ezért ne kerüljön parancssorba vagy Gitbe.
+Hozz létre a projektmappán kívül egy helyi JSON-fájlt az alábbi mezőkkel:
+
+```json
+{
+  "newLeadWebhookUrl": "https://hook.eu1.make.com/…",
+  "approvedReplyWebhookUrl": "https://hook.eu1.make.com/…"
+}
+```
+
+Az első futás csak ellenőriz. Megköveteli a saját Make-módot, a még letiltott
+kapcsolatot, az aktív céges kulcsot és a két szabályos Make-webhookot:
+
+```powershell
+node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json
+```
+
+Az ellenőrzés után a külön `--apply` kapcsoló atomikusan menti mindkét webhookot
+és engedélyezi a kapcsolatot. Már engedélyezett kapcsolatot nem módosít:
+
+```powershell
+node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json --apply
+```
+
+Sikeres beállítás után töröld a helyi JSON-fájlt. Ezután futtasd újra a csak olvasó
+onboarding-ellenőrzőt, majd végezd el az élő bejövő és kimenő izolációs próbát.
+
 ## Második egység: kimenő webhookok
 
 A `company_make_connections` táblát csak a szerver olvashatja. A két esemény külön
