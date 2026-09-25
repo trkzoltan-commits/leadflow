@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning } from "@/lib/lead-overview";
+import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, preferredReplyMessage } from "@/lib/lead-overview";
 
 type Lead = {
   id: string;
@@ -157,9 +157,7 @@ export default function LeadDetailsPage() {
 
       setMessageHistory(messages);
 
-      const reversedMessages = [...messages].reverse();
-
-      const selectedOutgoing = reversedMessages.find(message => message.direction === "outgoing");
+      const selectedOutgoing = preferredReplyMessage(messages);
 
       if (selectedOutgoing) {
         setDraftMessageId(selectedOutgoing.id);
@@ -197,10 +195,9 @@ export default function LeadDetailsPage() {
         setAiResult(fresh.ai_summary ?? "");
         const messages = messagesResult.data ?? [];
         setMessageHistory(messages);
-        const outgoing = [...messages].reverse().filter(message => message.direction === "outgoing");
         const selected = replyDirty
-          ? outgoing.find(message => message.id === draftMessageId)
-          : outgoing[0];
+          ? messages.find(message => message.id === draftMessageId && message.direction === "outgoing")
+          : preferredReplyMessage(messages);
         if (selected) {
           // Preserve unsaved text, but still reflect a send completed elsewhere.
           if (!replyDirty) {

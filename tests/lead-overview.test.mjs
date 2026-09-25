@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage}=context.exports;
 test("missing AI draft warning starts after 15 minutes only for accepted, open leads without an outgoing reply",()=>{
  const now=new Date("2026-09-20T12:00:00Z");
  const lead={new_lead_dispatch_status:"accepted",status:"new",created_at:"2026-09-20T11:45:01Z"};
@@ -112,4 +112,14 @@ test("empty data and DST boundary retain seven calendar days",()=>{
  const days=dailyCounts([],new Date("2026-03-29T22:30:00Z"));
  assert.equal(days[6].day,"2026-03-30"); assert.equal(new Set(days.map(day=>day.day)).size,7); assert.ok(days.every(day=>day.count===0));
  assert.equal(replyLabel(undefined),"Még nincs válasz");
+});
+
+
+test("lead detail prefers an actionable draft over a newer automatic acknowledgement",()=>{
+ const messages=[
+  {id:"draft",direction:"outgoing",status:"draft",created_at:"2026-09-25T19:59:52Z"},
+  {id:"ack",direction:"outgoing",status:"sent",created_at:"2026-09-25T19:59:54Z"},
+ ];
+ assert.equal(preferredReplyMessage(messages).id,"draft");
+ assert.equal(preferredReplyMessage([{...messages[1]}]).id,"ack");
 });
