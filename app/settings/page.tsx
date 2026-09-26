@@ -16,6 +16,9 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
 
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState("");
+  const [companySlug, setCompanySlug] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
   const [makeStatus, setMakeStatus] = useState<MakeConnectionStatus | null>(null);
   const [makeStatusError, setMakeStatusError] = useState(false);
   const [autoReplyMode, setAutoReplyMode] =
@@ -49,6 +52,22 @@ export default function SettingsPage() {
       }
 
       setCompanyId(userRow.company_id);
+
+      const { data: companyRow, error: companyError } = await supabase
+        .from("companies")
+        .select("name, public_slug")
+        .eq("id", userRow.company_id)
+        .single();
+
+      if (companyError || !companyRow?.public_slug) {
+        console.error("Céges adatok betöltési hiba:", companyError);
+        setError("Nem sikerült betölteni a vállalkozás adatait.");
+        setLoading(false);
+        return;
+      }
+
+      setCompanyName(companyRow.name || "");
+      setCompanySlug(companyRow.public_slug);
 
       const { data: settingsRow, error: settingsError } = await supabase
         .from("company_settings")
@@ -117,6 +136,18 @@ export default function SettingsPage() {
     }, 2500);
   }
 
+  async function handleCopyPublicForm() {
+    if (!companySlug) return;
+    const url = `${window.location.origin}/ajanlatkeres/${companySlug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch {
+      setError("A linket nem sikerült a vágólapra másolni.");
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50">
@@ -145,6 +176,90 @@ export default function SettingsPage() {
           <p className="mt-2 text-slate-500">
             Automatizálási és AI működési beállítások.
           </p>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-violet-600">
+                Első lépések
+              </p>
+              <h2 className="mt-1 text-xl font-bold text-slate-900">
+                {companyName || "Vállalkozás beállítása"}
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Itt látod, hogy a LeadFlow készen áll-e az érdeklődők fogadására és feldolgozására.
+              </p>
+            </div>
+            <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
+              makeStatus === "company_active" || makeStatus === "legacy"
+                ? "bg-green-100 text-green-700"
+                : "bg-amber-100 text-amber-700"
+            }`}>
+              {makeStatus === "company_active" || makeStatus === "legacy" ? "Használatra kész" : "Beállítás alatt"}
+            </span>
+          </div>
+
+          <div className="mt-5 space-y-3">
+            <div className="flex items-start gap-3 rounded-xl bg-green-50 p-4">
+              <span className="font-bold text-green-700">✓</span>
+              <div>
+                <p className="font-semibold text-slate-900">Partnerfiók összekapcsolva</p>
+                <p className="mt-1 text-sm text-slate-600">A belépett felhasználó ehhez a vállalkozáshoz tartozik.</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-4">
+              <div className="flex items-start gap-3">
+                <span className="font-bold text-green-700">✓</span>
+                <div>
+                  <p className="font-semibold text-slate-900">Publikus ajánlatkérő elérhető</p>
+                  <p className="mt-1 break-all text-sm text-slate-600">
+                    /ajanlatkeres/{companySlug}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleCopyPublicForm}
+                  className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  {linkCopied ? "✓ Link másolva" : "Ajánlatkérő link másolása"}
+                </button>
+                <a
+                  href={`/ajanlatkeres/${companySlug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-slate-200 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Megnyitás
+                </a>
+              </div>
+            </div>
+
+            <div className={`flex items-start gap-3 rounded-xl p-4 ${
+              makeStatus === "company_active" || makeStatus === "legacy" ? "bg-green-50" : "bg-amber-50"
+            }`}>
+              <span className={`font-bold ${
+                makeStatus === "company_active" || makeStatus === "legacy" ? "text-green-700" : "text-amber-700"
+              }`}>
+                {makeStatus === "company_active" || makeStatus === "legacy" ? "✓" : "!"}
+              </span>
+              <div>
+                <p className="font-semibold text-slate-900">Automatikus feldolgozás</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {makeStatus === "company_active"
+                    ? "A saját Make-kapcsolat aktív."
+                    : makeStatus === "legacy"
+                      ? "Az átmeneti LeadFlow-kapcsolat aktív."
+                      : makeStatusError
+                        ? "Az állapot most nem ellenőrizhető."
+                        : "A Make-kapcsolat beállítása még folyamatban van."}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
