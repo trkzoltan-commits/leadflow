@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
@@ -67,6 +68,11 @@ export default function LoginPage() {
           >
             Bejelentkezés
           </button>
+          <div className="text-center">
+            <Link href="/elfelejtett-jelszo" className="text-sm font-semibold text-violet-700 underline">
+              Elfelejtett jelszó
+            </Link>
+          </div>
         </form>
       </div>
     </main>

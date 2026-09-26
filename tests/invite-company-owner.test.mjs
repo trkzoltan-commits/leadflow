@@ -43,7 +43,7 @@ test("send links only the invited Auth ID to the company resolved by slug", asyn
   const client = fakeClient();
   assert.deepEqual(await inviteCompanyOwner(client, "pelda-kft", "owner@example.com", true), { sent: true });
   assert.deepEqual(client.calls.map(call => call.action), ["lookup", "lookup", "invite", "link"]);
-  assert.equal(client.calls[2].options.redirectTo, "https://leadflow-three-psi.vercel.app/meghivas");
+  assert.equal(client.calls[2].options.redirectTo, "https://leadflow-three-psi.vercel.app/meghivas?invitation=1");
   assert.deepEqual(client.calls[3].row, { id: "invited-user", company_id: "company-a", role: "owner" });
 });
 

@@ -4,12 +4,15 @@ import { type FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { readInvitationCredentials } from "@/lib/invitation-session";
 
 export default function InvitationPage() {
   const router = useRouter();
   const [checking, setChecking] = useState(true);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [invitedUserId, setInvitedUserId] = useState("");
+  const [invitedEmail, setInvitedEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
@@ -18,9 +21,22 @@ export default function InvitationPage() {
     let cancelled = false;
     async function checkInvitation() {
       try {
-        // The browser client processes the Supabase invite redirect before getUser resolves.
+        const credentials = readInvitationCredentials(window.location.href);
+        if (!credentials) throw new Error("missing-invitation");
+
+        if (credentials.kind === "tokens") {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: credentials.accessToken,
+            refresh_token: credentials.refreshToken,
+          });
+          if (sessionError) throw sessionError;
+        } else {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(credentials.code);
+          if (exchangeError) throw exchangeError;
+        }
+
         const { data: { user }, error: authError } = await supabase.auth.getUser();
-        if (authError || !user) throw new Error("missing-session");
+        if (authError || !user?.email) throw new Error("missing-session");
 
         const { data: profile, error: profileError } = await supabase
           .from("users")
@@ -28,7 +44,12 @@ export default function InvitationPage() {
           .eq("id", user.id)
           .single();
         if (profileError || !profile?.company_id) throw new Error("missing-company");
-        if (!cancelled) setReady(true);
+        if (!cancelled) {
+          setInvitedUserId(user.id);
+          setInvitedEmail(user.email);
+          setReady(true);
+          window.history.replaceState({}, "", "/meghivas");
+        }
       } catch {
         if (!cancelled) setError("A meghívó nem érvényes, lejárt, vagy a fiók még nincs vállalkozáshoz rendelve. Kérj új meghívót az üzemeltetőtől.");
       } finally {
@@ -54,6 +75,10 @@ export default function InvitationPage() {
 
     setSaving(true);
     try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user || user.id !== invitedUserId || user.email !== invitedEmail) {
+        throw new Error("session-changed");
+      }
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
     } catch {
@@ -73,6 +98,10 @@ export default function InvitationPage() {
       <h1 className="mt-2 text-2xl font-bold text-slate-900">Meghívás elfogadása</h1>
       {checking ? <p className="mt-6 text-slate-600">Meghívás ellenőrzése...</p> : ready ? <>
         <p className="mt-3 text-sm leading-6 text-slate-600">Állíts be saját jelszót a céges fiókodhoz. A jelszót csak te adod meg.</p>
+        <div className="mt-4 rounded-xl bg-violet-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Meghívott e-mail-cím</p>
+          <p className="mt-1 break-all font-semibold text-slate-900">{invitedEmail}</p>
+        </div>
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div><label htmlFor="password" className="block text-sm font-medium text-slate-700">Új jelszó</label>
             <input id="password" type="password" autoComplete="new-password" minLength={12} required value={password} onChange={event => setPassword(event.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400" /></div>

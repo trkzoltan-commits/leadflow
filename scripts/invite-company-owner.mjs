@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 
-const inviteRedirect = "https://leadflow-three-psi.vercel.app/meghivas";
+const inviteRedirect = "https://leadflow-three-psi.vercel.app/meghivas?invitation=1";
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function validateInviteInput(slug, email) {
