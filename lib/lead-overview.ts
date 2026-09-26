@@ -47,11 +47,13 @@ export function isDelayedSending(message?: Pick<OverviewMessage, "status" | "sen
   return Number.isFinite(startedAt) && now.getTime() - startedAt >= DELAYED_SEND_MINUTES * 60_000;
 }
 
-export function preferredReplyMessage<T extends { id: string; direction: string; status: string | null; created_at: string }>(messages: T[]) {
+export function preferredReplyMessage<T extends { id: string; direction: string; status: string | null; sender?: string | null; created_at: string }>(messages: T[]) {
   const outgoing = messages
     .filter(message => message.direction === "outgoing")
     .sort((left, right) => right.created_at.localeCompare(left.created_at) || right.id.localeCompare(left.id));
-  return outgoing.find(message => message.status === "draft") ?? outgoing[0];
+  return outgoing.find(message => message.status === "draft")
+    ?? outgoing.find(message => message.sender === "LeadFlow AI")
+    ?? outgoing[0];
 }
 
 export function filterLeads(leads: OverviewLead[], replies: Map<string, OverviewMessage>, filter: LeadListFilter, closedOutcome: ClosedOutcomeFilter = "all") {

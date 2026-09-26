@@ -117,9 +117,16 @@ test("empty data and DST boundary retain seven calendar days",()=>{
 
 test("lead detail prefers an actionable draft over a newer automatic acknowledgement",()=>{
  const messages=[
-  {id:"draft",direction:"outgoing",status:"draft",created_at:"2026-09-25T19:59:52Z"},
-  {id:"ack",direction:"outgoing",status:"sent",created_at:"2026-09-25T19:59:54Z"},
+  {id:"draft",direction:"outgoing",status:"draft",sender:"LeadFlow AI",created_at:"2026-09-25T19:59:52Z"},
+  {id:"ack",direction:"outgoing",status:"sent",sender:"LeadFlow",created_at:"2026-09-25T19:59:54Z"},
  ];
  assert.equal(preferredReplyMessage(messages).id,"draft");
  assert.equal(preferredReplyMessage([{...messages[1]}]).id,"ack");
+});
+test("lead detail keeps the AI reply selected after it has been sent",()=>{
+ const messages=[
+  {id:"reply",direction:"outgoing",status:"sent",sender:"LeadFlow AI",created_at:"2026-09-25T19:59:52Z"},
+  {id:"ack",direction:"outgoing",status:"sent",sender:"LeadFlow",created_at:"2026-09-25T19:59:54Z"},
+ ];
+ assert.equal(preferredReplyMessage(messages).id,"reply");
 });
