@@ -5,14 +5,34 @@ A partner napi munkáját a LeadFlow-ban végzi. Ez nem jelent GDPR-mentességet
 
 ## Pilot: új cég előkészítése
 
-Az első ügyfeleket az üzemeltető az ügyféllel közösen állítja be. A cég alaprekordjait
-titkok nélkül, egy tranzakcióban lehet létrehozni:
+Az első ügyfeleket az üzemeltető az ügyféllel közösen állítja be. A
+`202609260001_provision_company.sql` migráció alkalmazása után a cég alaprekordjait
+egy üzemeltetői parancs hozza létre. Az első futás csak a nevet és a slug
+elérhetőségét ellenőrzi:
+
+```powershell
+node --env-file=.env.local scripts/provision-company.mjs "Példa Kft." pelda-kft
+```
+
+A tényleges, atomikus létrehozáshoz külön `--create` kapcsoló kell:
+
+```powershell
+node --env-file=.env.local scripts/provision-company.mjs "Példa Kft." pelda-kft --create
+```
+
+A művelet létrehozza a céget, a kézi AI-módú beállítást és a letiltott, saját
+Make-kapcsolatot. Siker esetén kiírja a publikus ajánlatkérő URL-jét, de sem
+Supabase-titkot, sem Make-kulcsot nem jelenít meg. Foglalt slug vagy bármely
+adatbázishiba esetén a tranzakció teljes egészében visszagördül.
+
+Ha a migráció még nincs alkalmazva, tartalék megoldásként továbbra is generálható
+az ellenőrizhető SQL:
 
 ```powershell
 node scripts/generate-company-onboarding-sql.mjs "Példa Kft." pelda-kft
 ```
 
-A parancs csak SQL-t ír ki, adatbázist nem módosít. A kimenetet a **megfelelő Supabase
+A generáló parancs csak SQL-t ír ki, adatbázist nem módosít. A kimenetet a **megfelelő Supabase
 projekt** SQL Editorában kell ellenőrzés után futtatni. Ha a slug már foglalt, a
 tranzakció hibával leáll, és nem hoz létre részleges céget. Az új cég kézi AI-móddal
 és letiltott, saját Make-kapcsolattal indul; nem kerül a közös pilot webhookra.
