@@ -78,11 +78,16 @@ export async function PATCH(
     }
 
     const nextStatus = status.trim();
-    // Automatic flows may confirm draft directly; never reopen a sent message.
+    // Automatic flows may confirm draft directly. A definitive Make/Gmail error
+    // may close a sending attempt as failed; sent messages are never reopened.
+    const allowedTransition =
+      nextStatus === "sent"
+        ? ["draft", "sending", "failed", "sent"].includes(existingMessage.status)
+        : nextStatus === "failed"
+          ? ["sending", "failed"].includes(existingMessage.status)
+          : false;
     if (existingMessage.direction !== "outgoing" ||
-        !["sending", "sent"].includes(nextStatus) ||
-        !["draft", "sending", "sent"].includes(existingMessage.status) ||
-        (existingMessage.status === "sent" && nextStatus !== "sent")) {
+        !allowedTransition) {
       return NextResponse.json({ error: "Nem engedélyezett státuszváltás." }, { status: 409 });
     }
 

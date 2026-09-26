@@ -133,9 +133,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (message.status !== "draft") {
+    if (!["draft", "failed"].includes(message.status)) {
       return NextResponse.json(
-        { error: "Csak piszkozat státuszú üzenet küldhető." },
+        { error: "Csak piszkozat vagy igazoltan sikertelen üzenet küldhető." },
         { status: 400 }
       );
     }
@@ -186,7 +186,7 @@ export async function POST(request: Request) {
 
     /*
      * FONTOS:
-     * Atomi módon megpróbáljuk draft → sending
+     * Atomi módon megpróbáljuk draft/failed → sending
      * állapotba tenni az üzenetet.
      *
      * Ha két kérés egyszerre érkezne, csak az egyik
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
       })
       .eq("id", message.id)
       .eq("company_id", companyId)
-      .eq("status", "draft")
+      .eq("status", message.status)
       .select("id")
       .maybeSingle();
 

@@ -12,9 +12,9 @@ export type OverviewLead = {
   new_lead_dispatch_status: string | null;
   created_at: string;
 };
-export type OverviewMessage = { id: string; lead_id: string; status: string | null; created_at: string; sending_started_at: string | null };
+export type OverviewMessage = { id: string; lead_id: string; status: string | null; sender?: string | null; created_at: string; sending_started_at: string | null };
 
-export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "delayed" | "make";
+export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "failed" | "delayed" | "make";
 export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
 
 export const DELAYED_SEND_MINUTES = 60;
@@ -64,7 +64,7 @@ export function filterLeads(leads: OverviewLead[], replies: Map<string, Overview
     newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) !== null ||
     missingAiDraftWarning(lead, replies.has(lead.id)) !== null);
   if (filter === "delayed") return leads.filter(lead => lead.status !== "processed" && isDelayedSending(replies.get(lead.id)));
-  if (filter === "draft" || filter === "sending") {
+  if (filter === "draft" || filter === "sending" || filter === "failed") {
     return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);
   }
   return leads;
@@ -95,6 +95,11 @@ export function latestReplies(messages: OverviewMessage[]) {
   const result = new Map<string, OverviewMessage>();
   for (const message of messages) {
     const prior = result.get(message.lead_id);
+    if (message.sender === "LeadFlow" && prior?.sender && prior.sender !== "LeadFlow") continue;
+    if (prior?.sender === "LeadFlow" && message.sender && message.sender !== "LeadFlow") {
+      result.set(message.lead_id, message);
+      continue;
+    }
     if (!prior || message.created_at > prior.created_at ||
         (message.created_at === prior.created_at && message.id > prior.id)) result.set(message.lead_id, message);
   }
@@ -104,6 +109,7 @@ export function replyLabel(status?: string | null, sendingStartedAt?: string | n
   if (status === "draft") return "Ellenőrizendő piszkozat";
   if (isDelayedSending({ status: status ?? null, sending_started_at: sendingStartedAt ?? null })) return "Küldési visszaigazolás késik";
   if (status === "sending") return "Küldési visszaigazolásra vár";
+  if (status === "failed") return "Küldés sikertelen";
   if (status === "sent") return "Válasz elküldve";
   return status ? "Válasz állapota: " + status : "Még nincs válasz";
 }

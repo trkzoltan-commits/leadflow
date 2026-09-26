@@ -614,6 +614,7 @@ export default function LeadDetailsPage() {
     if (messageStatus === "sending")
       return "Küldés folyamatban";
     if (messageStatus === "sent") return "Elküldött";
+    if (messageStatus === "failed") return "Sikertelen";
     if (messageStatus === "received") return "Beérkezett";
 
     return messageStatus || "—";
@@ -748,13 +749,13 @@ export default function LeadDetailsPage() {
           <p className="mt-2 text-sm leading-6">{draftWarning}</p>
         </section>}
 
-        <section aria-label="Aktuális állapot" className={delayedSending ? "mb-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm" : "mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm"}>
+        <section aria-label="Aktuális állapot" className={delayedSending || messageStatus === "failed" ? "mb-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm" : "mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm"}>
           <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Következő lépés</p>
           <h2 role="status" className="mt-2 text-xl font-bold text-slate-900">
-            {delayedSending ? "A küldési visszaigazolás késik" : messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
+            {messageStatus === "failed" ? "A válasz küldése sikertelen" : delayedSending ? "A küldési visszaigazolás késik" : messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            {delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" ? "Az üzenet elküldöttként van visszaigazolva. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
+            {messageStatus === "failed" ? "A Make igazolta, hogy a Gmail nem küldte el az üzenetet. Ellenőrzés után biztonságosan újrapróbálhatod a küldést." : delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" ? "Az üzenet elküldöttként van visszaigazolva. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
           </p>
           <a href="#reply" className="mt-4 inline-flex rounded-xl bg-violet-600 px-4 py-2 font-semibold text-white">{messageStatus === "sent" ? "Elküldött válasz megtekintése" : "Ugrás a válaszhoz"}</a>
           <p className={syncError ? "mt-3 text-sm text-amber-700" : "mt-3 text-xs text-slate-500"} role="status">
@@ -948,7 +949,7 @@ export default function LeadDetailsPage() {
                         </button>
 
                         {draftMessageId &&
-                          messageStatus === "draft" && (
+                          (messageStatus === "draft" || messageStatus === "failed") && (
                             <button
                               type="button"
                               onClick={handleMarkAsSent}
@@ -957,7 +958,7 @@ export default function LeadDetailsPage() {
                             >
                               {markingSent
                                 ? "Küldés folyamatban..."
-                                : "Válasz elküldése"}
+                                : messageStatus === "failed" ? "Küldés újrapróbálása" : "Válasz elküldése"}
                             </button>
                           )}
 
@@ -972,6 +973,12 @@ export default function LeadDetailsPage() {
                     {messageStatus === "sending" && (
                       <div className={delayedSending ? "mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" : "mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"}>
                         {delayedSending ? "A küldési visszaigazolás késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Az újraküldés továbbra is zárolva van." : "A küldés visszaigazolására várunk. Az üzenetet jelenleg nem lehet módosítani vagy újra elküldeni. Az állapot automatikusan frissül."}
+                      </div>
+                    )}
+
+                    {messageStatus === "failed" && (
+                      <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                        A Gmail-küldés igazoltan sikertelen volt. Ellenőrzés után az újrapróbálás gombbal ismét elindíthatod.
                       </div>
                     )}
 

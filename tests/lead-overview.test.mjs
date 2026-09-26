@@ -78,12 +78,13 @@ test("closed leads remain available without appearing in active or attention vie
  const replies=new Map([
    ["a",{status:"draft"}],
    ["b",{status:"sending"}],
-   ["c",{status:"sending"}],
+   ["c",{status:"failed"}],
  ]);
  assert.deepEqual(filterLeads(leads,replies,"active").map(lead=>lead.id),["a","c"]);
  assert.deepEqual(filterLeads(leads,replies,"closed").map(lead=>lead.id),["b"]);
  assert.deepEqual(filterLeads(leads,replies,"draft").map(lead=>lead.id),["a"]);
- assert.deepEqual(filterLeads(leads,replies,"sending").map(lead=>lead.id),["c"]);
+ assert.deepEqual(filterLeads(leads,replies,"sending").map(lead=>lead.id),[]);
+ assert.deepEqual(filterLeads(leads,replies,"failed").map(lead=>lead.id),["c"]);
  assert.deepEqual(filterLeads(leads,replies,"all").map(lead=>lead.id),["a","b","c"]);
 });
 test("delayed filter hides closed leads and recently started sends",()=>{
@@ -99,6 +100,14 @@ test("latest reply does not count an old draft after a newer sent reply",()=>{
  {id:"3",lead_id:"b",status:"sending",created_at:"2026-09-19T09:00:00Z"},
  {id:"2",lead_id:"a",status:"sent",created_at:"2026-09-19T10:00:00Z"}]);
  assert.equal(result.get("a").status,"sent"); assert.equal(result.get("b").status,"sending"); assert.equal(result.size,2);
+});
+test("overview ignores a newer automatic acknowledgement when an AI reply exists",()=>{
+ const result=latestReplies([
+  {id:"reply",lead_id:"a",sender:"LeadFlow AI",status:"failed",created_at:"2026-09-25T19:59:52Z"},
+  {id:"ack",lead_id:"a",sender:"LeadFlow",status:"sent",created_at:"2026-09-25T19:59:54Z"},
+ ]);
+ assert.equal(result.get("a").id,"reply");
+ assert.equal(replyLabel("failed"),"Küldés sikertelen");
 });
 test("equal timestamps select deterministically regardless of input order",()=>{
  const rows=[{id:"a",lead_id:"a",status:"draft",created_at:"2026-09-19T10:00:00Z"},{id:"b",lead_id:"a",status:"sent",created_at:"2026-09-19T10:00:00Z"}];

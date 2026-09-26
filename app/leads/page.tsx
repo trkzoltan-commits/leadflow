@@ -116,6 +116,7 @@ function LeadsContent() {
                   ["active", "Aktív", scopedLeads.filter(lead => lead.status !== "processed").length],
                   ["closed", "Lezártak", scopedLeads.filter(lead => lead.status === "processed").length],
                   ["draft", "Ellenőrizendő", filterLeads(scopedLeads, replies, "draft").length],
+                  ["failed", "Sikertelen küldés", filterLeads(scopedLeads, replies, "failed").length],
                   ["make", "Automatizálás ellenőrizendő", filterLeads(scopedLeads, replies, "make").length],
                   ["delayed", "Késő visszaigazolás", filterLeads(scopedLeads, replies, "delayed").length],
                   ["sending", "Visszaigazolásra vár", filterLeads(scopedLeads, replies, "sending").length],

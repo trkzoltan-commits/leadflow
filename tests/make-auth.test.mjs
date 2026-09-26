@@ -137,7 +137,7 @@ for (const path of ["app/api/generate-reply/route.ts", "app/api/evaluate-reply/r
   });
 }
 
-for (const [before, after, expected] of [["sending","sent",200],["sent","sent",200],["sent","draft",409],["sending","draft",409],["sent","sending",409],["draft","failed",409]]) {
+for (const [before, after, expected] of [["sending","sent",200],["sending","failed",200],["failed","failed",200],["failed","sent",200],["sent","sent",200],["sent","failed",409],["sent","draft",409],["sending","draft",409],["sent","sending",409],["draft","failed",409]]) {
  test(`callback ${before} -> ${after}: ${expected}`, async () => {
    const {load,writes}=setup({messageStatus:before});
    const response=await load("app/api/messages/[id]/route.ts").PATCH(request(tokenA,"PATCH",{status:after}),{params:Promise.resolve({id:"message-a"})});

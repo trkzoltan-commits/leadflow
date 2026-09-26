@@ -7,10 +7,10 @@ import ts from "typescript";
 const compiled = new Map();
 const urlA = "https://hook.eu1.make.com/test-company-a";
 const urlB = "https://hook.eu2.make.com/test-company-b";
-function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null } = {}) {
+function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft" } = {}) {
   const calls = [];
   const claims = [];
-  let messageStatus = "draft";
+  let messageStatus = initialMessageStatus;
   const client = {
     auth: { getUser: async () => ({ data: { user: { id: "user-a" } }, error: null }) },
     from(table) {
@@ -128,3 +128,13 @@ for (const sendFailure of ["network", "http"]) {
     assert.deepEqual(state.claims.map(x => x.status), ["sending"]);
   });
 }
+
+test("a definitively failed delivery can be claimed for one safe retry", async () => {
+  const state = setup({ initialMessageStatus: "failed" });
+  const route = state.load("app/api/send-approved-reply/route.ts");
+  const request = () => new Request("https://example.invalid", { method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({message_id: "message-a"}) });
+  assert.equal((await route.POST(request())).status, 200);
+  assert.equal((await route.POST(request())).status, 409);
+  assert.equal(state.calls.length, 1);
+  assert.deepEqual(state.claims.map(x => x.status), ["sending"]);
+});
