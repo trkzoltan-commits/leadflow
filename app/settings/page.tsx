@@ -47,54 +47,27 @@ export default function SettingsPage() {
 
       setUserId(session.user.id);
       setUserEmail(session.user.email || "");
-      const { data: userRow, error: userError } = await supabase
-        .from("users")
-        .select("company_id,role")
-        .eq("id", session.user.id)
-        .single();
-
-      if (userError || !userRow?.company_id) {
-        console.error("Felhasználói cég lekérési hiba:", userError);
-        setError("Nem sikerült meghatározni a vállalkozást.");
+      const profileResponse = await fetch("/api/account-profile", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (!profileResponse.ok) {
+        setError("Nem sikerült betölteni a profil- és vállalkozási adatokat.");
         setLoading(false);
         return;
       }
-
-      setCompanyId(userRow.company_id);
-      setUserRole(userRow.role || "user");
-
-      const { data: companyRow, error: companyError } = await supabase
-        .from("companies")
-        .select("name, public_slug")
-        .eq("id", userRow.company_id)
-        .single();
-
-      if (companyError || !companyRow?.public_slug) {
-        console.error("Céges adatok betöltési hiba:", companyError);
-        setError("Nem sikerült betölteni a vállalkozás adatait.");
-        setLoading(false);
-        return;
-      }
-
-      setCompanyName(companyRow.name || "");
-      setCompanySlug(companyRow.public_slug);
-
-      const { data: settingsRow, error: settingsError } = await supabase
-        .from("company_settings")
-        .select("auto_reply_mode")
-        .eq("company_id", userRow.company_id)
-        .single();
-
-      if (settingsError) {
-        console.error("Beállítások betöltési hiba:", settingsError);
-        setError("Nem sikerült betölteni a beállításokat.");
-        setLoading(false);
-        return;
-      }
-
-      setAutoReplyMode(
-        (settingsRow?.auto_reply_mode as AutoReplyMode) || "manual"
-      );
+      const profile: {
+        companyId: string;
+        companyName: string;
+        companySlug: string;
+        role: string;
+        autoReplyMode: AutoReplyMode;
+      } = await profileResponse.json();
+      setCompanyId(profile.companyId);
+      setCompanyName(profile.companyName);
+      setCompanySlug(profile.companySlug);
+      setUserRole(profile.role);
+      setAutoReplyMode(profile.autoReplyMode || "manual");
 
       const localPreferences = readLocalPreferences();
       const { data: preferenceRow } = await supabase
