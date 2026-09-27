@@ -12,6 +12,25 @@ function validWebhook(value) {
   } catch { return false; }
 }
 
+export function nextOnboardingStep(checks) {
+  if (!checks.settings || !checks.companyMakeMode) {
+    return { code: "repair_provisioning", message: "Ellenőrizd a cég alapbeállításait és a saját Make-módot." };
+  }
+  if (!checks.owner) {
+    return { code: "invite_owner", message: "Küldd ki a tulajdonosi meghívót, majd ellenőrizd a céghez rendelést." };
+  }
+  if (!checks.activeMakeKey) {
+    return { code: "issue_make_key", message: "Add ki az első céges Make-kulcsot projekten kívüli fájlba." };
+  }
+  if (!checks.newLeadWebhook || !checks.approvedReplyWebhook) {
+    return { code: "configure_webhooks", message: "Készítsd elő a két Make-forgatókönyvet, majd rögzítsd mindkét webhookot letiltott kapcsolat mellett." };
+  }
+  if (!checks.makeEnabled) {
+    return { code: "verify_and_enable", message: "Végezd el a kétcéges élő izolációs próbát, majd engedélyezd a Make-kapcsolatot." };
+  }
+  return { code: "live_verification", message: "Az alapbeállítások teljesek. Dokumentáld a sikeres bejövő és kimenő élő izolációs próbát." };
+}
+
 export async function checkCompanyOnboarding(client, slug) {
   if (typeof slug !== "string" || slug.length < 3 || slug.length > 63 || !slugPattern.test(slug)) {
     throw new Error("Érvénytelen céges slug.");
@@ -41,7 +60,8 @@ export async function checkCompanyOnboarding(client, slug) {
     approvedReplyWebhook: validWebhook(connection?.approved_reply_webhook_url),
     makeEnabled: connection?.enabled === true,
   };
-  return { checks, ready: Object.values(checks).every(Boolean) };
+  const ready = Object.values(checks).every(Boolean);
+  return { checks, ready, nextStep: nextOnboardingStep(checks) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -55,7 +75,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
-    const { checks, ready } = await checkCompanyOnboarding(client, slug);
+    const { checks, ready, nextStep } = await checkCompanyOnboarding(client, slug);
     const labels = {
       settings: "Céges beállítások", owner: "Tulajdonos", companyMakeMode: "Saját Make-mód",
       activeMakeKey: "Aktív Make-kulcs", newLeadWebhook: "Új érdeklődő webhook",
@@ -66,6 +86,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     process.stdout.write(ready ? "Az alapbeállítások teljesek; élő izolációs próba még szükséges.\n"
       : "A bekötés még nem teljes.\n");
+    process.stdout.write(`Következő lépés: ${nextStep.message}\n`);
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : "Az ellenőrzés sikertelen."}\n`);
     process.exitCode = 1;

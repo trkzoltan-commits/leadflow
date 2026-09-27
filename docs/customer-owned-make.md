@@ -161,7 +161,8 @@ megfelelő Make-forgatókönyvbe, állítsd vissza az azonnali ütemezést, majd
 kulcsfájlt, az exportokat és az előkészített blueprinteket.
 
 Az üzemeltető a bekötés után csak olvasó ellenőrzést futtathat. Az eredmény
-igen/nem állapotokat mutat; nem írja ki az e-mail-címet, kulcsot vagy webhookcímeket:
+igen/nem állapotokat és egyetlen következő teendőt mutat biztonságos sorrendben;
+nem írja ki az e-mail-címet, kulcsot vagy webhookcímeket:
 
 ```powershell
 node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft

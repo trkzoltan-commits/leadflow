@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checkCompanyOnboarding } from "../scripts/check-company-onboarding.mjs";
+import { checkCompanyOnboarding, nextOnboardingStep } from "../scripts/check-company-onboarding.mjs";
 
 const webhook = "https://hook.eu1.make.com/example_123";
 function clientFor(rows = {}, errorTable = null) {
@@ -27,6 +27,7 @@ test("complete tenant setup passes without returning secrets", async () => {
   const result = await checkCompanyOnboarding(clientFor(), "pelda-kft");
   assert.equal(result.ready, true);
   assert.ok(Object.values(result.checks).every(Boolean));
+  assert.equal(result.nextStep.code, "live_verification");
   assert.equal(JSON.stringify(result).includes("hook."), false);
 });
 
@@ -43,4 +44,24 @@ test("missing owner, key, webhook or disabled Make blocks readiness", async () =
 test("database error and invalid slug fail closed", async () => {
   await assert.rejects(checkCompanyOnboarding(clientFor({}, "make_credentials"), "pelda-kft"));
   await assert.rejects(checkCompanyOnboarding(clientFor(), "Bad-Slug"));
+});
+
+test("next step follows the safe onboarding order", () => {
+  const complete = {
+    settings: true, owner: true, companyMakeMode: true, activeMakeKey: true,
+    newLeadWebhook: true, approvedReplyWebhook: true, makeEnabled: true,
+  };
+  const cases = [
+    ["settings", "repair_provisioning"],
+    ["companyMakeMode", "repair_provisioning"],
+    ["owner", "invite_owner"],
+    ["activeMakeKey", "issue_make_key"],
+    ["newLeadWebhook", "configure_webhooks"],
+    ["approvedReplyWebhook", "configure_webhooks"],
+    ["makeEnabled", "verify_and_enable"],
+  ];
+  for (const [missing, expected] of cases) {
+    assert.equal(nextOnboardingStep({ ...complete, [missing]: false }).code, expected);
+  }
+  assert.equal(nextOnboardingStep(complete).code, "live_verification");
 });
