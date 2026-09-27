@@ -136,7 +136,9 @@ node --env-file=.env.local scripts/check-automation-dispatches.mjs pelda-kft
 
 Bizonytalan HTTP- vagy hálózati eredménynél a rendszer továbbra sem próbálkozik
 automatikusan újra, mert a Make átvételének hiánya nem bizonyítható. Az auditnapló
-a következő egységben készülő státuszegyeztetés biztonságos alapja.
+`completed` állapotba kerül, amikor a Make létrehozta a kimenő választervezetet,
+illetve amikor a Gmail-küldés eredményét visszaigazolta. A még nyitott bejegyzések
+az üzemeltetői ellenőrzővel külön láthatók.
 
 ## Céges Make-kulcs kiadása a pilotban
 

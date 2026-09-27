@@ -1,6 +1,7 @@
 import { authenticateMake, scopeMakeQuery } from "@/lib/make-auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { finishAutomationDispatch } from "@/lib/automation-dispatch";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -92,6 +93,19 @@ export async function POST(request: Request) {
         { error: "Nem sikerült elmenteni az üzenetet." },
         { status: 500 }
       );
+    }
+
+    // A Make által létrehozott kimenő üzenet bizonyítja, hogy az új lead
+    // feldolgozása eljutott a választervezetig. A naplózási hiba nem törölheti
+    // a már biztonságosan elmentett üzenetet.
+    if ((direction || "outgoing") === "outgoing") {
+      const auditClosed = await finishAutomationDispatch(supabaseAdmin, {
+        companyId: lead.company_id,
+        eventType: "new_lead",
+        entityId: lead.id,
+        status: "completed",
+      });
+      if (!auditClosed) console.error("Az új érdeklődő automatizálási naplója nem zárható le.");
     }
 
     return NextResponse.json({
