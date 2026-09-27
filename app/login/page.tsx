@@ -64,12 +64,12 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white"
+            className="w-full rounded-xl bg-[#002bff] px-4 py-3 font-semibold text-white transition-colors hover:bg-[#001fcc]"
           >
             Bejelentkezés
           </button>
           <div className="text-center">
-            <Link href="/elfelejtett-jelszo" className="text-sm font-semibold text-violet-700 underline">
+            <Link href="/elfelejtett-jelszo" className="text-sm font-semibold text-[#002bff] underline">
               Elfelejtett jelszó
             </Link>
           </div>
