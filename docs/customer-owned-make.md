@@ -143,6 +143,23 @@ Windows alatt a fájl jogosultságai a szülőmappából is öröklődhetnek; v�
 számodra hozzáférhető helyet. Kulcsrotációhoz és elveszett kulcs pótlásához külön
 eljárás kell, ez a script új aktív kulcsot nem ad ki meglévő mellé.
 
+A több HTTP-modult tartalmazó blueprinteket nem kell kézzel végigírni. Exportáld a
+két, már ügyfélhez klónozott Make-forgatókönyvet, majd futtasd az előkészítőt. Az
+összes bemeneti és kimeneti fájlnak a projektmappán kívül kell lennie:
+
+```powershell
+node scripts/prepare-company-make-blueprints.mjs pelda-kft `
+  "C:\biztonsagos-hely\pelda-kft-make-key.txt" `
+  "C:\biztonsagos-hely\new-lead-export.blueprint.json" `
+  "C:\biztonsagos-hely\reply-export.blueprint.json" `
+  "C:\biztonsagos-hely\pelda-kft-ready"
+```
+
+A szkript minden `x-leadflow-secret` fejlécet frissít, és kizárólag új fájlokat
+hoz létre; meglévő kimenetet nem ír felül. Importáld a két elkészült fájlt a
+megfelelő Make-forgatókönyvbe, állítsd vissza az azonnali ütemezést, majd töröld a
+kulcsfájlt, az exportokat és az előkészített blueprinteket.
+
 Az üzemeltető a bekötés után csak olvasó ellenőrzést futtathat. Az eredmény
 igen/nem állapotokat mutat; nem írja ki az e-mail-címet, kulcsot vagy webhookcímeket:
 
