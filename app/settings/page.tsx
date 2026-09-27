@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { applyPreferences, readLocalPreferences } from "@/components/theme-preferences";
+import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
@@ -18,6 +20,11 @@ export default function SettingsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [companySlug, setCompanySlug] = useState("");
+  const [userId, setUserId] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userRole, setUserRole] = useState("user");
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>("blue");
+  const [colorMode, setColorMode] = useState<ColorMode>("system");
   const [linkCopied, setLinkCopied] = useState(false);
   const [makeStatus, setMakeStatus] = useState<MakeConnectionStatus | null>(null);
   const [makeStatusError, setMakeStatusError] = useState(false);
@@ -38,9 +45,11 @@ export default function SettingsPage() {
         return;
       }
 
+      setUserId(session.user.id);
+      setUserEmail(session.user.email || "");
       const { data: userRow, error: userError } = await supabase
         .from("users")
-        .select("company_id")
+        .select("company_id,role")
         .eq("id", session.user.id)
         .single();
 
@@ -52,6 +61,7 @@ export default function SettingsPage() {
       }
 
       setCompanyId(userRow.company_id);
+      setUserRole(userRow.role || "user");
 
       const { data: companyRow, error: companyError } = await supabase
         .from("companies")
@@ -86,6 +96,17 @@ export default function SettingsPage() {
         (settingsRow?.auto_reply_mode as AutoReplyMode) || "manual"
       );
 
+      const localPreferences = readLocalPreferences();
+      const { data: preferenceRow } = await supabase
+        .from("user_preferences")
+        .select("accent_theme,color_mode")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      const preferences = preferenceRow ? normalizePreferences(preferenceRow) : localPreferences;
+      setAccentTheme(preferences.accentTheme);
+      setColorMode(preferences.colorMode);
+      applyPreferences(preferences.accentTheme, preferences.colorMode);
+
       setLoading(false);
       try {
         const response = await fetch("/api/make-connection-status", {
@@ -107,7 +128,7 @@ export default function SettingsPage() {
   }, [router]);
 
   async function handleSave() {
-    if (!companyId) return;
+    if (!companyId || !userId) return;
 
     setSaving(true);
     setSaveSuccess(false);
@@ -127,6 +148,23 @@ export default function SettingsPage() {
       setSaving(false);
       return;
     }
+
+    const { error: preferenceError } = await supabase
+      .from("user_preferences")
+      .upsert({
+        user_id: userId,
+        accent_theme: accentTheme,
+        color_mode: colorMode,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+
+    if (preferenceError) {
+      console.error("Megjelenési beállítás mentési hiba:", preferenceError);
+      setError("Az üzenetbeállítás elmentve, de a megjelenést nem sikerült a fiókhoz menteni.");
+      setSaving(false);
+      return;
+    }
+    applyPreferences(accentTheme, colorMode);
 
     setSaving(false);
     setSaveSuccess(true);
@@ -150,7 +188,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-lg font-semibold text-slate-600">
           Betöltés...
         </div>
@@ -159,7 +197,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-10">
+    <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8">
           <button
@@ -174,9 +212,42 @@ export default function SettingsPage() {
           </h1>
 
           <p className="mt-2 text-slate-500">
-            Automatizálási és AI működési beállítások.
+            Saját adatok, megjelenés és üzenetek működése.
           </p>
         </div>
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-xl font-bold text-slate-900">Saját adatok</h2>
+          <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">E-mail-cím</dt><dd className="mt-1 break-all font-semibold text-slate-900">{userEmail || "—"}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Szerepkör</dt><dd className="mt-1 font-semibold text-slate-900">{roleLabel(userRole)}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2"><dt className="text-sm text-slate-500">Vállalkozás</dt><dd className="mt-1 font-semibold text-slate-900">{companyName || "—"}</dd></div>
+          </dl>
+        </section>
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-xl font-bold text-slate-900">Megjelenés</h2>
+          <p className="mt-2 text-sm text-slate-500">A választás ehhez a felhasználói fiókhoz tartozik, és mobilon is automatikusan alkalmazkodik.</p>
+          <fieldset className="mt-5"><legend className="font-semibold text-slate-900">Színtéma</legend>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {([
+                ["blue", "Kék", "#002bff"], ["green", "Zöld", "#149a02"], ["orange", "Narancssárga", "#e99800"],
+              ] as const).map(([value, label, color]) => <label key={value} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 ${accentTheme === value ? "border-current" : "border-slate-200"}`} style={{ color }}>
+                <input type="radio" name="accentTheme" value={value} checked={accentTheme === value} onChange={() => { setAccentTheme(value); applyPreferences(value, colorMode); }} />
+                <span className="h-5 w-5 rounded-full" style={{ backgroundColor: color }} /><span className="font-semibold text-slate-900">{label}</span>
+              </label>)}
+            </div>
+          </fieldset>
+          <fieldset className="mt-6"><legend className="font-semibold text-slate-900">Világos vagy sötét mód</legend>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {([[
+                "system", "Rendszer szerint"], ["light", "Világos"], ["dark", "Sötét"],
+              ] as const).map(([value, label]) => <label key={value} className={`cursor-pointer rounded-xl border p-4 font-semibold text-slate-900 ${colorMode === value ? "accent-border accent-soft" : "border-slate-200"}`}>
+                <input className="mr-3" type="radio" name="colorMode" value={value} checked={colorMode === value} onChange={() => { setColorMode(value); applyPreferences(accentTheme, value); }} />{label}
+              </label>)}
+            </div>
+          </fieldset>
+        </section>
 
         <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -263,9 +334,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold text-slate-900">
-            AI válaszmód
-          </h2>
+          <h2 className="text-xl font-bold text-slate-900">Üzenetek beállításai</h2>
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
             Meghatározza, hogy az AI által készített választervezet mikor
@@ -341,9 +410,9 @@ export default function SettingsPage() {
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="mt-6 w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="accent-bg mt-6 w-full rounded-xl px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Mentés..." : "Beállítás mentése"}
+            {saving ? "Mentés..." : "Beállítások mentése"}
           </button>
 
           {saveSuccess && (

@@ -11,7 +11,7 @@ const reportMonthNames = ["január", "február", "március", "április", "május
 const reportSegmentLabels: Record<ReportSegment, string> = { total: "Összes", won: "Megvalósult", lost: "Nem valósult meg", active: "Aktív", unknown: "Eredmény nélkül lezárt" };
 
 export default function LeadsPage() {
-  return <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-slate-50">Betöltés...</main>}><LeadsContent /></Suspense>;
+  return <Suspense fallback={<main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés...</main>}><LeadsContent /></Suspense>;
 }
 
 function LeadsContent() {
@@ -60,7 +60,7 @@ function LeadsContent() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-lg font-semibold text-slate-600">
           Betöltés...
         </div>
@@ -69,7 +69,7 @@ function LeadsContent() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-10">
+    <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between">
           <div>

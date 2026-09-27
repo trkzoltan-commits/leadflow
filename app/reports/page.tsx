@@ -23,13 +23,13 @@ export default function ReportsPage() {
   const { leads, loading, error, updatedAt, refresh } = useLeadOverview();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  if (loading) return <main className="flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
+  if (loading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
 
   const years = reportYears(leads);
   const year = selectedYear !== null && years.includes(selectedYear) ? selectedYear : reportYears([])[0];
   const report = annualReport(leads, year);
 
-  return <main className="min-h-screen bg-slate-50 p-6 text-slate-900 md:p-10">
+  return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-6 md:p-10">
     <div className="mx-auto max-w-6xl">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>

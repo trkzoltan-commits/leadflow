@@ -12,15 +12,83 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+:root,
+:root[data-accent-theme="blue"] {
+  --leadflow-accent: #002bff;
+  --leadflow-accent-strong: #001fc0;
+  --leadflow-accent-soft: #eef1ff;
+}
+
+:root[data-accent-theme="green"] {
+  --leadflow-accent: #149a02;
+  --leadflow-accent-strong: #0d7000;
+  --leadflow-accent-soft: #edf9eb;
+}
+
+:root[data-accent-theme="orange"] {
+  --leadflow-accent: #e99800;
+  --leadflow-accent-strong: #a96e00;
+  --leadflow-accent-soft: #fff7e8;
+}
+
+.accent-bg { background-color: var(--leadflow-accent); }
+.accent-bg:hover { background-color: var(--leadflow-accent-strong); }
+.accent-text { color: var(--leadflow-accent); }
+.accent-border { border-color: color-mix(in srgb, var(--leadflow-accent) 25%, white); }
+.accent-soft { background-color: var(--leadflow-accent-soft); }
+.accent-focus:focus { border-color: var(--leadflow-accent); }
+
+.partner-surface .bg-violet-600,
+.partner-surface .bg-violet-500 { background-color: var(--leadflow-accent); }
+.partner-surface .text-violet-600,
+.partner-surface .text-violet-700,
+.partner-surface .text-violet-900 { color: var(--leadflow-accent); }
+.partner-surface .bg-violet-50 { background-color: var(--leadflow-accent-soft); }
+.partner-surface .border-violet-100 { border-color: color-mix(in srgb, var(--leadflow-accent) 25%, white); }
+.partner-surface .hover\:bg-violet-50:hover { background-color: var(--leadflow-accent-soft); }
+.partner-surface .hover\:bg-violet-700:hover { background-color: var(--leadflow-accent-strong); }
+.partner-surface .focus\:border-violet-400:focus { border-color: var(--leadflow-accent); }
+.partner-surface .from-violet-600.to-purple-500 {
+  background-image: linear-gradient(to bottom right, var(--leadflow-accent), var(--leadflow-accent-strong));
+}
+
+:root[data-color-mode="dark"] .partner-surface {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+:root[data-color-mode="dark"] .partner-surface .bg-white { background-color: #172033; }
+:root[data-color-mode="dark"] .partner-surface .bg-slate-50 { background-color: #0f172a; }
+:root[data-color-mode="dark"] .partner-surface .bg-slate-100 { background-color: #243047; }
+:root[data-color-mode="dark"] .partner-surface .accent-soft { background-color: #243047; }
+:root[data-color-mode="dark"] .partner-surface .bg-green-50 { background-color: #123524; }
+:root[data-color-mode="dark"] .partner-surface .bg-amber-50 { background-color: #3f2d13; }
+:root[data-color-mode="dark"] .partner-surface .bg-red-50 { background-color: #421f26; }
+:root[data-color-mode="dark"] .partner-surface .bg-violet-50 { background-color: #243047; }
+:root[data-color-mode="dark"] .partner-surface .text-slate-900 { color: #f8fafc; }
+:root[data-color-mode="dark"] .partner-surface .text-slate-700,
+:root[data-color-mode="dark"] .partner-surface .text-slate-600 { color: #cbd5e1; }
+:root[data-color-mode="dark"] .partner-surface .text-slate-500 { color: #94a3b8; }
+:root[data-color-mode="dark"] .partner-surface .text-green-700 { color: #86efac; }
+:root[data-color-mode="dark"] .partner-surface .text-amber-700,
+:root[data-color-mode="dark"] .partner-surface .text-amber-800,
+:root[data-color-mode="dark"] .partner-surface .text-amber-900,
+:root[data-color-mode="dark"] .partner-surface .text-amber-950 { color: #fcd34d; }
+:root[data-color-mode="dark"] .partner-surface .text-red-700,
+:root[data-color-mode="dark"] .partner-surface .text-red-800 { color: #fca5a5; }
+:root[data-color-mode="dark"] .partner-surface .border-slate-100,
+:root[data-color-mode="dark"] .partner-surface .border-slate-200 { border-color: #334155; }
+:root[data-color-mode="dark"] .partner-surface .divide-slate-100 > :not(:last-child) { border-color: #334155; }
+:root[data-color-mode="dark"] .partner-surface input,
+:root[data-color-mode="dark"] .partner-surface textarea,
+:root[data-color-mode="dark"] .partner-surface select { background-color: #172033; color: #f8fafc; }
+
+@media (max-width: 640px) {
+  .partner-surface { overflow-x: hidden; }
+  .partner-surface table { min-width: 680px; }
 }

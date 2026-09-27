@@ -676,7 +676,7 @@ export default function LeadDetailsPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-lg font-semibold text-slate-600">
           Betöltés...
         </div>
@@ -686,7 +686,7 @@ export default function LeadDetailsPage() {
 
   if (!lead) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50">
+      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-slate-900">
             Az érdeklődő nem található
@@ -718,7 +718,7 @@ export default function LeadDetailsPage() {
   const draftWarning = missingAiDraftWarning(lead, messageHistory.some(message => message.direction === "outgoing"));
 
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-10">
+    <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
       <div className="mx-auto max-w-5xl">
         <div className="mb-8">
           <button
