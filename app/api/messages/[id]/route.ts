@@ -2,6 +2,7 @@ import { authenticateMake, scopeMakeQuery } from "@/lib/make-auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { finishAutomationDispatch } from "@/lib/automation-dispatch";
+import { deliveryReceiptUpdate } from "@/lib/delivery-receipt";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,7 +29,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { status } = body;
+    const { status, provider_message_id } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -54,7 +55,7 @@ export async function PATCH(
     const { data: existingMessage, error: existingMessageError } =
       await scopeMakeQuery(
         supabaseAdmin.from("messages")
-        .select("id, company_id, status, direction")
+        .select("id, company_id, status, direction, provider_message_id")
         .eq("id", id),
         auth.companyId
         ).single();
@@ -92,10 +93,23 @@ export async function PATCH(
       return NextResponse.json({ error: "Nem engedélyezett státuszváltás." }, { status: 409 });
     }
 
+    const receipt = deliveryReceiptUpdate(nextStatus, provider_message_id);
+    if (!receipt.ok) {
+      return NextResponse.json({ error: receipt.error }, { status: 400 });
+    }
+    const receivedProviderId = "provider_message_id" in receipt.values
+      ? receipt.values.provider_message_id
+      : undefined;
+    if (existingMessage.provider_message_id && receivedProviderId &&
+        existingMessage.provider_message_id !== receivedProviderId) {
+      return NextResponse.json({ error: "Az üzenethez már másik szolgáltatói azonosító tartozik." }, { status: 409 });
+    }
+
     const { data, error } = await supabaseAdmin
       .from("messages")
       .update({
         status: nextStatus,
+        ...receipt.values,
       })
       .eq("id", id)
       .eq("status", existingMessage.status)

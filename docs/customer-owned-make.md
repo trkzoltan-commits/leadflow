@@ -140,6 +140,15 @@ automatikusan újra, mert a Make átvételének hiánya nem bizonyítható. Az a
 illetve amikor a Gmail-küldés eredményét visszaigazolta. A még nyitott bejegyzések
 az üzemeltetői ellenőrzővel külön láthatók.
 
+### Gmail-küldési visszaigazolás
+
+A `202609270003_message_delivery_receipts.sql` migráció az üzenethez menti a Gmail
+modul által visszaadott átlátszatlan üzenetazonosítót, valamint a sikeres vagy
+igazoltan sikertelen küldés időpontját. Az azonosító tenanthez kötötten egyedi,
+nem kerül a partner böngészőjébe, és nem tartalmaz levélszöveget vagy címzettet.
+A Make sikeres státusz-visszahívása opcionálisan `provider_message_id` mezőt küld;
+a régi scenario-k e mező nélkül is működnek, így az átállás megszakításmentes.
+
 ## Céges Make-kulcs kiadása a pilotban
 
 Az üzemeltető először ellenőrzi a cég slugját, a letiltott saját Make-kapcsolatot

@@ -60,6 +60,11 @@ function setup({ revoked = false, dbError = false, legacy = "operator-test-only"
         if (name === "@/lib/automation-dispatch") return {
           finishAutomationDispatch: async () => true,
         };
+        if (name === "@/lib/delivery-receipt") return {
+          deliveryReceiptUpdate: status => ({ ok: true, values: status === "sent"
+            ? { delivery_confirmed_at: "2026-09-27T12:00:00.000Z", delivery_failed_at: null }
+            : { delivery_failed_at: "2026-09-27T12:00:00.000Z", delivery_confirmed_at: null } }),
+        };
         if (name === "openai") return class {
           responses = { create: async () => {
             aiCalls++;
