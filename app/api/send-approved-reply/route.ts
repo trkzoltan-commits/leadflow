@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
+import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,6 +17,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: Request) {
   let claimedMessageId: string | null = null;
+  let claimedCompanyId: string | null = null;
 
   try {
     const authorization = request.headers.get("authorization");
@@ -233,6 +235,18 @@ export async function POST(request: Request) {
     }
 
     claimedMessageId = claimedMessage.id;
+    claimedCompanyId = companyId;
+
+    const auditStarted = await beginAutomationDispatch(supabaseAdmin, {
+      companyId, eventType: "approved_reply", entityId: message.id,
+    });
+    if (!auditStarted) {
+      await supabaseAdmin.from("messages").update({ status: message.status })
+        .eq("id", message.id).eq("company_id", companyId).eq("status", "sending");
+      claimedMessageId = null;
+      claimedCompanyId = null;
+      return NextResponse.json({ error: "A küldés biztonságos naplózása nem sikerült. Próbáld újra később." }, { status: 503 });
+    }
 
     const webhookResponse = await fetch(webhookUrl, {
       method: "POST",
@@ -252,6 +266,12 @@ export async function POST(request: Request) {
       }),
     });
 
+    const attempt = webhookAttemptResult(webhookResponse);
+    await finishAutomationDispatch(supabaseAdmin, {
+      companyId, eventType: "approved_reply", entityId: message.id,
+      status: attempt.status, httpStatus: attempt.httpStatus, errorCode: attempt.errorCode,
+    });
+
     if (!webhookResponse.ok) {
       return NextResponse.json({ status: "sending", error: "A küldés visszaigazolására várunk. Az újraküldés zárolva van." }, { status: 502 });
     }
@@ -264,7 +284,11 @@ export async function POST(request: Request) {
   } catch {
     console.error("Send approved reply API hiba.");
 
-    if (claimedMessageId) {
+    if (claimedMessageId && claimedCompanyId) {
+      await finishAutomationDispatch(supabaseAdmin, {
+        companyId: claimedCompanyId, eventType: "approved_reply", entityId: claimedMessageId,
+        status: "uncertain", errorCode: "network",
+      });
       return NextResponse.json({ status: "sending", error: "A küldés visszaigazolására várunk. Az újraküldés zárolva van." }, { status: 502 });
     }
 

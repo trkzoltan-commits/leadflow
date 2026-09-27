@@ -50,6 +50,13 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
       fetch: async (url, options) => { calls.push({ url, options }); if (sendFailure === "network") throw new Error("timeout"); return { ok: sendFailure !== "http" }; },
       require(name) {
         if (name === "@/lib/make-webhook") return load("lib/make-webhook.ts");
+        if (name === "@/lib/automation-dispatch") return {
+          beginAutomationDispatch: async () => true,
+          finishAutomationDispatch: async () => true,
+          webhookAttemptResult: response => response?.ok
+            ? { status: "accepted", httpStatus: response.status ?? 200, errorCode: null }
+            : { status: "uncertain", httpStatus: response?.status ?? null, errorCode: response ? "http" : "network" },
+        };
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "next/server") return { NextResponse: Response };
         throw new Error(name);

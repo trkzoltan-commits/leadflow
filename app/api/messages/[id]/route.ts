@@ -1,6 +1,7 @@
 import { authenticateMake, scopeMakeQuery } from "@/lib/make-auth";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { finishAutomationDispatch } from "@/lib/automation-dispatch";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -128,6 +129,14 @@ export async function PATCH(
         { status: 500 }
       );
     }
+
+    await finishAutomationDispatch(supabaseAdmin, {
+      companyId: existingMessage.company_id,
+      eventType: "approved_reply",
+      entityId: id,
+      status: nextStatus === "sent" ? "completed" : "failed",
+      errorCode: nextStatus === "failed" ? "callback_failed" : null,
+    });
 
     return NextResponse.json({
       success: true,

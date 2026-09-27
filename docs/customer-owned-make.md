@@ -115,9 +115,28 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 ## Még hátravan
 
 - A cégenkénti kulcskiadás élő tesztje és a teljes ügyfél-onboarding.
-- Gmail-piszkozat azonosító, küldési napló és atomikus küldésfoglalás a Make előtt.
+- Gmail-piszkozat azonosító mentése.
 - Automatikus státuszegyeztetés és biztonságos retry.
 - Tartósan elmaradó küldési visszaigazolás automatikus rendezése.
+
+## Automatizálási indítások naplója
+
+A `202609270002_automation_dispatches.sql` migráció szerveroldali, tenanthez kötött
+naplót hoz létre a LeadFlow → Make indításokhoz. Nem tárol webhookcímet,
+e-mail-címet vagy üzenettartalmat. Rögzíti az eseménytípust, a próbálkozások számát,
+az utolsó HTTP-eredményt és a Make visszaigazolásával lezárt állapotot. A partner
+böngészője közvetlenül nem olvashatja ezt a táblát.
+
+Az üzemeltető személyes adatok kiírása nélkül ellenőrizheti egy cég összesített
+állapotát:
+
+```powershell
+node --env-file=.env.local scripts/check-automation-dispatches.mjs pelda-kft
+```
+
+Bizonytalan HTTP- vagy hálózati eredménynél a rendszer továbbra sem próbálkozik
+automatikusan újra, mert a Make átvételének hiánya nem bizonyítható. Az auditnapló
+a következő egységben készülő státuszegyeztetés biztonságos alapja.
 
 ## Céges Make-kulcs kiadása a pilotban
 

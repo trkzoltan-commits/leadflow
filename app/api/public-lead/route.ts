@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
+import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -114,6 +115,14 @@ export async function POST(request: Request) {
     const webhookUrl = await getMakeWebhook(company.id, "new_lead");
 
     if (webhookUrl) {
+      const auditStarted = await beginAutomationDispatch(supabaseAdmin, {
+        companyId: company.id, eventType: "new_lead", entityId: data.id,
+      });
+      if (!auditStarted) {
+        console.error("Az új érdeklődő Make-indítási naplója nem hozható létre.");
+        await recordDispatchStatus("uncertain");
+        return NextResponse.json({ success: true, leadId: data.id });
+      }
       try {
         const webhookResponse = await fetch(webhookUrl, {
           method: "POST",
@@ -130,6 +139,11 @@ export async function POST(request: Request) {
           }),
         });
 
+        const attempt = webhookAttemptResult(webhookResponse);
+        await finishAutomationDispatch(supabaseAdmin, {
+          companyId: company.id, eventType: "new_lead", entityId: data.id,
+          status: attempt.status, httpStatus: attempt.httpStatus, errorCode: attempt.errorCode,
+        });
         if (!webhookResponse.ok) {
           console.error(
             "Make webhook HTTP hiba:",
@@ -145,12 +159,23 @@ export async function POST(request: Request) {
           "Make webhook hívási hiba."
         );
         await recordDispatchStatus("uncertain");
+        await finishAutomationDispatch(supabaseAdmin, {
+          companyId: company.id, eventType: "new_lead", entityId: data.id,
+          status: "uncertain", errorCode: "network",
+        });
       }
     } else {
       console.warn(
         "A vállalkozás Make-kapcsolata nem érhető el."
       );
       await recordDispatchStatus("unconfigured");
+      const auditStarted = await beginAutomationDispatch(supabaseAdmin, {
+        companyId: company.id, eventType: "new_lead", entityId: data.id,
+      });
+      if (auditStarted) await finishAutomationDispatch(supabaseAdmin, {
+        companyId: company.id, eventType: "new_lead", entityId: data.id,
+        status: "unconfigured", errorCode: "unconfigured",
+      });
     }
 
     return NextResponse.json({

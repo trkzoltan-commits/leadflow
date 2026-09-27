@@ -57,6 +57,9 @@ function setup({ revoked = false, dbError = false, legacy = "operator-test-only"
         if (name === "next/server") return { NextResponse: Response };
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "@/lib/make-auth") return load("lib/make-auth.ts");
+        if (name === "@/lib/automation-dispatch") return {
+          finishAutomationDispatch: async () => true,
+        };
         if (name === "openai") return class {
           responses = { create: async () => {
             aiCalls++;
