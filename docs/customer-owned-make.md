@@ -10,6 +10,23 @@ Az első ügyfeleket az üzemeltető az ügyféllel közösen állítja be. A
 egy üzemeltetői parancs hozza létre. Az első futás csak a nevet és a slug
 elérhetőségét ellenőrzi:
 
+Az első pilot ügyfeleknél a javasolt belépési pont az összevont előkészítő. Ez egy
+paranccsal létrehozza a céget, a kézi alapbeállítást, a letiltott saját Make-kapcsolatot
+és az első céges Make-kulcsot. A kulcsfájl kötelezően a projektmappán kívül készül:
+
+```powershell
+node --env-file=.env.local scripts/prepare-company-onboarding.mjs "Példa Kft." pelda-kft
+node --env-file=.env.local scripts/prepare-company-onboarding.mjs "Példa Kft." pelda-kft --create "C:\biztonsagos-hely\pelda-kft-make-key.txt"
+```
+
+Az első parancs csak ellenőriz. A második végzi el a létrehozást. A meghívó küldése,
+a két Make-forgatókönyv beállítása, a webhookok rögzítése és az élő izolációs próba
+továbbra is külön, tudatos lépés marad. Ha a kulcskiadás a cég létrehozása után hibázik,
+a szkript ezt külön jelzi; ilyenkor a céget nem szabad újra létrehozni.
+
+A különálló provisioning parancs hibaelhárításhoz és részlépésekhez továbbra is
+használható:
+
 ```powershell
 node --env-file=.env.local scripts/provision-company.mjs "Példa Kft." pelda-kft
 ```
