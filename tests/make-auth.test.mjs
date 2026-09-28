@@ -11,6 +11,7 @@ const hash = (token) => crypto.createHash("sha256").update(token).digest("hex");
 const compiled = new Map();
 function setup({ revoked = false, dbError = false, legacy = "operator-test-only", messageStatus = "draft" } = {}) {
   const writes = [];
+  const auditFinishes = [];
   let aiCalls = 0;
   const records = {
     make_credentials: revoked ? [] : [
@@ -18,7 +19,7 @@ function setup({ revoked = false, dbError = false, legacy = "operator-test-only"
       { token_hash: hash(tokenB), company_id: "b", revoked_at: null },
     ],
     leads: [{ id: "lead-a", company_id: "a" }, { id: "lead-b", company_id: "b" }],
-    messages: [{ id: "message-a", company_id: "a", status: messageStatus, direction: "outgoing" }, { id: "message-b", company_id: "b" }],
+    messages: [{ id: "message-a", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing" }, { id: "message-b", company_id: "b", lead_id: "lead-b" }],
     company_settings: [{ company_id: "a", auto_reply_mode: "manual" }],
   };
   const client = {
@@ -58,7 +59,7 @@ function setup({ revoked = false, dbError = false, legacy = "operator-test-only"
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "@/lib/make-auth") return load("lib/make-auth.ts");
         if (name === "@/lib/automation-dispatch") return {
-          finishAutomationDispatch: async () => true,
+          finishAutomationDispatch: async (_client, input) => { auditFinishes.push(input); return true; },
         };
         if (name === "@/lib/delivery-receipt") return {
           deliveryReceiptUpdate: status => ({ ok: true, values: status === "sent"
@@ -78,7 +79,7 @@ function setup({ revoked = false, dbError = false, legacy = "operator-test-only"
     cache.set(path, context.exports);
     return context.exports;
   }
-  return { load, writes, aiCalls: () => aiCalls };
+  return { load, writes, auditFinishes, aiCalls: () => aiCalls };
 }
 function request(token, method = "GET", body) {
   return new Request("https://example.invalid/api", {
@@ -105,6 +106,18 @@ test("tenant credential works without the legacy shared secret", async () => {
   const auth = await load("lib/make-auth.ts").authenticateMake(request(tokenA));
   assert.equal(auth.ok, true);
   assert.equal(auth.companyId, "a");
+});
+test("a confirmed reply also closes the lead's original automation audit", async () => {
+  const { load, auditFinishes } = setup({ messageStatus: "sending" });
+  const response = await load("app/api/messages/[id]/route.ts").PATCH(
+    request(tokenA, "PATCH", { status: "sent" }),
+    { params: Promise.resolve({ id: "message-a" }) }
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(auditFinishes.map(({ eventType, entityId, status }) => ({ eventType, entityId, status })), [
+    { eventType: "approved_reply", entityId: "message-a", status: "completed" },
+    { eventType: "new_lead", entityId: "lead-a", status: "completed" },
+  ]);
 });
 test("legacy operator secret remains usable during migration", async () => {
   const { load } = setup({ dbError: true });

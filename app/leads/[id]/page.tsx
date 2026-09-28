@@ -36,7 +36,11 @@ type Message = {
   status: string | null;
   created_at: string;
   sending_started_at: string | null;
+  delivery_confirmed_at: string | null;
+  delivery_failed_at: string | null;
 };
+
+const messageSelect = "id, direction, sender, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at";
 
 export default function LeadDetailsPage() {
   const router = useRouter();
@@ -143,9 +147,7 @@ export default function LeadDetailsPage() {
 
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
-        .select(
-          "id, direction, sender, content, channel, status, created_at, sending_started_at"
-        )
+        .select(messageSelect)
         .eq("lead_id", leadId)
         .order("created_at", { ascending: true });
 
@@ -181,7 +183,7 @@ export default function LeadDetailsPage() {
       try {
         const [leadResult, messagesResult] = await Promise.all([
           supabase.from("leads").select("status, new_lead_dispatch_status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
-          supabase.from("messages").select("id, direction, sender, content, channel, status, created_at, sending_started_at").eq("lead_id", leadId).order("created_at", { ascending: true }),
+          supabase.from("messages").select(messageSelect).eq("lead_id", leadId).order("created_at", { ascending: true }),
         ]);
         if (cancelled) return;
         if (leadResult.error || messagesResult.error || !leadResult.data) {
@@ -486,9 +488,7 @@ export default function LeadDetailsPage() {
             channel: lead.source || "manual",
             status: "draft",
           })
-          .select(
-            "id, direction, sender, content, channel, status, created_at, sending_started_at"
-          )
+          .select(messageSelect)
           .single();
 
         if (error) {
@@ -713,6 +713,8 @@ export default function LeadDetailsPage() {
     messageStatus === "sent" ||
     messageStatus === "sending";
   const sendingStartedAt = messageHistory.find(message => message.id === draftMessageId)?.sending_started_at;
+  const selectedMessage = messageHistory.find(message => message.id === draftMessageId);
+  const deliveryConfirmedAt = selectedMessage?.delivery_confirmed_at ?? null;
   const delayedSending = isDelayedSending({ status: messageStatus, sending_started_at: sendingStartedAt ?? null });
   const dispatchWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at);
   const draftWarning = missingAiDraftWarning(lead, messageHistory.some(message => message.direction === "outgoing"));
@@ -755,7 +757,7 @@ export default function LeadDetailsPage() {
             {messageStatus === "failed" ? "A válasz küldése sikertelen" : delayedSending ? "A küldési visszaigazolás késik" : messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            {messageStatus === "failed" ? "A Make igazolta, hogy a Gmail nem küldte el az üzenetet. Ellenőrzés után biztonságosan újrapróbálhatod a küldést." : delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" ? "Az üzenet elküldöttként van visszaigazolva. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
+            {messageStatus === "failed" ? "A Make igazolta, hogy a Gmail nem küldte el az üzenetet. Ellenőrzés után biztonságosan újrapróbálhatod a küldést." : delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" && deliveryConfirmedAt ? `A Gmail ${displayReceivedAt(deliveryConfirmedAt)} időpontban visszaigazolta a küldést. Most az érdeklődő válaszát várhatod.` : messageStatus === "sent" ? "Az üzenet elküldöttként van rögzítve. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
           </p>
           <a href="#reply" className="mt-4 inline-flex rounded-xl bg-violet-600 px-4 py-2 font-semibold text-white">{messageStatus === "sent" ? "Elküldött válasz megtekintése" : "Ugrás a válaszhoz"}</a>
           <p className={syncError ? "mt-3 text-sm text-amber-700" : "mt-3 text-xs text-slate-500"} role="status">
@@ -1002,7 +1004,9 @@ export default function LeadDetailsPage() {
 
                     {messageStatus === "sent" && (
                       <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                        ✓ Az üzenet sikeresen elküldve.
+                        {deliveryConfirmedAt
+                          ? `✓ A Gmail visszaigazolta a küldést: ${displayReceivedAt(deliveryConfirmedAt)}.`
+                          : "✓ Az üzenet elküldöttként van rögzítve."}
                       </div>
                     )}
                   </div>
@@ -1074,6 +1078,11 @@ export default function LeadDetailsPage() {
                         <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">
                           {message.content}
                         </div>
+                        {message.direction === "outgoing" && message.delivery_confirmed_at && (
+                          <p className="mt-3 text-xs font-semibold text-emerald-700">
+                            Gmail-visszaigazolás: {displayReceivedAt(message.delivery_confirmed_at)}
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>

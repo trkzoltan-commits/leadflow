@@ -152,6 +152,18 @@ export async function PATCH(
       errorCode: nextStatus === "failed" ? "callback_failed" : null,
     });
 
+    // A confirmed outgoing reply also proves that this lead no longer needs
+    // operator attention for an unfinished new-lead automation. This covers
+    // manually prepared replies as well as drafts created by Make.
+    if (nextStatus === "sent" && data.lead_id) {
+      await finishAutomationDispatch(supabaseAdmin, {
+        companyId: existingMessage.company_id,
+        eventType: "new_lead",
+        entityId: data.lead_id,
+        status: "completed",
+      });
+    }
+
     return NextResponse.json({
       success: true,
       message: data,
