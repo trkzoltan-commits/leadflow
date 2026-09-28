@@ -139,3 +139,11 @@ test("lead detail keeps the AI reply selected after it has been sent",()=>{
  ];
  assert.equal(preferredReplyMessage(messages).id,"reply");
 });
+test("lead detail selects a successful retry instead of an older failed AI reply",()=>{
+ const messages=[
+  {id:"retry",direction:"outgoing",status:"sent",sender:"company",created_at:"2026-09-28T19:45:52Z"},
+  {id:"ack",direction:"outgoing",status:"sent",sender:"LeadFlow",created_at:"2026-09-26T19:13:35Z"},
+  {id:"failed",direction:"outgoing",status:"failed",sender:"LeadFlow AI",created_at:"2026-09-26T19:13:33Z"},
+ ];
+ assert.equal(preferredReplyMessage(messages).id,"retry");
+});

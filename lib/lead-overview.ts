@@ -52,7 +52,7 @@ export function preferredReplyMessage<T extends { id: string; direction: string;
     .filter(message => message.direction === "outgoing")
     .sort((left, right) => right.created_at.localeCompare(left.created_at) || right.id.localeCompare(left.id));
   return outgoing.find(message => message.status === "draft")
-    ?? outgoing.find(message => message.sender === "LeadFlow AI")
+    ?? outgoing.find(message => message.sender !== "LeadFlow")
     ?? outgoing[0];
 }
 
