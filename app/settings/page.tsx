@@ -30,6 +30,15 @@ export default function SettingsPage() {
   const [makeStatusError, setMakeStatusError] = useState(false);
   const [autoReplyMode, setAutoReplyMode] =
     useState<AutoReplyMode>("manual");
+  const [companyLogoUrl, setCompanyLogoUrl] = useState("");
+  const [signatureEnabled, setSignatureEnabled] = useState(true);
+  const [signatureShowLogo, setSignatureShowLogo] = useState(true);
+  const [emailSignoff, setEmailSignoff] = useState("Üdvözlettel,");
+  const [signerName, setSignerName] = useState("");
+  const [signerRole, setSignerRole] = useState("");
+  const [signaturePhone, setSignaturePhone] = useState("");
+  const [signatureWebsite, setSignatureWebsite] = useState("");
+  const [signatureLegalText, setSignatureLegalText] = useState("");
 
   useEffect(() => {
     async function loadSettings() {
@@ -68,6 +77,24 @@ export default function SettingsPage() {
       setCompanySlug(profile.companySlug);
       setUserRole(profile.role);
       setAutoReplyMode(profile.autoReplyMode || "manual");
+
+      const [{ data: signatureSettings }, { data: companyRow }] = await Promise.all([
+        supabase.from("company_settings").select(
+          "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_website,email_legal_text"
+        ).eq("company_id", profile.companyId).single(),
+        supabase.from("companies").select("logo_url").eq("id", profile.companyId).single(),
+      ]);
+      if (signatureSettings) {
+        setSignatureEnabled(signatureSettings.email_signature_enabled ?? true);
+        setSignatureShowLogo(signatureSettings.email_signature_show_logo ?? true);
+        setEmailSignoff(signatureSettings.email_signoff || "Üdvözlettel,");
+        setSignerName(signatureSettings.email_signer_name || "");
+        setSignerRole(signatureSettings.email_signer_role || "");
+        setSignaturePhone(signatureSettings.email_phone || "");
+        setSignatureWebsite(signatureSettings.email_website || "");
+        setSignatureLegalText(signatureSettings.email_legal_text || "");
+      }
+      setCompanyLogoUrl(companyRow?.logo_url || "");
 
       const localPreferences = readLocalPreferences();
       const { data: preferenceRow } = await supabase
@@ -111,6 +138,14 @@ export default function SettingsPage() {
       .from("company_settings")
       .update({
         auto_reply_mode: autoReplyMode,
+        email_signature_enabled: signatureEnabled,
+        email_signature_show_logo: signatureShowLogo,
+        email_signoff: emailSignoff.trim() || "Üdvözlettel,",
+        email_signer_name: signerName.trim() || null,
+        email_signer_role: signerRole.trim() || null,
+        email_phone: signaturePhone.trim() || null,
+        email_website: signatureWebsite.trim() || null,
+        email_legal_text: signatureLegalText.trim() || null,
         updated_at: new Date().toISOString(),
       })
       .eq("company_id", companyId);
@@ -313,6 +348,23 @@ export default function SettingsPage() {
             Meghatározza, hogy az AI által készített választervezet mikor
             kerülhet automatikusan kiküldésre.
           </p>
+
+          <div className="mt-6 rounded-xl border border-slate-200 p-4 sm:p-5">
+            <div className="flex items-start gap-3">
+              <input className="mt-1" type="checkbox" checked={signatureEnabled} onChange={(event) => setSignatureEnabled(event.target.checked)} />
+              <div><h3 className="font-semibold text-slate-900">Céges e-mail-aláírás</h3><p className="mt-1 text-sm text-slate-500">Minden jóváhagyott válasz végére automatikusan hozzáadjuk.</p></div>
+            </div>
+            {signatureEnabled && <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">Elköszönés<input value={emailSignoff} maxLength={100} onChange={(e) => setEmailSignoff(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Cégnév<input value={companyName} disabled className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Aláíró neve<input value={signerName} maxLength={120} onChange={(e) => setSignerName(e.target.value)} placeholder="Például: Kovács Péter" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Beosztás<input value={signerRole} maxLength={120} onChange={(e) => setSignerRole(e.target.value)} placeholder="Például: ügyvezető" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Telefonszám<input value={signaturePhone} maxLength={80} onChange={(e) => setSignaturePhone(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Weboldal<input value={signatureWebsite} maxLength={300} onChange={(e) => setSignatureWebsite(e.target.value)} placeholder="https://pelda.hu" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="sm:col-span-2 text-sm font-medium text-slate-700">Opcionális jogi vagy adatvédelmi szöveg<textarea value={signatureLegalText} maxLength={1000} onChange={(e) => setSignatureLegalText(e.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="sm:col-span-2 flex items-start gap-3 rounded-xl bg-slate-50 p-4"><input className="mt-1" type="checkbox" checked={signatureShowLogo} onChange={(e) => setSignatureShowLogo(e.target.checked)} disabled={!companyLogoUrl} /><span><span className="block font-semibold text-slate-900">Céges logó megjelenítése</span><span className="mt-1 block text-sm text-slate-500">{companyLogoUrl ? "A publikus ajánlatkérőhöz feltöltött logót használjuk." : "Ehhez a vállalkozáshoz még nincs logó beállítva."}</span></span></label>
+            </div>}
+          </div>
 
           <div className="mt-6 space-y-3">
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4">

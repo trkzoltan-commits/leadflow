@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
 import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
-import { plainTextToEmailHtml } from "@/lib/email-html";
+import { buildApprovedReplyHtml } from "@/lib/email-html";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -181,6 +181,20 @@ export async function POST(request: Request) {
       );
     }
 
+    const [{ data: company }, { data: emailSettings }] = await Promise.all([
+      supabaseAdmin.from("companies").select("name,logo_url").eq("id", companyId).single(),
+      supabaseAdmin.from("company_settings").select(
+        "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_website,email_legal_text"
+      ).eq("company_id", companyId).single(),
+    ]);
+
+    if (!company?.name || !emailSettings) {
+      return NextResponse.json(
+        { error: "A vállalkozás e-mail-aláírása nem érhető el." },
+        { status: 503 }
+      );
+    }
+
     const webhookUrl = await getMakeWebhook(companyId, "approved_reply");
 
     if (!webhookUrl) {
@@ -269,7 +283,18 @@ export async function POST(request: Request) {
         company_id: lead.company_id,
         recipient_email: lead.email,
         recipient_name: lead.name,
-        content: plainTextToEmailHtml(message.content),
+        content: buildApprovedReplyHtml(message.content, {
+          enabled: emailSettings.email_signature_enabled,
+          showLogo: emailSettings.email_signature_show_logo,
+          logoUrl: company.logo_url,
+          companyName: company.name,
+          signoff: emailSettings.email_signoff,
+          signerName: emailSettings.email_signer_name,
+          signerRole: emailSettings.email_signer_role,
+          phone: emailSettings.email_phone,
+          website: emailSettings.email_website,
+          legalText: emailSettings.email_legal_text,
+        }),
         timestamp: new Date().toISOString(),
       }),
     });

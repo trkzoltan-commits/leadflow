@@ -102,6 +102,7 @@ A válasz legyen:
 - ügyfélbarát,
 - elküldhető e-mailben vagy üzenetben,
 - ne tartalmazzon belső megjegyzést vagy magyarázatot.
+- ne tartalmazzon elköszönést vagy aláírást, mert azt a rendszer küldéskor automatikusan hozzáadja.
 
 Csak a kész választervezetet add vissza.
       `,
