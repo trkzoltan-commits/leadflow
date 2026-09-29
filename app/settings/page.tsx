@@ -19,6 +19,7 @@ export default function SettingsPage() {
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const [savedCompanyName, setSavedCompanyName] = useState("");
   const [companySlug, setCompanySlug] = useState("");
   const [userId, setUserId] = useState("");
   const [userEmail, setUserEmail] = useState("");
@@ -74,6 +75,7 @@ export default function SettingsPage() {
       } = await profileResponse.json();
       setCompanyId(profile.companyId);
       setCompanyName(profile.companyName);
+      setSavedCompanyName(profile.companyName);
       setCompanySlug(profile.companySlug);
       setUserRole(profile.role);
       setAutoReplyMode(profile.autoReplyMode || "manual");
@@ -133,6 +135,30 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveSuccess(false);
     setError("");
+
+    if (userRole === "owner" && companyName.trim() !== savedCompanyName) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setError("A munkamenet lejárt. Jelentkezz be újra.");
+        setSaving(false);
+        return;
+      }
+      const companyResponse = await fetch("/api/account-profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ companyName }),
+      });
+      const companyResult = await companyResponse.json();
+      if (!companyResponse.ok) {
+        setError(companyResult.error || "A cégnév módosítása nem sikerült.");
+        setSaving(false);
+        return;
+      }
+      setCompanyName(companyResult.companyName);
+      setSavedCompanyName(companyResult.companyName);
+    }
 
     const { error: updateError } = await supabase
       .from("company_settings")
@@ -356,7 +382,7 @@ export default function SettingsPage() {
             </div>
             {signatureEnabled && <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-medium text-slate-700">Elköszönés<input value={emailSignoff} maxLength={100} onChange={(e) => setEmailSignoff(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-              <label className="text-sm font-medium text-slate-700">Cégnév<input value={companyName} disabled className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Cégnév<input value={companyName} maxLength={200} disabled={userRole !== "owner"} onChange={(e) => setCompanyName(e.target.value)} className={`mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 ${userRole !== "owner" ? "bg-slate-50" : "bg-white"}`} /><span className="mt-1 block text-xs text-slate-500">{userRole === "owner" ? "Tulajdonosként módosíthatod; minden céges felületen ez a név jelenik meg." : "A cégnevet csak a tulajdonos módosíthatja."}</span></label>
               <label className="text-sm font-medium text-slate-700">Aláíró neve<input value={signerName} maxLength={120} onChange={(e) => setSignerName(e.target.value)} placeholder="Például: Kovács Péter" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Beosztás<input value={signerRole} maxLength={120} onChange={(e) => setSignerRole(e.target.value)} placeholder="Például: ügyvezető" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Telefonszám<input value={signaturePhone} maxLength={80} onChange={(e) => setSignaturePhone(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
