@@ -142,6 +142,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (typeof message.content !== "string" || !message.content.trim()) {
+      return NextResponse.json(
+        { error: "Üres válasz nem küldhető el. Írj vagy készíts választervezetet, majd mentsd el." },
+        { status: 400 }
+      );
+    }
+
     const { data: lead, error: leadError } =
       await supabaseAdmin
         .from("leads")
@@ -261,7 +268,7 @@ export async function POST(request: Request) {
         company_id: lead.company_id,
         recipient_email: lead.email,
         recipient_name: lead.name,
-        content: message.content,
+        content: message.content.trim(),
         timestamp: new Date().toISOString(),
       }),
     });

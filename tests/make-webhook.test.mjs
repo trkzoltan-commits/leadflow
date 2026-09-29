@@ -7,7 +7,7 @@ import ts from "typescript";
 const compiled = new Map();
 const urlA = "https://hook.eu1.make.com/test-company-a";
 const urlB = "https://hook.eu2.make.com/test-company-b";
-function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft" } = {}) {
+function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft", messageContent = "Test" } = {}) {
   const calls = [];
   const claims = [];
   let messageStatus = initialMessageStatus;
@@ -32,7 +32,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
           if (table === "users") return { data: { company_id: "a" }, error: null };
           if (table === "leads") return { data: { id: "lead-a", company_id: "a", email: "test@example.invalid", ...mutation }, error: null };
           if (mutation) { claims.push(mutation); messageStatus = mutation.status; }
-          return { data: { id: "message-a", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: "Test" }, error: null };
+          return { data: { id: "message-a", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: messageContent }, error: null };
         },
         async maybeSingle() { return this.single(); },
       };
@@ -144,4 +144,14 @@ test("a definitively failed delivery can be claimed for one safe retry", async (
   assert.equal((await route.POST(request())).status, 409);
   assert.equal(state.calls.length, 1);
   assert.deepEqual(state.claims.map(x => x.status), ["sending"]);
+});
+
+test("an empty approved reply is rejected before Make dispatch", async () => {
+  const state = setup({ messageContent: "   " });
+  const response = await state.load("app/api/send-approved-reply/route.ts").POST(new Request("https://example.invalid", {
+    method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({ message_id: "message-a" }),
+  }));
+  assert.equal(response.status, 400);
+  assert.equal(state.calls.length, 0);
+  assert.equal(state.claims.length, 0);
 });
