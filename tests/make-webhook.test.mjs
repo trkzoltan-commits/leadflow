@@ -57,6 +57,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
             ? { status: "accepted", httpStatus: response.status ?? 200, errorCode: null }
             : { status: "uncertain", httpStatus: response?.status ?? null, errorCode: response ? "http" : "network" },
         };
+        if (name === "@/lib/email-html") return load("lib/email-html.ts");
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "next/server") return { NextResponse: Response };
         throw new Error(name);
@@ -154,4 +155,19 @@ test("an empty approved reply is rejected before Make dispatch", async () => {
   assert.equal(response.status, 400);
   assert.equal(state.calls.length, 0);
   assert.equal(state.claims.length, 0);
+});
+
+test("approved reply is safely formatted as HTML with preserved blank lines", async () => {
+  const state = setup({
+    messageContent: "Kedves Zoltán!\r\n\r\nA válasz <fontos> & pontos.\r\n\r\nÜdvözlettel,\r\na csapat",
+  });
+  const response = await state.load("app/api/send-approved-reply/route.ts").POST(new Request("https://example.invalid", {
+    method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({ message_id: "message-a" }),
+  }));
+  assert.equal(response.status, 200);
+  const payload = JSON.parse(state.calls[0].options.body);
+  assert.equal(
+    payload.content,
+    "Kedves Zoltán!<br><br>A válasz &lt;fontos&gt; &amp; pontos.<br><br>Üdvözlettel,<br>a csapat"
+  );
 });

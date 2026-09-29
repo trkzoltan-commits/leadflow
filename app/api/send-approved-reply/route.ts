@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
 import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
+import { plainTextToEmailHtml } from "@/lib/email-html";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -268,7 +269,7 @@ export async function POST(request: Request) {
         company_id: lead.company_id,
         recipient_email: lead.email,
         recipient_name: lead.name,
-        content: message.content.trim(),
+        content: plainTextToEmailHtml(message.content),
         timestamp: new Date().toISOString(),
       }),
     });
