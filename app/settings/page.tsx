@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { applyPreferences, readLocalPreferences } from "@/components/theme-preferences";
 import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
+import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
@@ -237,14 +238,9 @@ export default function SettingsPage() {
     <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
       <div className="mx-auto max-w-3xl">
         <div className="mb-8">
-          <button
-            onClick={() => router.push("/")}
-            className="mb-4 text-sm font-medium text-violet-600 hover:text-violet-700"
-          >
-            ← Vissza a dashboardra
-          </button>
+          <DashboardBrandLink />
 
-          <h1 className="text-3xl font-bold text-slate-900">
+          <h1 className="mt-1 text-3xl font-bold text-slate-900">
             Beállítások
           </h1>
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { displayReceivedAt, filterLeads, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
 import { filterReportLeads, parseReportSelection, type ReportSegment } from "@/lib/lead-report";
+import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 const reportMonthNames = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
 const reportSegmentLabels: Record<ReportSegment, string> = { total: "Összes", won: "Megvalósult", lost: "Nem valósult meg", active: "Aktív", unknown: "Eredmény nélkül lezárt" };
@@ -73,6 +74,7 @@ function LeadsContent() {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex items-center justify-between">
           <div>
+            <DashboardBrandLink />
             <h1 className="text-3xl font-bold text-slate-900">
               Érdeklődők
             </h1>
@@ -82,12 +84,6 @@ function LeadsContent() {
             </p>
           </div>
 
-          <button
-            onClick={() => router.push("/")}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-50"
-          >
-            ← Dashboard
-          </button>
           <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-50">Riportok</Link>
         </div>
 

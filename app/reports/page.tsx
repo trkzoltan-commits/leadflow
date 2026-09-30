@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { annualReport, reportYears, type ReportCounts } from "@/lib/lead-report";
+import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 const monthNames = ["Január", "Február", "Március", "Április", "Május", "Június", "Július", "Augusztus", "Szeptember", "Október", "November", "December"];
 const columns: { key: keyof ReportCounts; label: string }[] = [
@@ -33,11 +34,10 @@ export default function ReportsPage() {
     <div className="mx-auto max-w-6xl">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="font-semibold text-violet-600">LeadFlow</p>
+          <DashboardBrandLink />
           <h1 className="mt-1 text-3xl font-bold">Riportok</h1>
           <p className="mt-2 text-slate-600">Éves összesítés havi bontásban, az érdeklődők érkezési dátuma szerint.</p>
         </div>
-        <Link href="/" className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm">← Dashboard</Link>
       </div>
 
       <div role="status" className={error ? "mb-6 rounded-xl bg-amber-50 p-4 text-amber-800" : "mb-6 text-sm text-slate-500"}>

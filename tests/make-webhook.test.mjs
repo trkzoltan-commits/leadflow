@@ -172,7 +172,8 @@ test("approved reply is safely formatted as HTML with preserved blank lines", as
   assert.equal(response.status, 200);
   const payload = JSON.parse(state.calls[0].options.body);
   assert.match(payload.content, /^Kedves Zoltán!<br><br>A válasz &lt;fontos&gt; &amp; pontos\./);
-  assert.match(payload.content, /border-top:2px solid #149a02/);
+  assert.doesNotMatch(payload.content, /border-top/);
+  assert.match(payload.content, /color:#149a02;font-size:16px/);
   assert.match(payload.content, /font-size:16px;font-weight:700[^>]*>Teszt Kft\.<\/div>/);
   assert.match(payload.content, /mailto:info@example\.invalid/);
   assert.match(payload.content, /tel:\+36301234567/);

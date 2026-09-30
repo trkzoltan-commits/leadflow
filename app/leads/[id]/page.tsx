@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, preferredReplyMessage } from "@/lib/lead-overview";
+import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 type Lead = {
   id: string;
@@ -724,9 +725,10 @@ export default function LeadDetailsPage() {
     <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
       <div className="mx-auto max-w-5xl">
         <div className="mb-8">
+          <DashboardBrandLink />
           <button
             onClick={() => router.push("/leads")}
-            className="mb-4 text-sm font-medium text-violet-600 hover:text-violet-700"
+            className="mb-4 mt-3 block text-sm font-medium text-violet-600 hover:text-violet-700"
           >
             ← Vissza az érdeklődőkhöz
           </button>
