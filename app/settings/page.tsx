@@ -43,6 +43,7 @@ export default function SettingsPage() {
   const [signatureEmail, setSignatureEmail] = useState("");
   const [signatureWebsite, setSignatureWebsite] = useState("");
   const [signatureLegalText, setSignatureLegalText] = useState("");
+  const canManageCompany = userRole === "owner" || userRole === "admin";
 
   useEffect(() => {
     async function loadSettings() {
@@ -164,28 +165,24 @@ export default function SettingsPage() {
       setSavedCompanyName(companyResult.companyName);
     }
 
-    const { error: updateError } = await supabase
-      .from("company_settings")
-      .update({
-        auto_reply_mode: autoReplyMode,
-        email_signature_enabled: signatureEnabled,
-        email_signature_show_logo: signatureShowLogo,
-        email_signoff: emailSignoff.trim() || "Üdvözlettel,",
-        email_signer_name: signerName.trim() || null,
-        email_signer_role: signerRole.trim() || null,
-        email_phone: signaturePhone.trim() || null,
-        email_address: signatureEmail.trim() || null,
-        email_website: signatureWebsite.trim() || null,
-        email_legal_text: signatureLegalText.trim() || null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("company_id", companyId);
-
-    if (updateError) {
-      console.error("Beállítás mentési hiba:", updateError);
-      setError("Nem sikerült elmenteni a beállítást.");
-      setSaving(false);
-      return;
+    if (canManageCompany) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("A munkamenet lejárt. Jelentkezz be újra.");
+        setSaving(false);
+        return;
+      }
+      const settingsResponse = await fetch("/api/company-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ autoReplyMode, signatureEnabled, signatureShowLogo, emailSignoff, signerName, signerRole, signaturePhone, signatureEmail, signatureWebsite, signatureLegalText }),
+      });
+      const settingsResult = await settingsResponse.json();
+      if (!settingsResponse.ok) {
+        setError(settingsResult.error || "Nem sikerült elmenteni a céges beállítást.");
+        setSaving(false);
+        return;
+      }
     }
 
     const { error: preferenceError } = await supabase
@@ -377,6 +374,10 @@ export default function SettingsPage() {
             kerülhet automatikusan kiküldésre.
           </p>
 
+          {!canManageCompany && <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm leading-6 text-slate-600">A céges üzenetbeállításokat tulajdonos vagy adminisztrátor módosíthatja. A saját megjelenési beállításaidat továbbra is elmentheted.</p>}
+
+          <fieldset disabled={!canManageCompany} className={!canManageCompany ? "opacity-60" : ""}>
+
           <div className="mt-6 rounded-xl border border-slate-200 p-4 sm:p-5">
             <div className="flex items-start gap-3">
               <input className="mt-1" type="checkbox" checked={signatureEnabled} onChange={(event) => setSignatureEnabled(event.target.checked)} />
@@ -459,6 +460,7 @@ export default function SettingsPage() {
               </div>
             </label>
           </div>
+          </fieldset>
 
           <button
             type="button"
@@ -466,7 +468,7 @@ export default function SettingsPage() {
             disabled={saving}
             className="accent-bg mt-6 w-full rounded-xl px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saving ? "Mentés..." : "Beállítások mentése"}
+            {saving ? "Mentés..." : canManageCompany ? "Beállítások mentése" : "Saját megjelenés mentése"}
           </button>
 
           {saveSuccess && (
