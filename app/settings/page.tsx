@@ -38,6 +38,7 @@ export default function SettingsPage() {
   const [signerName, setSignerName] = useState("");
   const [signerRole, setSignerRole] = useState("");
   const [signaturePhone, setSignaturePhone] = useState("");
+  const [signatureEmail, setSignatureEmail] = useState("");
   const [signatureWebsite, setSignatureWebsite] = useState("");
   const [signatureLegalText, setSignatureLegalText] = useState("");
 
@@ -82,7 +83,7 @@ export default function SettingsPage() {
 
       const [{ data: signatureSettings }, { data: companyRow }] = await Promise.all([
         supabase.from("company_settings").select(
-          "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_website,email_legal_text"
+          "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_address,email_website,email_legal_text"
         ).eq("company_id", profile.companyId).single(),
         supabase.from("companies").select("logo_url").eq("id", profile.companyId).single(),
       ]);
@@ -93,6 +94,7 @@ export default function SettingsPage() {
         setSignerName(signatureSettings.email_signer_name || "");
         setSignerRole(signatureSettings.email_signer_role || "");
         setSignaturePhone(signatureSettings.email_phone || "");
+        setSignatureEmail(signatureSettings.email_address || "");
         setSignatureWebsite(signatureSettings.email_website || "");
         setSignatureLegalText(signatureSettings.email_legal_text || "");
       }
@@ -170,6 +172,7 @@ export default function SettingsPage() {
         email_signer_name: signerName.trim() || null,
         email_signer_role: signerRole.trim() || null,
         email_phone: signaturePhone.trim() || null,
+        email_address: signatureEmail.trim() || null,
         email_website: signatureWebsite.trim() || null,
         email_legal_text: signatureLegalText.trim() || null,
         updated_at: new Date().toISOString(),
@@ -386,6 +389,7 @@ export default function SettingsPage() {
               <label className="text-sm font-medium text-slate-700">Aláíró neve<input value={signerName} maxLength={120} onChange={(e) => setSignerName(e.target.value)} placeholder="Például: Kovács Péter" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Beosztás<input value={signerRole} maxLength={120} onChange={(e) => setSignerRole(e.target.value)} placeholder="Például: ügyvezető" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Telefonszám<input value={signaturePhone} maxLength={80} onChange={(e) => setSignaturePhone(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">E-mail-cím<input type="email" value={signatureEmail} maxLength={254} onChange={(e) => setSignatureEmail(e.target.value)} placeholder="info@pelda.hu" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Weboldal<input value={signatureWebsite} maxLength={300} onChange={(e) => setSignatureWebsite(e.target.value)} placeholder="https://pelda.hu" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="sm:col-span-2 text-sm font-medium text-slate-700">Opcionális jogi vagy adatvédelmi szöveg<textarea value={signatureLegalText} maxLength={1000} onChange={(e) => setSignatureLegalText(e.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="sm:col-span-2 flex items-start gap-3 rounded-xl bg-slate-50 p-4"><input className="mt-1" type="checkbox" checked={signatureShowLogo} onChange={(e) => setSignatureShowLogo(e.target.checked)} disabled={!companyLogoUrl} /><span><span className="block font-semibold text-slate-900">Céges logó megjelenítése</span><span className="mt-1 block text-sm text-slate-500">{companyLogoUrl ? "A publikus ajánlatkérőhöz feltöltött logót használjuk." : "Ehhez a vállalkozáshoz még nincs logó beállítva."}</span></span></label>

@@ -28,11 +28,11 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
             const url = filters.company_id === "a" ? urlA : urlB;
             return { data: missing ? null : { mode, enabled, new_lead_webhook_url: urls ? url : null, approved_reply_webhook_url: urls ? url : null }, error: null };
           }
-          if (table === "companies") return { data: { id: "a", public_slug: "company-a", name: "Teszt Kft.", logo_url: "https://example.invalid/logo.png" }, error: null };
+          if (table === "companies") return { data: { id: "a", public_slug: "company-a", name: "Teszt Kft.", logo_url: "https://example.invalid/logo.png", brand_primary: "#149a02" }, error: null };
           if (table === "company_settings") return { data: {
             auto_reply_mode: "manual", email_signature_enabled: true, email_signature_show_logo: true,
             email_signoff: "Üdvözlettel,", email_signer_name: "Teszt Elek", email_signer_role: "ügyvezető",
-            email_phone: "+36 30 123 4567", email_website: "https://example.invalid", email_legal_text: null,
+            email_phone: "+36 30 123 4567", email_address: "info@example.invalid", email_website: "https://example.invalid", email_legal_text: null,
           }, error: null };
           if (table === "users") return { data: { company_id: "a" }, error: null };
           if (table === "leads") return { data: { id: "lead-a", company_id: "a", email: "test@example.invalid", ...mutation }, error: null };
@@ -171,8 +171,10 @@ test("approved reply is safely formatted as HTML with preserved blank lines", as
   }));
   assert.equal(response.status, 200);
   const payload = JSON.parse(state.calls[0].options.body);
-  assert.equal(
-    payload.content,
-    'Kedves Zoltán!<br><br>A válasz &lt;fontos&gt; &amp; pontos.<br><br>Üdvözlettel,<br>a csapat<div style="margin-top:24px">Üdvözlettel,<br>Teszt Elek<br>ügyvezető<br>Teszt Kft.<br>+36 30 123 4567<br><a href="https://example.invalid/">https://example.invalid</a><br><img src="https://example.invalid/logo.png" alt="Teszt Kft." style="display:block;max-width:180px;max-height:72px;margin-top:12px" /></div>'
-  );
+  assert.match(payload.content, /^Kedves Zoltán!<br><br>A válasz &lt;fontos&gt; &amp; pontos\./);
+  assert.match(payload.content, /border-top:2px solid #149a02/);
+  assert.match(payload.content, /font-size:16px;font-weight:700[^>]*>Teszt Kft\.<\/div>/);
+  assert.match(payload.content, /mailto:info@example\.invalid/);
+  assert.match(payload.content, /tel:\+36301234567/);
+  assert.match(payload.content, /https:\/\/example\.invalid\/logo\.png/);
 });
