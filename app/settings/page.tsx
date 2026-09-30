@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { applyPreferences, readLocalPreferences } from "@/components/theme-preferences";
 import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { TeamManagement } from "@/components/team-management";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
@@ -257,6 +258,8 @@ export default function SettingsPage() {
             <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2"><dt className="text-sm text-slate-500">Vállalkozás</dt><dd className="mt-1 font-semibold text-slate-900">{companyName || "—"}</dd></div>
           </dl>
         </section>
+
+        <TeamManagement isOwner={userRole === "owner"} />
 
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-900">Megjelenés</h2>
