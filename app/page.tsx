@@ -11,9 +11,10 @@ export default function Home() {
   const router = useRouter();
   const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
   if (loading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
-  const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending"].includes(replies.get(lead.id)?.status ?? ""))
-    .sort((a, b) => Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
+  const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending", "failed"].includes(replies.get(lead.id)?.status ?? ""))
+    .sort((a, b) => Number(replies.get(b.id)?.status === "failed") - Number(replies.get(a.id)?.status === "failed") || Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
   const delayedCount = attention.filter(lead => isDelayedSending(replies.get(lead.id))).length;
+  const failedCount = attention.filter(lead => replies.get(lead.id)?.status === "failed").length;
   const makeAttention = filterLeads(leads, replies, "make");
   const missingDraftCount = makeAttention.filter(lead => missingAiDraftWarning(lead, replies.has(lead.id)) !== null).length;
   const days = dailyCounts(leads);
@@ -28,6 +29,7 @@ export default function Home() {
     ["Új érdeklődő", leads.filter(lead => lead.status === "new").length],
     ["Ellenőrizendő piszkozat", attention.filter(lead => replies.get(lead.id)?.status === "draft").length],
     ["Küldési visszaigazolásra vár", attention.filter(lead => replies.get(lead.id)?.status === "sending").length],
+    ["Sikertelen küldés", failedCount],
     ["Késő visszaigazolás", delayedCount],
     ["Automatizálás ellenőrizendő", makeAttention.length],
   ];
@@ -57,8 +59,9 @@ export default function Home() {
         <section className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold">Figyelmet igénylő válaszok</h2>
           <p className="mt-2 text-sm text-slate-500">A legutóbbi válasz állapota alapján. A piszkozatot az automatizálás még feldolgozhatja.</p>
+          {failedCount > 0 && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">{failedCount} igazoltan sikertelen küldés újrapróbálható. Nyisd meg az érintett érdeklődőt, ellenőrizd a választ, majd indítsd újra.</p>}
           {delayedCount > 0 && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">{delayedCount} küldés visszaigazolása több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát; ne indíts újraküldést.</p>}
-          {attention.length === 0 ? <p className="mt-4 text-slate-600">Nincs ellenőrizendő piszkozat vagy visszaigazolásra váró küldés.</p> : <ul className="mt-4 divide-y divide-slate-100">{attention.map(lead => <li key={lead.id}><Link href={`/leads/${lead.id}`} className="flex flex-wrap justify-between gap-2 rounded-lg py-3 hover:bg-violet-50"><span className="font-semibold">{lead.name || "Névtelen érdeklődő"} <span className="font-normal text-slate-500">· {lead.service || "Nincs szolgáltatás"}</span></span><span className={isDelayedSending(replies.get(lead.id)) ? "text-sm font-semibold text-red-700" : "text-sm text-amber-800"}>{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)} →</span></Link></li>)}</ul>}
+          {attention.length === 0 ? <p className="mt-4 text-slate-600">Nincs ellenőrizendő piszkozat vagy küldési probléma.</p> : <ul className="mt-4 divide-y divide-slate-100">{attention.map(lead => <li key={lead.id}><Link href={`/leads/${lead.id}`} className="flex flex-wrap justify-between gap-2 rounded-lg py-3 hover:bg-violet-50"><span className="font-semibold">{lead.name || "Névtelen érdeklődő"} <span className="font-normal text-slate-500">· {lead.service || "Nincs szolgáltatás"}</span></span><span className={isDelayedSending(replies.get(lead.id)) || replies.get(lead.id)?.status === "failed" ? "text-sm font-semibold text-red-700" : "text-sm text-amber-800"}>{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)} →</span></Link></li>)}</ul>}
         </section>
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="min-w-0 space-y-6">

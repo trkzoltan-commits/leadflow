@@ -41,6 +41,8 @@ type Message = {
   delivery_failed_at: string | null;
 };
 
+type DeliveryAudit = { status: string | null; attemptCount: number; lastAttemptAt: string | null; updatedAt: string | null };
+
 const messageSelect = "id, direction, sender, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at";
 
 export default function LeadDetailsPage() {
@@ -76,6 +78,7 @@ export default function LeadDetailsPage() {
   const [markSentError, setMarkSentError] = useState("");
 
   const [messageHistory, setMessageHistory] = useState<Message[]>([]);
+  const [deliveryAudit, setDeliveryAudit] = useState<DeliveryAudit | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -222,6 +225,23 @@ export default function LeadDetailsPage() {
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, markingSent]);
+
+  useEffect(() => {
+    if (!draftMessageId) { setDeliveryAudit(null); return; }
+    let cancelled = false;
+    async function loadDeliveryAudit() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session || cancelled) return;
+      const response = await fetch(`/api/messages/${draftMessageId}/delivery-status`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store",
+      });
+      if (!response.ok || cancelled) return;
+      const result = await response.json();
+      if (!cancelled) setDeliveryAudit(result);
+    }
+    void loadDeliveryAudit();
+    return () => { cancelled = true; };
+  }, [draftMessageId, messageStatus]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -762,6 +782,7 @@ export default function LeadDetailsPage() {
           <p className="mt-2 text-sm leading-6 text-slate-600">
             {messageStatus === "failed" && deliveryFailedAt ? `A Gmail ${displayReceivedAt(deliveryFailedAt)} időpontban igazolta, hogy az üzenet nem ment ki. Ellenőrzés után biztonságosan újrapróbálhatod a küldést.` : messageStatus === "failed" ? "A Make igazolta, hogy a Gmail nem küldte el az üzenetet. Ellenőrzés után biztonságosan újrapróbálhatod a küldést." : delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" && deliveryConfirmedAt ? `A Gmail ${displayReceivedAt(deliveryConfirmedAt)} időpontban visszaigazolta a küldést. Most az érdeklődő válaszát várhatod.` : messageStatus === "sent" ? "Az üzenet elküldöttként van rögzítve. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
           </p>
+          {deliveryAudit && deliveryAudit.attemptCount > 0 && <p className="mt-3 text-sm font-medium text-slate-700">Küldési próbálkozások: {deliveryAudit.attemptCount}{deliveryAudit.lastAttemptAt ? ` · Utolsó indítás: ${displayReceivedAt(deliveryAudit.lastAttemptAt)}` : ""}</p>}
           <a href="#reply" className="mt-4 inline-flex rounded-xl bg-violet-600 px-4 py-2 font-semibold text-white">{messageStatus === "sent" ? "Elküldött válasz megtekintése" : "Ugrás a válaszhoz"}</a>
           <p className={syncError ? "mt-3 text-sm text-amber-700" : "mt-3 text-xs text-slate-500"} role="status">
             {syncError ? "Az automatikus frissítés átmenetileg nem érhető el. Újrapróbáljuk; a szerkesztett szöveg megmarad." : "Az állapot és az üzenetek 5 másodpercenként automatikusan frissülnek."}
