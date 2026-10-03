@@ -190,17 +190,31 @@ hoz létre; meglévő kimenetet nem ír felül. Importáld a két elkészült f�
 megfelelő Make-forgatókönyvbe, állítsd vissza az azonnali ütemezést, majd töröld a
 kulcsfájlt, az exportokat és az előkészített blueprinteket.
 
-Az üzemeltető a bekötés után csak olvasó ellenőrzést futtathat. Az eredmény
-igen/nem állapotokat és egyetlen következő teendőt mutat biztonságos sorrendben;
-nem írja ki az e-mail-címet, kulcsot vagy webhookcímeket:
+Az üzemeltető a bekötés közben és után állapotellenőrzést futtathat. Az eredmény
+igen/nem állapotokat és mindig egyetlen következő teendőt mutat biztonságos
+sorrendben; nem írja ki az e-mail-címet, kulcsot vagy webhookcímeket:
 
 ```powershell
 node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft
 ```
 
-Az „alapbeállítások teljesek” üzenet nem bizonyítja a Make-folyamatok működését,
-a Gmail-küldést vagy a két cég közti élő adatizolációt. Ezeket külön próbával kell
-ellenőrizni, mielőtt ügyfél használja a rendszert.
+A `202610030002_company_onboarding_progress.sql` migráció után az élő ellenőrzések
+eredménye is cégenként rögzíthető. Egy pontot csak a próba tényleges, kézi
+ellenőrzése után szabad igazolni:
+
+```powershell
+node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft --confirm owner-login
+node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft --confirm new-lead-flow
+node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft --confirm approved-reply-flow
+node --env-file=.env.local scripts/check-company-onboarding.mjs pelda-kft --confirm tenant-isolation
+```
+
+Az ellenőrzési pontok rendre a tulajdonosi belépést, a bejövő érdeklődő teljes
+folyamatát és belső értesítését, a jóváhagyott válasz kézbesítését és
+visszaigazolását, valamint a két cég közötti adat- és Make-izolációt jelentik.
+A parancs csak akkor írja ki, hogy a cég pilotra kész, ha az összes technikai
+feltétel és mind a négy élő próba teljesült. A visszaigazolások személyes adatot,
+webhookcímet és titkot nem tárolnak.
 
 ### Webhookok beállítása és engedélyezés
 
