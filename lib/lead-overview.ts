@@ -114,7 +114,7 @@ export function replyLabel(status?: string | null, sendingStartedAt?: string | n
   return status ? "Válasz állapota: " + status : "Még nincs válasz";
 }
 export function leadLabel(status: string | null) {
-  return ({new: "Új", contacted: "Kapcsolatfelvétel megtörtént", waiting: "Válaszra vár", processed: "Feldolgozott"} as Record<string,string>)[status ?? ""] ?? status ?? "—";
+  return ({new: "Új", contacted: "Kapcsolatfelvétel megtörtént", waiting: "Válaszra vár", offer_sent: "Ajánlat elküldve", decision: "Döntésre vár", processed: "Feldolgozott"} as Record<string,string>)[status ?? ""] ?? status ?? "—";
 }
 export function displayDate(value: string) {
   const date = new Date(value);

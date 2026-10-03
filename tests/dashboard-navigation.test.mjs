@@ -9,6 +9,7 @@ test("every authenticated partner page exposes the shared Dashboard brand link",
     "app/page.tsx",
     "app/leads/page.tsx",
     "app/leads/[id]/page.tsx",
+    "app/pipeline/page.tsx",
     "app/reports/page.tsx",
     "app/settings/page.tsx",
   ]) {
@@ -18,4 +19,9 @@ test("every authenticated partner page exposes the shared Dashboard brand link",
   const component = read("components/dashboard-brand-link.tsx");
   assert.match(component, /href="\/"/);
   assert.match(component, /LeadFlow Dashboard – Áttekintés/);
+});
+
+test("dashboard and lead list expose the pipeline", () => {
+  assert.match(read("app/page.tsx"), /href="\/pipeline"/);
+  assert.match(read("app/leads/page.tsx"), /href="\/pipeline"/);
 });

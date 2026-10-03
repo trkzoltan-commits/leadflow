@@ -39,6 +39,7 @@ export default function Home() {
         <div><DashboardBrandLink /><h1 className="mt-1 text-3xl font-bold">Áttekintés</h1><p className="mt-2 text-slate-600">Érdeklődők, válaszok és következő teendők.</p></div>
         <nav aria-label="Fő navigáció" className="grid w-full grid-cols-2 gap-2 text-sm font-semibold sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
           <Link href="/leads" className="rounded-xl bg-violet-600 px-4 py-3 text-white">Érdeklődők</Link>
+          <Link href="/pipeline" className="rounded-xl border border-slate-200 bg-white px-4 py-3">Pipeline</Link>
           <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-3">Riportok</Link>
           <Link href="/settings" aria-label="Saját adatok és beállítások" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">⚙ Beállítások</Link>
           <button onClick={async () => { await supabase.auth.signOut(); router.replace("/login"); }} className="rounded-xl border border-slate-200 bg-white px-4 py-3">Kijelentkezés</button>

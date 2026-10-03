@@ -45,6 +45,8 @@ function LeadsContent() {
     if (status === "new") return "Új";
     if (status === "contacted") return "Kapcsolatfelvétel megtörtént";
     if (status === "waiting") return "Válaszra vár";
+    if (status === "offer_sent") return "Ajánlat elküldve";
+    if (status === "decision") return "Döntésre vár";
     if (status === "processed") return "Feldolgozott";
 
     return status || "—";
@@ -84,7 +86,10 @@ function LeadsContent() {
             </p>
           </div>
 
-          <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-50">Riportok</Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/pipeline" className="rounded-xl bg-violet-600 px-4 py-2 font-medium text-white shadow-sm">Pipeline</Link>
+            <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-50">Riportok</Link>
+          </div>
         </div>
 
         <p role="status" className={loadError ? "mb-5 text-amber-700" : "mb-5 text-sm text-slate-500"}>

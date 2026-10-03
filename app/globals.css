@@ -58,6 +58,18 @@ body {
   background-image: linear-gradient(to bottom right, var(--leadflow-accent), var(--leadflow-accent-strong));
 }
 
+.pipeline-column { background: color-mix(in srgb, var(--pipeline-color) 8%, white); border-color: color-mix(in srgb, var(--pipeline-color) 30%, white); }
+.pipeline-column > div:first-child h2 { color: color-mix(in srgb, var(--pipeline-color) 78%, #0f172a); }
+.pipeline-new { --pipeline-color: #2563eb; }
+.pipeline-contacted { --pipeline-color: #0891b2; }
+.pipeline-waiting { --pipeline-color: #d97706; }
+.pipeline-offer-sent { --pipeline-color: #7c3aed; }
+.pipeline-decision { --pipeline-color: #ea580c; }
+.pipeline-processed { --pipeline-color: #64748b; }
+.pipeline-drop-active { background: color-mix(in srgb, var(--pipeline-color) 15%, white); border-color: var(--pipeline-color); }
+.pipeline-drop-placeholder { border-color: var(--pipeline-color); color: color-mix(in srgb, var(--pipeline-color) 80%, #0f172a); background: color-mix(in srgb, var(--pipeline-color) 8%, white); }
+.pipeline-card { border-left-width: 3px; border-left-color: color-mix(in srgb, var(--pipeline-color) 65%, white); }
+
 :root[data-color-mode="dark"] .partner-surface {
   background-color: #0f172a;
   color: #e2e8f0;
@@ -84,6 +96,10 @@ body {
 :root[data-color-mode="dark"] .partner-surface .border-slate-100,
 :root[data-color-mode="dark"] .partner-surface .border-slate-200 { border-color: #334155; }
 :root[data-color-mode="dark"] .partner-surface .divide-slate-100 > :not(:last-child) { border-color: #334155; }
+:root[data-color-mode="dark"] .partner-surface .pipeline-column { background: color-mix(in srgb, var(--pipeline-color) 18%, #172033); border-color: color-mix(in srgb, var(--pipeline-color) 45%, #334155); }
+:root[data-color-mode="dark"] .partner-surface .pipeline-column > div:first-child h2 { color: color-mix(in srgb, var(--pipeline-color) 45%, white); }
+:root[data-color-mode="dark"] .partner-surface .pipeline-drop-active { background: color-mix(in srgb, var(--pipeline-color) 28%, #172033); border-color: var(--pipeline-color); }
+:root[data-color-mode="dark"] .partner-surface .pipeline-drop-placeholder { background: color-mix(in srgb, var(--pipeline-color) 15%, #172033); color: white; }
 :root[data-color-mode="dark"] .partner-surface input,
 :root[data-color-mode="dark"] .partner-surface textarea,
 :root[data-color-mode="dark"] .partner-surface select { background-color: #172033; color: #f8fafc; }

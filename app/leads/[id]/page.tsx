@@ -1194,6 +1194,14 @@ export default function LeadDetailsPage() {
                         Válaszra vár
                       </option>
 
+                      <option value="offer_sent">
+                        Ajánlat elküldve
+                      </option>
+
+                      <option value="decision">
+                        Döntésre vár
+                      </option>
+
                       <option value="processed">
                         Feldolgozott
                       </option>
