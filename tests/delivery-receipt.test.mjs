@@ -19,6 +19,8 @@ test("sent receipt normalizes the Gmail id and records confirmation time", async
   assert.equal(result.values.provider_message_id, "18f0abc_DEF-123");
   assert.equal(result.values.delivery_confirmed_at, "2026-09-27T12:00:00.000Z");
   assert.equal(result.values.delivery_failed_at, null);
+  assert.equal(result.values.delivery_resolution_source, "make");
+  assert.equal(result.values.delivery_resolved_by, null);
 });
 
 test("failed receipt records a definitive failure without inventing a Gmail id", async () => {
@@ -26,6 +28,7 @@ test("failed receipt records a definitive failure without inventing a Gmail id",
   const result = deliveryReceiptUpdate("failed", undefined, new Date("2026-09-27T12:00:00Z"));
   assert.equal(result.ok, true);
   assert.equal(result.values.delivery_failed_at, "2026-09-27T12:00:00.000Z");
+  assert.equal(result.values.delivery_resolution_source, "make");
   assert.equal(Object.hasOwn(result.values, "provider_message_id"), false);
 });
 

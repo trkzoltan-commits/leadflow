@@ -19,6 +19,8 @@ export function deliveryReceiptUpdate(status: string, providerMessageId: unknown
       ...(normalizedId ? { provider_message_id: normalizedId } : {}),
       delivery_confirmed_at: timestamp,
       delivery_failed_at: null,
+      delivery_resolution_source: "make",
+      delivery_resolved_by: null,
     },
   };
   if (status === "failed") return {
@@ -26,6 +28,8 @@ export function deliveryReceiptUpdate(status: string, providerMessageId: unknown
     values: {
       delivery_failed_at: timestamp,
       delivery_confirmed_at: null,
+      delivery_resolution_source: "make",
+      delivery_resolved_by: null,
     },
   };
   return { ok: true as const, values: {} };

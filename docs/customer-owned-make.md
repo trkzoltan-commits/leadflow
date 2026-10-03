@@ -116,8 +116,7 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 
 - A cégenkénti kulcskiadás élő tesztje és a teljes ügyfél-onboarding.
 - Gmail-piszkozat azonosító mentése.
-- Automatikus státuszegyeztetés és biztonságos retry.
-- Tartósan elmaradó küldési visszaigazolás automatikus rendezése.
+- Make/Gmail-alapú automatikus státuszegyeztetés a kézi rendezés kiváltására.
 
 ## Automatizálási indítások naplója
 
@@ -295,6 +294,14 @@ migráció ideje lesz a figyelmeztetés kezdőpontja, mert a korábbi pontos id�
 60 perc elteltével a partner dashboardján, listájában és az adatlapon kiemelt jelzés
 jelenik meg. A jelzés nem engedélyez újraküldést és nem minősíti sikertelennek a
 küldést; a partner a saját Make-futást és Gmail Elküldött levelek mappát ellenőrzi.
+A `202610030003_manual_delivery_resolution.sql` migráció után a partner 60 perc
+elteltével rögzítheti, hogy megtalálta az elküldött levelet, vagy mindkét helyen
+ellenőrizte és az üzenet biztosan nem ment ki. Az első eredmény lezárja a küldést,
+a második igazoltan sikertelen állapotba teszi, ahonnan biztonságosan indítható
+új próbálkozás. A rendszer eltárolja, hogy Make-visszahívás vagy kézi ellenőrzés
+zárta le az állapotot, valamint kézi rendezésnél a felhasználó azonosítóját. A
+felület csak a saját cég üzenetét engedi rendezni, és a döntés előtt nem oldja fel
+az újraküldési zárolást.
 
 ## Új érdeklődő Make-indításának jelzése
 

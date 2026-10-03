@@ -39,11 +39,12 @@ type Message = {
   sending_started_at: string | null;
   delivery_confirmed_at: string | null;
   delivery_failed_at: string | null;
+  delivery_resolution_source: string | null;
 };
 
 type DeliveryAudit = { status: string | null; attemptCount: number; lastAttemptAt: string | null; updatedAt: string | null };
 
-const messageSelect = "id, direction, sender, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at";
+const messageSelect = "id, direction, sender, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at, delivery_resolution_source";
 
 export default function LeadDetailsPage() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function LeadDetailsPage() {
 
   const [markingSent, setMarkingSent] = useState(false);
   const [markSentError, setMarkSentError] = useState("");
+  const [resolvingDelivery, setResolvingDelivery] = useState(false);
 
   const [messageHistory, setMessageHistory] = useState<Message[]>([]);
   const [deliveryAudit, setDeliveryAudit] = useState<DeliveryAudit | null>(null);
@@ -178,7 +180,7 @@ export default function LeadDetailsPage() {
   }, [leadId, router]);
 
   useEffect(() => {
-    if (loading || !lead || saving || draftSaving || replyLoading || aiLoading || markingSent) return;
+    if (loading || !lead || saving || draftSaving || replyLoading || aiLoading || markingSent || resolvingDelivery) return;
     let cancelled = false;
     let running = false;
     async function refresh() {
@@ -224,7 +226,7 @@ export default function LeadDetailsPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, markingSent]);
+  }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, markingSent, resolvingDelivery]);
 
   useEffect(() => {
     if (!draftMessageId) { setDeliveryAudit(null); return; }
@@ -619,6 +621,33 @@ export default function LeadDetailsPage() {
     }
   }
 
+  async function handleResolveDelivery(result: "sent" | "failed") {
+    if (!draftMessageId || resolvingDelivery || !delayedSending) return;
+    if (result === "failed" && !window.confirm("Csak akkor folytasd, ha a Make futását és a Gmail Elküldött levelek mappát is ellenőrizted, és biztos vagy benne, hogy az üzenet nem ment ki. Sikertelennek jelöljük?")) return;
+
+    setResolvingDelivery(true);
+    setMarkSentError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("A felhasználói munkamenet nem érhető el.");
+      const response = await fetch(`/api/messages/${draftMessageId}/resolve-delivery`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ result }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "A küldés állapota nem rendezhető.");
+      setMessageStatus(data.message.status);
+      setMessageHistory(current => current.map(message => message.id === draftMessageId
+        ? { ...message, ...data.message }
+        : message));
+    } catch (error) {
+      setMarkSentError(error instanceof Error ? error.message : "A küldés állapota nem rendezhető.");
+    } finally {
+      setResolvingDelivery(false);
+    }
+  }
+
   function getSourceLabel(source: string | null) {
     if (source === "manual") return "Kézi felvétel";
     if (source === "email") return "E-mail";
@@ -737,6 +766,7 @@ export default function LeadDetailsPage() {
   const selectedMessage = messageHistory.find(message => message.id === draftMessageId);
   const deliveryConfirmedAt = selectedMessage?.delivery_confirmed_at ?? null;
   const deliveryFailedAt = selectedMessage?.delivery_failed_at ?? null;
+  const deliveryResolutionSource = selectedMessage?.delivery_resolution_source ?? null;
   const delayedSending = isDelayedSending({ status: messageStatus, sending_started_at: sendingStartedAt ?? null });
   const dispatchWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at);
   const draftWarning = missingAiDraftWarning(lead, messageHistory.some(message => message.direction === "outgoing"));
@@ -780,7 +810,7 @@ export default function LeadDetailsPage() {
             {messageStatus === "failed" ? "A válasz küldése sikertelen" : delayedSending ? "A küldési visszaigazolás késik" : messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
           </h2>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            {messageStatus === "failed" && deliveryFailedAt ? `A Gmail ${displayReceivedAt(deliveryFailedAt)} időpontban igazolta, hogy az üzenet nem ment ki. Ellenőrzés után biztonságosan újrapróbálhatod a küldést.` : messageStatus === "failed" ? "A Make igazolta, hogy a Gmail nem küldte el az üzenetet. Ellenőrzés után biztonságosan újrapróbálhatod a küldést." : delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" && deliveryConfirmedAt ? `A Gmail ${displayReceivedAt(deliveryConfirmedAt)} időpontban visszaigazolta a küldést. Most az érdeklődő válaszát várhatod.` : messageStatus === "sent" ? "Az üzenet elküldöttként van rögzítve. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
+            {messageStatus === "failed" && deliveryFailedAt ? `${deliveryResolutionSource === "manual" ? "Kézi ellenőrzés" : "A Gmail"} ${displayReceivedAt(deliveryFailedAt)} időpontban igazolta, hogy az üzenet nem ment ki. Ellenőrzés után biztonságosan újrapróbálhatod a küldést.` : messageStatus === "failed" ? "A Make igazolta, hogy a Gmail nem küldte el az üzenetet. Ellenőrzés után biztonságosan újrapróbálhatod a küldést." : delayedSending ? "A visszaigazolás több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ne küldd újra az üzenetet, amíg a kézbesítés eredménye nem tisztázott." : messageStatus === "sending" ? "Az újraküldés zárolva van. A visszaigazolás automatikusan megjelenik." : messageStatus === "sent" && deliveryConfirmedAt ? `${deliveryResolutionSource === "manual" ? "Kézi ellenőrzés" : "A Gmail"} ${displayReceivedAt(deliveryConfirmedAt)} időpontban visszaigazolta a küldést. Most az érdeklődő válaszát várhatod.` : messageStatus === "sent" ? "Az üzenet elküldöttként van rögzítve. Most az érdeklődő válaszát várhatod." : replyDirty ? "A válaszban nem mentett módosítás van. Küldés előtt mentsd a piszkozatot." : replyDraft ? "Olvasd át a választ és ellenőrizd a címzettet. A küldés a válasz alatt indítható." : "A háttérben elkészülő válasz itt automatikusan megjelenik. Szükség esetén kézzel is készíthetsz tervezetet."}
           </p>
           {deliveryAudit && deliveryAudit.attemptCount > 0 && <p className="mt-3 text-sm font-medium text-slate-700">Küldési próbálkozások: {deliveryAudit.attemptCount}{deliveryAudit.lastAttemptAt ? ` · Utolsó indítás: ${displayReceivedAt(deliveryAudit.lastAttemptAt)}` : ""}</p>}
           <a href="#reply" className="mt-4 inline-flex rounded-xl bg-violet-600 px-4 py-2 font-semibold text-white">{messageStatus === "sent" ? "Elküldött válasz megtekintése" : "Ugrás a válaszhoz"}</a>
@@ -998,7 +1028,17 @@ export default function LeadDetailsPage() {
 
                     {messageStatus === "sending" && (
                       <div className={delayedSending ? "mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" : "mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"}>
-                        {delayedSending ? "A küldési visszaigazolás késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Az újraküldés továbbra is zárolva van." : "A küldés visszaigazolására várunk. Az üzenetet jelenleg nem lehet módosítani vagy újra elküldeni. Az állapot automatikusan frissül."}
+                        {delayedSending ? "A küldési visszaigazolás késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ezután rögzítsd a tényleges eredményt." : "A küldés visszaigazolására várunk. Az üzenetet jelenleg nem lehet módosítani vagy újra elküldeni. Az állapot automatikusan frissül."}
+                        {delayedSending && <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <button type="button" disabled={resolvingDelivery} onClick={() => handleResolveDelivery("sent")}
+                            className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                            Megtaláltam az elküldött levelet
+                          </button>
+                          <button type="button" disabled={resolvingDelivery} onClick={() => handleResolveDelivery("failed")}
+                            className="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
+                            Biztosan nem ment ki
+                          </button>
+                        </div>}
                       </div>
                     )}
 
@@ -1031,7 +1071,9 @@ export default function LeadDetailsPage() {
                     {messageStatus === "sent" && (
                       <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
                         {deliveryConfirmedAt
-                          ? `✓ A Gmail visszaigazolta a küldést: ${displayReceivedAt(deliveryConfirmedAt)}.`
+                          ? deliveryResolutionSource === "manual"
+                            ? `✓ Kézzel ellenőrizve elküldött: ${displayReceivedAt(deliveryConfirmedAt)}.`
+                            : `✓ A Gmail visszaigazolta a küldést: ${displayReceivedAt(deliveryConfirmedAt)}.`
                           : "✓ Az üzenet elküldöttként van rögzítve."}
                       </div>
                     )}
@@ -1106,12 +1148,12 @@ export default function LeadDetailsPage() {
                         </div>
                         {message.direction === "outgoing" && message.delivery_confirmed_at && (
                           <p className="mt-3 text-xs font-semibold text-emerald-700">
-                            Gmail-visszaigazolás: {displayReceivedAt(message.delivery_confirmed_at)}
+                            {message.delivery_resolution_source === "manual" ? "Kézzel ellenőrizve elküldött" : "Gmail-visszaigazolás"}: {displayReceivedAt(message.delivery_confirmed_at)}
                           </p>
                         )}
                         {message.direction === "outgoing" && message.delivery_failed_at && (
                           <p className="mt-3 text-xs font-semibold text-red-700">
-                            Sikertelen Gmail-küldés visszaigazolva: {displayReceivedAt(message.delivery_failed_at)}
+                            {message.delivery_resolution_source === "manual" ? "Kézzel ellenőrizve sikertelen" : "Sikertelen Gmail-küldés visszaigazolva"}: {displayReceivedAt(message.delivery_failed_at)}
                           </p>
                         )}
                       </div>
