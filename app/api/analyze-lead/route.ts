@@ -38,11 +38,11 @@ export async function POST(request: Request) {
 
     const { data: profile, error: profileError } = await supabase
       .from("users")
-      .select("company_id")
+      .select("company_id,is_active")
       .eq("id", user.id)
       .single();
 
-    if (profileError || !profile?.company_id) {
+    if (profileError || !profile?.company_id || profile.is_active === false) {
       return NextResponse.json(
         { error: "A felhasználó vállalkozása nem azonosítható." },
         { status: 403 }

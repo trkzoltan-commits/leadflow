@@ -17,10 +17,10 @@ export async function GET(request: Request) {
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("users")
-      .select("company_id,role")
+      .select("company_id,role,is_active")
       .eq("id", user.id)
       .single();
-    if (profileError || !profile?.company_id) {
+    if (profileError || !profile?.company_id || profile.is_active === false) {
       return NextResponse.json({ error: "A felhasználó vállalkozása nem azonosítható." }, { status: 403 });
     }
 
@@ -53,8 +53,8 @@ export async function PATCH(request: Request) {
     if (userError || !user) return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
 
     const { data: profile, error: profileError } = await supabaseAdmin
-      .from("users").select("company_id,role").eq("id", user.id).single();
-    if (profileError || !profile?.company_id) {
+      .from("users").select("company_id,role,is_active").eq("id", user.id).single();
+    if (profileError || !profile?.company_id || profile.is_active === false) {
       return NextResponse.json({ error: "A felhasználó vállalkozása nem azonosítható." }, { status: 403 });
     }
     if (profile.role !== "owner") {

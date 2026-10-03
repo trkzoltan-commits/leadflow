@@ -7,7 +7,7 @@ const settings = readFileSync(new URL("../app/settings/page.tsx", import.meta.ur
 const migration = readFileSync(new URL("../supabase/migrations/202609300002_company_settings_server_write.sql", import.meta.url), "utf8");
 
 test("company settings server route resolves the tenant and requires owner or admin", () => {
-  assert.match(route, /select\("company_id,role"\)/);
+  assert.match(route, /select\("company_id,role,is_active"\)/);
   assert.match(route, /profile\.role !== "owner" && profile\.role !== "admin"/);
   assert.match(route, /eq\("company_id", profile\.company_id\)/);
 });

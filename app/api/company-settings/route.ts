@@ -21,8 +21,8 @@ export async function PATCH(request: Request) {
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
     if (userError || !user) return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
     const { data: profile, error: profileError } = await supabaseAdmin.from("users")
-      .select("company_id,role").eq("id", user.id).single();
-    if (profileError || !profile?.company_id) return NextResponse.json({ error: "A felhasználó vállalkozása nem azonosítható." }, { status: 403 });
+      .select("company_id,role,is_active").eq("id", user.id).single();
+    if (profileError || !profile?.company_id || profile.is_active === false) return NextResponse.json({ error: "A felhasználó vállalkozása nem azonosítható." }, { status: 403 });
     if (profile.role !== "owner" && profile.role !== "admin") {
       return NextResponse.json({ error: "A céges beállításokat csak tulajdonos vagy adminisztrátor módosíthatja." }, { status: 403 });
     }

@@ -17,8 +17,8 @@ export async function GET(request: Request) {
     if (userError || !user) return NextResponse.json({ error: "Nincs jogosultság." }, { status: 401 });
 
     const { data: profile, error: profileError } = await userClient.from("users")
-      .select("company_id").eq("id", user.id).single();
-    if (profileError || !profile?.company_id) {
+      .select("company_id,is_active").eq("id", user.id).single();
+    if (profileError || !profile?.company_id || profile.is_active === false) {
       return NextResponse.json({ error: "A felhasználó vállalkozása nem azonosítható." }, { status: 403 });
     }
 

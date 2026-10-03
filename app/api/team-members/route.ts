@@ -19,10 +19,10 @@ async function requireOwner(request: Request) {
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("users")
-    .select("company_id,role")
+    .select("company_id,role,is_active")
     .eq("id", user.id)
     .single();
-  if (profileError || !profile?.company_id) {
+  if (profileError || !profile?.company_id || profile.is_active === false) {
     return { error: NextResponse.json({ error: "A felhasználó vállalkozása nem azonosítható." }, { status: 403 }) };
   }
   if (profile.role !== "owner") {
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
     const { data: profiles, error } = await supabaseAdmin
       .from("users")
-      .select("id,role")
+      .select("id,role,is_active")
       .eq("company_id", access.companyId);
     if (error) return NextResponse.json({ error: "A munkatársak nem tölthetők be." }, { status: 503 });
 
@@ -48,6 +48,7 @@ export async function GET(request: Request) {
         id: profile.id,
         email: data.user?.email || "Ismeretlen e-mail-cím",
         role: profile.role || "user",
+        active: profile.is_active !== false,
         current: profile.id === access.user.id,
       };
     }));
@@ -83,12 +84,13 @@ export async function POST(request: Request) {
       id: invited.user.id,
       company_id: access.companyId,
       role,
+      is_active: true,
     });
     if (linkError) {
       await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
       return NextResponse.json({ error: "A meghívott fiókot nem sikerült a vállalkozáshoz rendelni." }, { status: 503 });
     }
-    return NextResponse.json({ member: { id: invited.user.id, email, role, current: false } }, { status: 201 });
+    return NextResponse.json({ member: { id: invited.user.id, email, role, active: true, current: false } }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "A meghívás nem sikerült." }, { status: 503 });
   }
@@ -100,8 +102,10 @@ export async function PATCH(request: Request) {
     if ("error" in access) return access.error;
     const body = await request.json();
     const memberId = typeof body?.memberId === "string" ? body.memberId : "";
+    const action = body?.action === "set_active" ? "set_active" : "set_role";
     const role = typeof body?.role === "string" ? body.role : "";
-    if (!memberId || !assignableRoles.has(role)) {
+    const active = body?.active;
+    if (!memberId || (action === "set_role" && !assignableRoles.has(role)) || (action === "set_active" && typeof active !== "boolean")) {
       return NextResponse.json({ error: "Érvénytelen jogosultságmódosítás." }, { status: 400 });
     }
     if (memberId === access.user.id) {
@@ -110,13 +114,28 @@ export async function PATCH(request: Request) {
 
     const { data: target, error: targetError } = await supabaseAdmin
       .from("users")
-      .select("id,role")
+      .select("id,role,is_active")
       .eq("id", memberId)
       .eq("company_id", access.companyId)
       .single();
     if (targetError || !target) return NextResponse.json({ error: "A munkatárs nem található." }, { status: 404 });
     if (target.role === "owner") {
       return NextResponse.json({ error: "A tulajdonosi jogosultság itt nem módosítható." }, { status: 400 });
+    }
+
+    if (action === "set_active") {
+      const authUpdate = await supabaseAdmin.auth.admin.updateUserById(memberId, {
+        ban_duration: active ? "none" : "876000h",
+      });
+      if (authUpdate.error) return NextResponse.json({ error: "A bejelentkezési hozzáférés módosítása nem sikerült." }, { status: 503 });
+
+      const { error: statusError } = await supabaseAdmin.from("users").update({ is_active: active })
+        .eq("id", memberId).eq("company_id", access.companyId);
+      if (statusError) {
+        await supabaseAdmin.auth.admin.updateUserById(memberId, { ban_duration: active ? "876000h" : "none" });
+        return NextResponse.json({ error: "A hozzáférési állapot mentése nem sikerült." }, { status: 503 });
+      }
+      return NextResponse.json({ memberId, active });
     }
 
     const { error: updateError } = await supabaseAdmin

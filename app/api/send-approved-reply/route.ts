@@ -51,14 +51,15 @@ export async function POST(request: Request) {
     const { data: userProfile, error: userProfileError } =
       await supabaseAdmin
         .from("users")
-        .select("company_id")
+        .select("company_id,is_active")
         .eq("id", user.id)
         .single();
 
     if (
       userProfileError ||
       !userProfile ||
-      !userProfile.company_id
+      !userProfile.company_id ||
+      userProfile.is_active === false
     ) {
       console.error(
         "Felhasználói profil lekérési hiba:",

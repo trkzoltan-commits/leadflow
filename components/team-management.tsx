@@ -4,7 +4,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { roleLabel } from "@/lib/user-preferences";
 
-type Member = { id: string; email: string; role: string; current: boolean };
+type Member = { id: string; email: string; role: string; active: boolean; current: boolean };
 
 export function TeamManagement({ isOwner }: { isOwner: boolean }) {
   const [members, setMembers] = useState<Member[]>([]);
@@ -70,6 +70,22 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
     } finally { setBusy(""); }
   }
 
+  async function changeAccess(member: Member) {
+    const nextActive = !member.active;
+    setBusy(member.id); setError(""); setMessage("");
+    try {
+      await authorizedFetch("/api/team-members", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: member.id, action: "set_active", active: nextActive }),
+      });
+      setMembers((current) => current.map((item) => item.id === member.id ? { ...item, active: nextActive } : item));
+      setMessage(nextActive ? "A munkatárs hozzáférése újra aktív." : "A munkatárs hozzáférését inaktiváltuk.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "A hozzáférés módosítása nem sikerült.");
+    } finally { setBusy(""); }
+  }
+
   if (!isOwner) return null;
   return <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
     <h2 className="text-xl font-bold text-slate-900">Munkatársak és jogosultságok</h2>
@@ -89,11 +105,16 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
 
     <div className="mt-6 space-y-3">
       {loading && <p className="text-sm text-slate-500">Munkatársak betöltése...</p>}
-      {!loading && members.map((member) => <div key={member.id} className="flex flex-col gap-3 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="break-all font-semibold text-slate-900">{member.email}{member.current ? " (te)" : ""}</p><p className="mt-1 text-sm text-slate-500">{roleLabel(member.role)}</p></div>
-        {member.role !== "owner" && <select aria-label={`${member.email} szerepköre`} value={member.role} disabled={busy === member.id} onChange={(event) => void changeRole(member.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
-          <option value="user">Felhasználó</option><option value="admin">Adminisztrátor</option>
-        </select>}
+      {!loading && members.map((member) => <div key={member.id} className={`flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between ${member.active ? "bg-slate-50" : "bg-amber-50"}`}>
+        <div><p className="break-all font-semibold text-slate-900">{member.email}{member.current ? " (te)" : ""}</p><p className="mt-1 text-sm text-slate-500">{roleLabel(member.role)} · {member.active ? "Aktív" : "Inaktív"}</p></div>
+        {member.role !== "owner" && <div className="flex flex-col gap-2 sm:flex-row">
+          <select aria-label={`${member.email} szerepköre`} value={member.role} disabled={busy === member.id || !member.active} onChange={(event) => void changeRole(member.id, event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
+            <option value="user">Felhasználó</option><option value="admin">Adminisztrátor</option>
+          </select>
+          <button type="button" disabled={busy === member.id} onClick={() => void changeAccess(member)} className={`rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-50 ${member.active ? "border-amber-300 bg-white text-amber-800" : "border-green-300 bg-white text-green-700"}`}>
+            {busy === member.id ? "Mentés..." : member.active ? "Inaktiválás" : "Újraaktiválás"}
+          </button>
+        </div>}
       </div>)}
     </div>
     {message && <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-medium text-green-700">✓ {message}</p>}
