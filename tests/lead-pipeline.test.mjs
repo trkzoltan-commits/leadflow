@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PIPELINE_COLUMNS, isPipelineStatus, pipelineGroups } from "../lib/lead-pipeline.ts";
+import { PIPELINE_COLUMNS, filterPipelineLeads, isPipelineStatus, pipelineGroups } from "../lib/lead-pipeline.ts";
 
 test("pipeline contains the approved stages in business order", () => {
   assert.deepEqual(PIPELINE_COLUMNS.map(column => column.status), [
@@ -29,5 +29,17 @@ test("unknown statuses cannot be written through pipeline controls", () => {
   assert.equal(isPipelineStatus("decision"), true);
   assert.equal(isPipelineStatus("unknown"), false);
   assert.equal(isPipelineStatus(null), false);
+});
+
+test("pipeline assignee filters isolate personal and unassigned work", () => {
+  const leads = [
+    { id: "a", assigned_user_id: "user-a" },
+    { id: "b", assigned_user_id: "user-b" },
+    { id: "c", assigned_user_id: null },
+  ];
+  assert.deepEqual(filterPipelineLeads(leads, "all", "user-a").map(lead => lead.id), ["a", "b", "c"]);
+  assert.deepEqual(filterPipelineLeads(leads, "mine", "user-a").map(lead => lead.id), ["a"]);
+  assert.deepEqual(filterPipelineLeads(leads, "mine", null), []);
+  assert.deepEqual(filterPipelineLeads(leads, "unassigned", "user-a").map(lead => lead.id), ["c"]);
 });
 

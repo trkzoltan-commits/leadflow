@@ -1,10 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, type OverviewLead } from "@/lib/lead-overview";
-import { PIPELINE_COLUMNS, isPipelineStatus, pipelineGroups, type PipelineStatus } from "@/lib/lead-pipeline";
+import {
+  PIPELINE_COLUMNS,
+  filterPipelineLeads,
+  isPipelineStatus,
+  pipelineGroups,
+  type LeadAssignee,
+  type PipelineAssigneeFilter,
+  type PipelineStatus,
+} from "@/lib/lead-pipeline";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 
@@ -29,8 +37,45 @@ export default function PipelinePage() {
   const [pendingClose, setPendingClose] = useState<OverviewLead | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const groups = pipelineGroups(leads);
+  const [assigneeError, setAssigneeError] = useState("");
+  const [assignees, setAssignees] = useState<LeadAssignee[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [canAssign, setCanAssign] = useState(false);
+  const [assigneesLoading, setAssigneesLoading] = useState(true);
+  const [assigneeFilter, setAssigneeFilter] = useState<PipelineAssigneeFilter>("all");
+  const [assigningLeadIds, setAssigningLeadIds] = useState<Set<string>>(() => new Set());
+  const filteredLeads = filterPipelineLeads(leads, assigneeFilter, currentUserId);
+  const groups = pipelineGroups(filteredLeads);
   const draggedLead = leads.find(lead => lead.id === draggedLeadId);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAssignees() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const response = await fetch("/api/lead-assignees", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result?.error || "A felelősök nem tölthetők be.");
+        if (!cancelled) {
+          setAssignees(Array.isArray(result.members) ? result.members : []);
+          setCurrentUserId(typeof result.currentUserId === "string" ? result.currentUserId : null);
+          setCanAssign(result.canAssign === true);
+        }
+      } catch (loadError) {
+        if (!cancelled) setAssigneeError(loadError instanceof Error
+          ? loadError.message
+          : "A felelősök listája nem tölthető be. Frissítsd az oldalt, majd próbáld újra.");
+      } finally {
+        if (!cancelled) setAssigneesLoading(false);
+      }
+    }
+    void loadAssignees();
+    return () => { cancelled = true; };
+  }, []);
 
   async function persistStatus(lead: OverviewLead, nextStatus: PipelineStatus, outcome: "won" | "lost" | null = null) {
     if (lead.status === nextStatus && (nextStatus !== "processed" || lead.outcome === outcome)) return;
@@ -51,6 +96,35 @@ export default function PipelinePage() {
     if (isPipelineStatus(value)) void persistStatus(lead, value);
   }
 
+  async function persistAssignee(lead: OverviewLead, assignedUserId: string | null) {
+    if (!canAssign || assigningLeadIds.has(lead.id) || lead.assigned_user_id === assignedUserId) return;
+    setAssigningLeadIds(current => new Set(current).add(lead.id));
+    setSaveError("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Nincs aktív munkamenet.");
+      const response = await fetch("/api/lead-assignees", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ leadId: lead.id, assignedUserId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.error || "A felelős mentése nem sikerült.");
+      await refresh();
+    } catch (assignError) {
+      setSaveError(assignError instanceof Error ? assignError.message : "A felelős mentése nem sikerült. Próbáld újra.");
+    } finally {
+      setAssigningLeadIds(current => {
+        const next = new Set(current);
+        next.delete(lead.id);
+        return next;
+      });
+    }
+  }
+
   if (loading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
 
   return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-6 md:p-8">
@@ -59,8 +133,25 @@ export default function PipelinePage() {
         <div><DashboardBrandLink /><h1 className="mt-1 text-3xl font-bold">Pipeline</h1><p className="mt-2 text-slate-600">Az érdeklődők aktuális üzleti szakaszai.</p></div>
         <Link href="/leads" className="rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold shadow-sm">Lista nézet</Link>
       </header>
-      <div role="status" className={error || saveError ? "mb-5 rounded-xl bg-amber-50 p-4 text-amber-900" : "mb-5 text-sm text-slate-500"}>
-        {saveError || (error ? "Az adatok frissítése nem sikerült. Az utolsó betöltött állapotot látod." : "A Pipeline 10 másodpercenként automatikusan frissül.")}
+      <div role="status" className={error || saveError || assigneeError ? "mb-5 rounded-xl bg-amber-50 p-4 text-amber-900" : "mb-5 text-sm text-slate-500"}>
+        {saveError || assigneeError || (error ? "Az adatok frissítése nem sikerült. Az utolsó betöltött állapotot látod." : "A Pipeline 10 másodpercenként automatikusan frissül.")}
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-center gap-2" aria-label="Felelős szerinti szűrés">
+        <span className="mr-1 text-sm font-semibold text-slate-700">Felelős:</span>
+        {([
+          ["all", "Minden ügy", leads.length],
+          ["mine", "Saját ügyeim", currentUserId && !assigneeError ? leads.filter(lead => lead.assigned_user_id === currentUserId).length : null],
+          ["unassigned", "Nincs felelős", leads.filter(lead => !lead.assigned_user_id).length],
+        ] as const).map(([value, label, count]) => <button key={value} type="button"
+          disabled={value === "mine" && (assigneesLoading || Boolean(assigneeError))}
+          aria-pressed={assigneeFilter === value}
+          onClick={() => setAssigneeFilter(value)}
+          className={assigneeFilter === value
+            ? "rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+            : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm disabled:opacity-50"}>
+          {label}{count === null ? "" : ` (${count})`}
+        </button>)}
       </div>
 
       {updatedAt && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
@@ -100,10 +191,16 @@ export default function PipelinePage() {
                   const reply = replies.get(lead.id);
                   const automationWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) || missingAiDraftWarning(lead, replies.has(lead.id));
                   const replyWarning = reply?.status === "failed" || isDelayedSending(reply);
-                  return <article key={lead.id} draggable={savingLeadId !== lead.id}
-                    onDragStart={() => { setDraggedLeadId(lead.id); setDragTargetStatus(null); }}
+                  const assignedMember = assignees.find(member => member.id === lead.assigned_user_id);
+                  const unlistedAssignee = Boolean(lead.assigned_user_id && !assignedMember);
+                  const cardSaving = savingLeadId === lead.id || assigningLeadIds.has(lead.id);
+                  return <article key={lead.id} draggable={!cardSaving}
+                    onDragStart={event => {
+                      if ((event.target as HTMLElement).closest("select")) { event.preventDefault(); return; }
+                      setDraggedLeadId(lead.id); setDragTargetStatus(null);
+                    }}
                     onDragEnd={() => { setDraggedLeadId(null); setDragTargetStatus(null); }}
-                    className={`pipeline-card rounded-xl border bg-white p-3 shadow-sm ${automationWarning || replyWarning ? "border-amber-300" : "border-slate-200"} ${savingLeadId === lead.id ? "opacity-50" : "cursor-grab"}`}>
+                    className={`pipeline-card rounded-xl border bg-white p-3 shadow-sm ${automationWarning || replyWarning ? "border-amber-300" : "border-slate-200"} ${cardSaving ? "opacity-50" : "cursor-grab"}`}>
                     <Link href={`/leads/${lead.id}`} className="text-sm font-bold text-slate-900 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link>
                     <p className="mt-1 text-xs text-slate-600">{lead.service || "Nincs szolgáltatás"}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
@@ -113,8 +210,24 @@ export default function PipelinePage() {
                     {column.status === "processed" && <p className="mt-3 text-xs font-semibold text-slate-600">{outcomeLabel(lead.outcome)}</p>}
                     <p className={`mt-2 text-xs font-semibold ${replyWarning ? "text-red-700" : "text-slate-600"}`}>{replyLabel(reply?.status, reply?.sending_started_at)}</p>
                     {automationWarning && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">Automatizálás ellenőrizendő</p>}
+                    <div className="mt-3 text-xs font-medium text-slate-500">Felelős
+                      {canAssign && !assigneeError ? <select aria-label={`${lead.name || "Névtelen érdeklődő"} felelőse`}
+                        value={lead.assigned_user_id ?? ""} disabled={cardSaving || assigneesLoading}
+                        onChange={event => void persistAssignee(lead, event.target.value || null)}
+                        className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
+                        <option value="">Nincs felelős</option>
+                        {unlistedAssignee && <option value={lead.assigned_user_id ?? ""}>Inaktív vagy már nem elérhető</option>}
+                        {assignees.map(member => <option key={member.id} value={member.id}>
+                          {member.email}{member.id === currentUserId ? " (én)" : ""}
+                        </option>)}
+                      </select> : <p className="mt-1 rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-800">
+                        {assigneeError && lead.assigned_user_id
+                          ? "A felelős most nem tölthető be"
+                          : assignedMember?.email || (lead.assigned_user_id ? "Inaktív vagy már nem elérhető" : "Nincs felelős")}
+                      </p>}
+                    </div>
                     <label className="mt-3 block text-xs font-medium text-slate-500">Állapot módosítása
-                      <select value={isPipelineStatus(lead.status) ? lead.status : "new"} disabled={savingLeadId === lead.id}
+                      <select value={isPipelineStatus(lead.status) ? lead.status : "new"} disabled={cardSaving}
                         onChange={event => requestMove(lead, event.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800">
                         {PIPELINE_COLUMNS.map(option => <option key={option.status} value={option.status}>{option.label}</option>)}
                       </select>

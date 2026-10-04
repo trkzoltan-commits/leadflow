@@ -17,10 +17,10 @@ export function useLeadOverview() {
 
   useEffect(() => {
     let cancelled = false;
-    let running = false;
-    async function load() {
-      if (running || cancelled) return;
-      running = true;
+    let runningPromise: Promise<void> | null = null;
+    let queuedPromise: Promise<void> | null = null;
+    async function runLoad() {
+      if (cancelled) return;
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (cancelled) return;
@@ -35,7 +35,7 @@ export function useLeadOverview() {
           const rows: OverviewLead[] = [];
           for (let offset = 0; !cancelled; offset += 500) {
             const { data, error } = await supabase.from("leads")
-              .select("id, name, email, phone, service, location, priority, status, outcome, source, new_lead_dispatch_status, created_at")
+              .select("id, assigned_user_id, name, email, phone, service, location, priority, status, outcome, source, new_lead_dispatch_status, created_at")
               .order("created_at", { ascending: false }).order("id", { ascending: false })
               .range(offset, offset + 499);
             if (error) throw error;
@@ -65,9 +65,25 @@ export function useLeadOverview() {
       } catch {
         if (!cancelled) setError(true);
       } finally {
-        running = false;
         if (!cancelled) setLoading(false);
       }
+    }
+    function load(): Promise<void> {
+      if (cancelled) return Promise.resolve();
+      if (runningPromise) {
+        if (!queuedPromise) {
+          queuedPromise = runningPromise.then(() => {
+            queuedPromise = null;
+            return load();
+          });
+        }
+        return queuedPromise;
+      }
+      const task = runLoad().finally(() => {
+        if (runningPromise === task) runningPromise = null;
+      });
+      runningPromise = task;
+      return task;
     }
     refreshRef.current = load;
     void load();

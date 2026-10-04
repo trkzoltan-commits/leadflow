@@ -18,6 +18,11 @@ test("pipeline supports drag, direct status selection and explicit closure outco
   assert.match(source, /lg:grid-cols-6/);
   assert.match(source, /pipeline-drop-placeholder/);
   assert.match(source, /dragTargetStatus === column\.status/);
+  assert.match(source, /Felelős szerinti szűrés/);
+  assert.match(source, /Saját ügyeim/);
+  assert.match(source, /Nincs felelős/);
+  assert.match(source, /fetch\("\/api\/lead-assignees"/);
+  assert.match(source, /assigned_user_id/);
 });
 
 test("pipeline updates stay tenant scoped through authenticated RLS", async () => {

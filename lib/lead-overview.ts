@@ -1,5 +1,6 @@
 export type OverviewLead = {
   id: string;
+  assigned_user_id: string | null;
   name: string | null;
   email: string | null;
   phone: string | null;
