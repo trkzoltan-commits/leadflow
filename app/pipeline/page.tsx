@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, type OverviewLead } from "@/lib/lead-overview";
+import {
+  budapestDateOffset,
+  displayNextActionDueDate,
+  isValidDateOnly,
+  NEXT_ACTION_MAX_LENGTH,
+  nextActionDueState,
+  type NextActionDueState,
+} from "@/lib/lead-next-action";
 import {
   PIPELINE_COLUMNS,
   filterPipelineLeads,
@@ -29,6 +37,14 @@ const columnClass: Record<PipelineStatus, string> = {
   processed: "pipeline-processed",
 };
 
+const nextActionDueClass: Record<NextActionDueState, string> = {
+  overdue: "next-action-due-overdue",
+  today: "next-action-due-today",
+  soon: "next-action-due-soon",
+  later: "bg-slate-100 text-slate-700",
+  invalid: "bg-slate-100 text-slate-700",
+};
+
 export default function PipelinePage() {
   const { leads, replies, loading, error, updatedAt, refresh } = useLeadOverview();
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
@@ -44,9 +60,20 @@ export default function PipelinePage() {
   const [assigneesLoading, setAssigneesLoading] = useState(true);
   const [assigneeFilter, setAssigneeFilter] = useState<PipelineAssigneeFilter>("all");
   const [assigningLeadIds, setAssigningLeadIds] = useState<Set<string>>(() => new Set());
+  const [pendingNextAction, setPendingNextAction] = useState<OverviewLead | null>(null);
+  const [nextActionDraft, setNextActionDraft] = useState("");
+  const [nextActionDueDateDraft, setNextActionDueDateDraft] = useState("");
+  const [nextActionError, setNextActionError] = useState("");
+  const [savingNextActionLeadId, setSavingNextActionLeadId] = useState<string | null>(null);
+  const nextActionDialogRef = useRef<HTMLFormElement | null>(null);
+  const nextActionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const filteredLeads = filterPipelineLeads(leads, assigneeFilter, currentUserId);
   const groups = pipelineGroups(filteredLeads);
   const draggedLead = leads.find(lead => lead.id === draggedLeadId);
+
+  function canEditLeadNextAction(lead: OverviewLead) {
+    return canAssign || Boolean(currentUserId && lead.assigned_user_id === currentUserId);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -77,14 +104,56 @@ export default function PipelinePage() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    if (!pendingNextAction) return;
+    const dialog = nextActionDialogRef.current;
+    if (!dialog) return;
+
+    const focusableSelector = "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [href], [tabindex]:not([tabindex='-1'])";
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector));
+    focusable()[0]?.focus();
+
+    function keepFocusInside(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (!savingNextActionLeadId) {
+          setPendingNextAction(null);
+          setNextActionError("");
+          requestAnimationFrame(() => nextActionTriggerRef.current?.focus());
+        }
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const elements = focusable();
+      if (elements.length === 0) { event.preventDefault(); return; }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", keepFocusInside);
+    return () => document.removeEventListener("keydown", keepFocusInside);
+  }, [pendingNextAction, savingNextActionLeadId]);
+
   async function persistStatus(lead: OverviewLead, nextStatus: PipelineStatus, outcome: "won" | "lost" | null = null) {
     if (lead.status === nextStatus && (nextStatus !== "processed" || lead.outcome === outcome)) return;
+    if (nextStatus === "processed" && lead.next_action && !canEditLeadNextAction(lead)) {
+      setSaveError("A teendővel rendelkező ügyet csak a felelős, a tulajdonos vagy egy adminisztrátor zárhatja le.");
+      return;
+    }
     if (nextStatus === "processed" && !outcome) { setPendingClose(lead); return; }
     setSavingLeadId(lead.id);
     setSaveError("");
     const { error: updateError } = await supabase.from("leads").update({
       status: nextStatus,
       outcome: nextStatus === "processed" ? outcome : null,
+      ...(nextStatus === "processed" ? { next_action: null, next_action_due_date: null } : {}),
       updated_at: new Date().toISOString(),
     }).eq("id", lead.id);
     if (updateError) setSaveError("Az állapot módosítása nem sikerült. Próbáld újra.");
@@ -122,6 +191,73 @@ export default function PipelinePage() {
         next.delete(lead.id);
         return next;
       });
+    }
+  }
+
+  function openNextActionEditor(lead: OverviewLead, trigger: HTMLButtonElement) {
+    nextActionTriggerRef.current = trigger;
+    setPendingNextAction(lead);
+    setNextActionDraft(lead.next_action ?? "");
+    setNextActionDueDateDraft(lead.next_action_due_date ?? budapestDateOffset(1));
+    setNextActionError("");
+  }
+
+  function closeNextActionEditor() {
+    if (savingNextActionLeadId) return;
+    setPendingNextAction(null);
+    setNextActionError("");
+    requestAnimationFrame(() => nextActionTriggerRef.current?.focus());
+  }
+
+  async function persistNextAction(lead: OverviewLead, clear = false) {
+    const nextAction = nextActionDraft.trim();
+    if (!clear && (!nextAction || nextAction.length > NEXT_ACTION_MAX_LENGTH || !isValidDateOnly(nextActionDueDateDraft))) {
+      setNextActionError(`Írd le a következő teendőt, és válassz határidőt. A leírás legfeljebb ${NEXT_ACTION_MAX_LENGTH} karakter lehet.`);
+      return;
+    }
+
+    setSavingNextActionLeadId(lead.id);
+    setNextActionError("");
+    let failureMessage = "A következő teendő mentése nem sikerült. Frissítsd az oldalt, majd próbáld újra.";
+    let saved = false;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        failureMessage = "A munkamenet lejárt. Jelentkezz be újra.";
+        throw new Error("missing session");
+      }
+      const response = await fetch("/api/lead-next-action", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          leadId: lead.id,
+          nextAction: clear ? null : nextAction,
+          dueDate: clear ? null : nextActionDueDateDraft,
+          expectedNextAction: lead.next_action,
+          expectedDueDate: lead.next_action_due_date,
+        }),
+      });
+      let result: { error?: unknown } = {};
+      try {
+        result = await response.json() as { error?: unknown };
+      } catch {
+        result = {};
+      }
+      if (!response.ok) {
+        if (typeof result.error === "string" && result.error) failureMessage = result.error;
+        throw new Error("request failed");
+      }
+      setPendingNextAction(null);
+      saved = true;
+      await refresh();
+    } catch {
+      setNextActionError(failureMessage);
+    } finally {
+      setSavingNextActionLeadId(null);
+      if (saved) requestAnimationFrame(() => nextActionTriggerRef.current?.focus());
     }
   }
 
@@ -193,10 +329,13 @@ export default function PipelinePage() {
                   const replyWarning = reply?.status === "failed" || isDelayedSending(reply);
                   const assignedMember = assignees.find(member => member.id === lead.assigned_user_id);
                   const unlistedAssignee = Boolean(lead.assigned_user_id && !assignedMember);
-                  const cardSaving = savingLeadId === lead.id || assigningLeadIds.has(lead.id);
+                  const canEditNextAction = canEditLeadNextAction(lead);
+                  const dueState = nextActionDueState(lead.next_action_due_date);
+                  const nextActionDescriptionId = `next-action-description-${lead.id}`;
+                  const cardSaving = savingLeadId === lead.id || assigningLeadIds.has(lead.id) || savingNextActionLeadId === lead.id;
                   return <article key={lead.id} draggable={!cardSaving}
                     onDragStart={event => {
-                      if ((event.target as HTMLElement).closest("select")) { event.preventDefault(); return; }
+                      if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) { event.preventDefault(); return; }
                       setDraggedLeadId(lead.id); setDragTargetStatus(null);
                     }}
                     onDragEnd={() => { setDraggedLeadId(null); setDragTargetStatus(null); }}
@@ -210,6 +349,31 @@ export default function PipelinePage() {
                     {column.status === "processed" && <p className="mt-3 text-xs font-semibold text-slate-600">{outcomeLabel(lead.outcome)}</p>}
                     <p className={`mt-2 text-xs font-semibold ${replyWarning ? "text-red-700" : "text-slate-600"}`}>{replyLabel(reply?.status, reply?.sending_started_at)}</p>
                     {automationWarning && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs font-semibold text-amber-900">Automatizálás ellenőrizendő</p>}
+                    {column.status !== "processed" && <div className="mt-3">
+                      {lead.next_action ? (canEditNextAction ? <button type="button"
+                        aria-label={`${lead.name || "Névtelen érdeklődő"} következő teendőjének módosítása`}
+                        aria-describedby={nextActionDescriptionId}
+                        onClick={event => openNextActionEditor(lead, event.currentTarget)} disabled={cardSaving || assigneesLoading}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-left disabled:opacity-50">
+                        <span id={nextActionDescriptionId} className="block">
+                          <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Következő teendő</span>
+                          <span className="mt-1 block break-words text-xs font-semibold text-slate-900">{lead.next_action}</span>
+                          <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${nextActionDueClass[dueState]}`}>
+                            {displayNextActionDueDate(lead.next_action_due_date)}
+                          </span>
+                        </span>
+                      </button> : <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-500">Következő teendő</span>
+                        <span className="mt-1 block break-words text-xs font-semibold text-slate-900">{lead.next_action}</span>
+                        <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${nextActionDueClass[dueState]}`}>
+                          {displayNextActionDueDate(lead.next_action_due_date)}
+                        </span>
+                      </div>) : canEditNextAction ? <button type="button"
+                        onClick={event => openNextActionEditor(lead, event.currentTarget)} disabled={cardSaving || assigneesLoading}
+                        className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-slate-400 hover:bg-slate-50 disabled:opacity-50">
+                        + Teendő hozzáadása
+                      </button> : <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">Nincs következő teendő</p>}
+                    </div>}
                     <div className="mt-3 text-xs font-medium text-slate-500">Felelős
                       {canAssign && !assigneeError ? <select aria-label={`${lead.name || "Névtelen érdeklődő"} felelőse`}
                         value={lead.assigned_user_id ?? ""} disabled={cardSaving || assigneesLoading}
@@ -252,6 +416,54 @@ export default function PipelinePage() {
         </div>
         <button type="button" disabled={savingLeadId === pendingClose.id} onClick={() => setPendingClose(null)} className="mt-3 w-full rounded-xl border border-slate-200 px-4 py-3 font-semibold disabled:opacity-50">Mégse</button>
       </div>
+    </div>}
+
+    {pendingNextAction && <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 p-4 sm:items-center"
+      role="dialog" aria-modal="true" aria-labelledby="next-action-title">
+      <form onSubmit={event => { event.preventDefault(); void persistNextAction(pendingNextAction); }}
+        ref={nextActionDialogRef}
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6">
+        <h2 id="next-action-title" className="text-xl font-bold">Következő teendő</h2>
+        <p className="mt-1 text-sm text-slate-600">{pendingNextAction.name || "Névtelen érdeklődő"}</p>
+
+        <label className="mt-5 block text-sm font-semibold text-slate-700">Mit kell elintézni?
+          <textarea autoFocus rows={3} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
+            onChange={event => setNextActionDraft(event.target.value)} disabled={savingNextActionLeadId === pendingNextAction.id}
+            className="mt-2 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder="Például: Telefonos egyeztetés az ajánlat részleteiről" />
+        </label>
+        <div className="mt-1 text-right text-xs text-slate-500">{nextActionDraft.length}/{NEXT_ACTION_MAX_LENGTH}</div>
+
+        <label className="mt-4 block text-sm font-semibold text-slate-700">Határidő
+          <input type="date" value={nextActionDueDateDraft}
+            onChange={event => setNextActionDueDateDraft(event.target.value)} disabled={savingNextActionLeadId === pendingNextAction.id}
+            className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+        </label>
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Gyors határidő választás">
+          {([[0, "Ma"], [1, "Holnap"], [3, "+3 nap"]] as const).map(([days, label]) => <button key={days}
+            type="button" disabled={savingNextActionLeadId === pendingNextAction.id}
+            onClick={() => setNextActionDueDateDraft(budapestDateOffset(days))}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
+            {label}
+          </button>)}
+        </div>
+
+        {nextActionError && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <button type="submit" disabled={savingNextActionLeadId === pendingNextAction.id || !nextActionDraft.trim() || !isValidDateOnly(nextActionDueDateDraft)}
+            className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">
+            {savingNextActionLeadId === pendingNextAction.id ? "Mentés…" : "Teendő mentése"}
+          </button>
+          <button type="button" onClick={closeNextActionEditor} disabled={savingNextActionLeadId === pendingNextAction.id}
+            className="rounded-xl border border-slate-200 px-4 py-3 font-semibold text-slate-700 disabled:opacity-50">Mégse</button>
+        </div>
+        {pendingNextAction.next_action && <button type="button" onClick={() => void persistNextAction(pendingNextAction, true)}
+          disabled={savingNextActionLeadId === pendingNextAction.id}
+          className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
+          Teendő törlése
+        </button>}
+      </form>
     </div>}
   </main>;
 }

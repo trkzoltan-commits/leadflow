@@ -23,6 +23,12 @@ test("pipeline supports drag, direct status selection and explicit closure outco
   assert.match(source, /Nincs felelős/);
   assert.match(source, /fetch\("\/api\/lead-assignees"/);
   assert.match(source, /assigned_user_id/);
+  assert.match(source, /fetch\("\/api\/lead-next-action"/);
+  assert.match(source, /Következő teendő/);
+  assert.match(source, /type="date"/);
+  assert.match(source, /Teendő törlése/);
+  assert.match(source, /nextStatus === "processed" \? \{ next_action: null, next_action_due_date: null \}/);
+  assert.match(source, /closest\("a, button, input, select, textarea"\)/);
 });
 
 test("pipeline updates stay tenant scoped through authenticated RLS", async () => {
