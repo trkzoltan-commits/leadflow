@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PIPELINE_COLUMNS, filterPipelineLeads, isPipelineStatus, pipelineGroups } from "../lib/lead-pipeline.ts";
+import { PIPELINE_COLUMNS, filterPipelineLeads, filterPipelineLeadsByPriority, isPipelineStatus, pipelineGroups } from "../lib/lead-pipeline.ts";
 
 test("pipeline contains the approved stages in business order", () => {
   assert.deepEqual(PIPELINE_COLUMNS.map(column => column.status), [
@@ -41,5 +41,18 @@ test("pipeline assignee filters isolate personal and unassigned work", () => {
   assert.deepEqual(filterPipelineLeads(leads, "mine", "user-a").map(lead => lead.id), ["a"]);
   assert.deepEqual(filterPipelineLeads(leads, "mine", null), []);
   assert.deepEqual(filterPipelineLeads(leads, "unassigned", "user-a").map(lead => lead.id), ["c"]);
+});
+
+test("pipeline priority filters treat legacy missing priority as medium", () => {
+  const leads = [
+    { id: "high", priority: "high" },
+    { id: "medium", priority: "medium" },
+    { id: "legacy", priority: null },
+    { id: "low", priority: "low" },
+  ];
+  assert.deepEqual(filterPipelineLeadsByPriority(leads, "high").map(lead => lead.id), ["high"]);
+  assert.deepEqual(filterPipelineLeadsByPriority(leads, "medium").map(lead => lead.id), ["medium", "legacy"]);
+  assert.deepEqual(filterPipelineLeadsByPriority(leads, "low").map(lead => lead.id), ["low"]);
+  assert.equal(filterPipelineLeadsByPriority(leads, "all"), leads);
 });
 

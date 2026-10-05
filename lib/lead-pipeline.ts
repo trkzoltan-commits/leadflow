@@ -3,6 +3,7 @@ import type { OverviewLead } from "./lead-overview";
 export const PIPELINE_STATUSES = ["new", "contacted", "waiting", "offer_sent", "decision", "processed"] as const;
 export type PipelineStatus = typeof PIPELINE_STATUSES[number];
 export type PipelineAssigneeFilter = "all" | "mine" | "unassigned";
+export type PipelinePriorityFilter = "all" | "high" | "medium" | "low";
 
 export type LeadAssignee = {
   id: string;
@@ -38,5 +39,14 @@ export function filterPipelineLeads(
   }
   if (filter === "unassigned") return leads.filter(lead => !lead.assigned_user_id);
   return leads;
+}
+
+export function filterPipelineLeadsByPriority<T extends Pick<OverviewLead, "priority">>(
+  leads: T[],
+  filter: PipelinePriorityFilter
+) {
+  if (filter === "all") return leads;
+  if (filter === "medium") return leads.filter(lead => !lead.priority || lead.priority === "medium");
+  return leads.filter(lead => lead.priority === filter);
 }
 

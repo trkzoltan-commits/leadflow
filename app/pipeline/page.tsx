@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
-import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, type OverviewLead } from "@/lib/lead-overview";
+import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type OverviewLead } from "@/lib/lead-overview";
 import {
   budapestDateOffset,
   displayNextActionDueDate,
@@ -18,10 +18,12 @@ import {
 import {
   PIPELINE_COLUMNS,
   filterPipelineLeads,
+  filterPipelineLeadsByPriority,
   isPipelineStatus,
   pipelineGroups,
   type LeadAssignee,
   type PipelineAssigneeFilter,
+  type PipelinePriorityFilter,
   type PipelineStatus,
 } from "@/lib/lead-pipeline";
 import { supabase } from "@/lib/supabase";
@@ -63,6 +65,8 @@ export default function PipelinePage() {
   const [assigneesLoading, setAssigneesLoading] = useState(true);
   const [assigneeFilter, setAssigneeFilter] = useState<PipelineAssigneeFilter>("all");
   const [nextActionFilter, setNextActionFilter] = useState<NextActionFilter>("all");
+  const [priorityFilter, setPriorityFilter] = useState<PipelinePriorityFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [assigningLeadIds, setAssigningLeadIds] = useState<Set<string>>(() => new Set());
   const [pendingNextAction, setPendingNextAction] = useState<OverviewLead | null>(null);
   const [nextActionDraft, setNextActionDraft] = useState("");
@@ -72,16 +76,19 @@ export default function PipelinePage() {
   const nextActionDialogRef = useRef<HTMLFormElement | null>(null);
   const nextActionTriggerRef = useRef<HTMLButtonElement | null>(null);
   const assigneeFilteredLeads = filterPipelineLeads(leads, assigneeFilter, currentUserId);
+  const searchedLeads = searchLeads(assigneeFilteredLeads, searchQuery);
+  const scopedLeads = filterPipelineLeadsByPriority(searchedLeads, priorityFilter);
   const now = new Date();
   const nextActionCounts = {
-    overdue: filterLeadsByNextAction(assigneeFilteredLeads, "overdue", now).length,
-    today: filterLeadsByNextAction(assigneeFilteredLeads, "today", now).length,
-    soon: filterLeadsByNextAction(assigneeFilteredLeads, "soon", now).length,
-    missing: filterLeadsByNextAction(assigneeFilteredLeads, "missing", now).length,
+    overdue: filterLeadsByNextAction(scopedLeads, "overdue", now).length,
+    today: filterLeadsByNextAction(scopedLeads, "today", now).length,
+    soon: filterLeadsByNextAction(scopedLeads, "soon", now).length,
+    missing: filterLeadsByNextAction(scopedLeads, "missing", now).length,
   };
-  const filteredLeads = sortLeadsByNextAction(filterLeadsByNextAction(assigneeFilteredLeads, nextActionFilter, now));
+  const filteredLeads = sortLeadsByNextAction(filterLeadsByNextAction(scopedLeads, nextActionFilter, now));
   const groups = pipelineGroups(filteredLeads);
   const draggedLead = leads.find(lead => lead.id === draggedLeadId);
+  const hasFocusedFilters = Boolean(searchQuery.trim()) || priorityFilter !== "all" || nextActionFilter !== "all";
 
   function canEditLeadNextAction(lead: OverviewLead) {
     return canAssign || Boolean(currentUserId && lead.assigned_user_id === currentUserId);
@@ -285,6 +292,34 @@ export default function PipelinePage() {
         {saveError || assigneeError || (error ? "Az adatok frissítése nem sikerült. Az utolsó betöltött állapotot látod." : "A Pipeline 10 másodpercenként automatikusan frissül.")}
       </div>
 
+      <section aria-label="Pipeline keresés és prioritás" className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_auto] lg:items-end">
+          <label className="block text-sm font-semibold text-slate-700">Keresés
+            <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)}
+              placeholder="Név, e-mail, telefonszám, szolgáltatás vagy helyszín"
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+          </label>
+          <div className="flex flex-wrap items-center gap-2" aria-label="Prioritás szerinti szűrés">
+            <span className="mr-1 text-sm font-semibold text-slate-700">Prioritás:</span>
+            {([[
+              "all", "Mind"
+            ], ["high", "Magas"], ["medium", "Közepes"], ["low", "Alacsony"]] as const).map(([value, label]) => <button key={value} type="button"
+              aria-pressed={priorityFilter === value} onClick={() => setPriorityFilter(value)}
+              className={priorityFilter === value
+                ? "accent-bg rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"}>
+              {label}
+            </button>)}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+          <span>{filteredLeads.length} érdeklődő látható</span>
+          {(searchQuery.trim() || priorityFilter !== "all" || assigneeFilter !== "all" || nextActionFilter !== "all") && <button type="button"
+            onClick={() => { setSearchQuery(""); setPriorityFilter("all"); setAssigneeFilter("all"); setNextActionFilter("all"); }}
+            className="font-semibold text-blue-700 underline underline-offset-2">Szűrők törlése</button>}
+        </div>
+      </section>
+
       <div className="mb-5 flex flex-wrap items-center gap-2" aria-label="Felelős szerinti szűrés">
         <span className="mr-1 text-sm font-semibold text-slate-700">Felelős:</span>
         {([
@@ -323,7 +358,7 @@ export default function PipelinePage() {
       {updatedAt && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {PIPELINE_COLUMNS.map(column => {
           const columnLeads = groups.get(column.status) ?? [];
-          const closedCollapsed = column.status === "processed" && nextActionFilter === "all" && !showClosed;
+          const closedCollapsed = column.status === "processed" && !hasFocusedFilters && !showClosed;
           const showDropPlaceholder = Boolean(draggedLead && draggedLead.status !== column.status && dragTargetStatus === column.status);
           return <section key={column.status} aria-label={column.label}
             onDragEnter={event => { event.preventDefault(); setDragTargetStatus(column.status); }}
@@ -352,7 +387,7 @@ export default function PipelinePage() {
             </div>
             {closedCollapsed ? <button type="button" onClick={() => setShowClosed(true)} className="w-full rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-700 shadow-sm">Lezárt ügyek megjelenítése</button>
               : <div className="space-y-3">
-                {column.status === "processed" && nextActionFilter === "all" && <button type="button" onClick={() => setShowClosed(false)} className="w-full text-sm font-medium text-slate-600 underline">Lezárt ügyek összecsukása</button>}
+                {column.status === "processed" && !hasFocusedFilters && <button type="button" onClick={() => setShowClosed(false)} className="w-full text-sm font-medium text-slate-600 underline">Lezárt ügyek összecsukása</button>}
                 {columnLeads.map(lead => {
                   const reply = replies.get(lead.id);
                   const automationWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) || missingAiDraftWarning(lead, replies.has(lead.id));
