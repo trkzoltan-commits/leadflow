@@ -22,6 +22,10 @@ test("every authenticated partner page exposes the shared Dashboard brand link",
 });
 
 test("dashboard and lead list expose the pipeline", () => {
-  assert.match(read("app/page.tsx"), /href="\/pipeline"/);
+  const dashboard = read("app/page.tsx");
+  assert.match(dashboard, /href="\/pipeline"/);
+  assert.match(dashboard, /Mai és lejárt teendők/);
+  assert.match(dashboard, /urgentNextActionLeads/);
+  assert.match(dashboard, /href=\{`\/leads\/\$\{lead\.id\}`\}/);
   assert.match(read("app/leads/page.tsx"), /href="\/pipeline"/);
 });

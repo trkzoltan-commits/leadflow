@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, replyLabel } from "@/lib/lead-overview";
+import { displayNextActionDueDate, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
 
 export default function Home() {
   const router = useRouter();
@@ -17,6 +18,10 @@ export default function Home() {
   const failedCount = attention.filter(lead => replies.get(lead.id)?.status === "failed").length;
   const makeAttention = filterLeads(leads, replies, "make");
   const missingDraftCount = makeAttention.filter(lead => missingAiDraftWarning(lead, replies.has(lead.id)) !== null).length;
+  const now = new Date();
+  const urgentNextActions = urgentNextActionLeads(leads, now);
+  const overdueNextActionCount = urgentNextActions.filter(lead => nextActionDueState(lead.next_action_due_date, now) === "overdue").length;
+  const todayNextActionCount = urgentNextActions.length - overdueNextActionCount;
   const days = dailyCounts(leads);
   const max = Math.max(1, ...days.map(day => day.count));
   const leadMap = new Map(leads.map(lead => [lead.id, lead]));
@@ -57,6 +62,37 @@ export default function Home() {
           <p className="mt-2 text-sm">Ebből {missingDraftCount} esetben 15 perc után sincs AI-választervezet. Ellenőrizd a saját Make-futást, mielőtt bármit újraindítasz.</p>
           <Link href="/leads?filter=make" className="mt-3 inline-block text-sm font-semibold underline">Érintett érdeklődők megnyitása →</Link>
         </section>}
+        <section className="mb-6 rounded-2xl border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-bold">Mai és lejárt teendők</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                {urgentNextActions.length === 0
+                  ? "Nincs mára esedékes vagy lejárt teendő."
+                  : `${overdueNextActionCount} lejárt, ${todayNextActionCount} ma esedékes teendő.`}
+              </p>
+            </div>
+            <Link href="/pipeline" className="accent-text text-sm font-semibold">Pipeline megnyitása →</Link>
+          </div>
+          {urgentNextActions.length > 0 && <ul className="mt-5 grid gap-3 md:grid-cols-2">
+            {urgentNextActions.slice(0, 6).map(lead => {
+              const dueState = nextActionDueState(lead.next_action_due_date, now);
+              return <li key={lead.id}>
+                <Link href={`/leads/${lead.id}`} className="block h-full rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="font-bold text-slate-900">{lead.name || "Névtelen érdeklődő"}</span>
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${dueState === "overdue" ? "next-action-due-overdue" : "next-action-due-today"}`}>
+                      {displayNextActionDueDate(lead.next_action_due_date, now)}
+                    </span>
+                  </div>
+                  <p className="mt-2 break-words text-sm font-semibold text-slate-800">{lead.next_action}</p>
+                  <p className="mt-1 text-xs text-slate-500">{lead.service || "Nincs szolgáltatás"}</p>
+                </Link>
+              </li>;
+            })}
+          </ul>}
+          {urgentNextActions.length > 6 && <p className="mt-4 text-sm text-slate-500">További {urgentNextActions.length - 6} sürgős teendő a Pipeline-ban látható.</p>}
+        </section>
         <section className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold">Figyelmet igénylő válaszok</h2>
           <p className="mt-2 text-sm text-slate-500">A legutóbbi válasz állapota alapján. A piszkozatot az automatizálás még feldolgozhatja.</p>

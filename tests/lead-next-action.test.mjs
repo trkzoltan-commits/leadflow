@@ -5,8 +5,11 @@ import {
   budapestDateKey,
   budapestDateOffset,
   displayNextActionDueDate,
+  filterLeadsByNextAction,
   isValidDateOnly,
   nextActionDueState,
+  sortLeadsByNextAction,
+  urgentNextActionLeads,
 } from "../lib/lead-next-action.ts";
 
 const route = readFileSync(new URL("../app/api/lead-next-action/route.ts", import.meta.url), "utf8");
@@ -47,6 +50,37 @@ test("quick deadlines and display labels stay calendar based", () => {
   assert.match(displayNextActionDueDate("2026-10-03", now), /^Lejárt ·/);
   assert.match(displayNextActionDueDate("2026-10-04", now), /^Ma ·/);
   assert.match(displayNextActionDueDate("2026-10-05", now), /^Holnap ·/);
+});
+
+test("task filters exclude closed leads and keep the ranges distinct", () => {
+  const now = new Date("2026-10-05T08:00:00Z");
+  const leads = [
+    { id: "overdue", status: "contacted", next_action: "Visszahívás", next_action_due_date: "2026-10-04", created_at: "2026-10-01T08:00:00Z" },
+    { id: "today", status: "waiting", next_action: "Ajánlat ellenőrzése", next_action_due_date: "2026-10-05", created_at: "2026-10-02T08:00:00Z" },
+    { id: "soon", status: "decision", next_action: "Érdeklődés", next_action_due_date: "2026-10-08", created_at: "2026-10-03T08:00:00Z" },
+    { id: "later", status: "new", next_action: "Helyszíni mérés", next_action_due_date: "2026-10-09", created_at: "2026-10-04T08:00:00Z" },
+    { id: "missing", status: "offer_sent", next_action: null, next_action_due_date: null, created_at: "2026-10-05T08:00:00Z" },
+    { id: "closed", status: "processed", next_action: "Régi teendő", next_action_due_date: "2026-10-04", created_at: "2026-10-05T09:00:00Z" },
+  ];
+
+  assert.deepEqual(filterLeadsByNextAction(leads, "overdue", now).map(lead => lead.id), ["overdue"]);
+  assert.deepEqual(filterLeadsByNextAction(leads, "today", now).map(lead => lead.id), ["today"]);
+  assert.deepEqual(filterLeadsByNextAction(leads, "soon", now).map(lead => lead.id), ["soon"]);
+  assert.deepEqual(filterLeadsByNextAction(leads, "missing", now).map(lead => lead.id), ["missing"]);
+  assert.equal(filterLeadsByNextAction(leads, "all", now), leads);
+});
+
+test("pipeline and dashboard order the most urgent tasks first", () => {
+  const now = new Date("2026-10-05T08:00:00Z");
+  const leads = [
+    { id: "missing", status: "new", next_action: null, next_action_due_date: null, created_at: "2026-10-05T08:00:00Z" },
+    { id: "tomorrow", status: "waiting", next_action: "Visszahívás", next_action_due_date: "2026-10-06", created_at: "2026-10-03T08:00:00Z" },
+    { id: "today", status: "contacted", next_action: "Ajánlat", next_action_due_date: "2026-10-05", created_at: "2026-10-02T08:00:00Z" },
+    { id: "overdue", status: "decision", next_action: "Döntés kérése", next_action_due_date: "2026-10-03", created_at: "2026-10-01T08:00:00Z" },
+  ];
+
+  assert.deepEqual(sortLeadsByNextAction(leads).map(lead => lead.id), ["overdue", "today", "tomorrow", "missing"]);
+  assert.deepEqual(urgentNextActionLeads(leads, now).map(lead => lead.id), ["overdue", "today"]);
 });
 
 test("next-action API is authenticated, tenant scoped and writes with the caller JWT", () => {

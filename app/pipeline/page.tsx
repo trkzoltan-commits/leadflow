@@ -7,9 +7,12 @@ import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDisp
 import {
   budapestDateOffset,
   displayNextActionDueDate,
+  filterLeadsByNextAction,
   isValidDateOnly,
   NEXT_ACTION_MAX_LENGTH,
   nextActionDueState,
+  sortLeadsByNextAction,
+  type NextActionFilter,
   type NextActionDueState,
 } from "@/lib/lead-next-action";
 import {
@@ -59,6 +62,7 @@ export default function PipelinePage() {
   const [canAssign, setCanAssign] = useState(false);
   const [assigneesLoading, setAssigneesLoading] = useState(true);
   const [assigneeFilter, setAssigneeFilter] = useState<PipelineAssigneeFilter>("all");
+  const [nextActionFilter, setNextActionFilter] = useState<NextActionFilter>("all");
   const [assigningLeadIds, setAssigningLeadIds] = useState<Set<string>>(() => new Set());
   const [pendingNextAction, setPendingNextAction] = useState<OverviewLead | null>(null);
   const [nextActionDraft, setNextActionDraft] = useState("");
@@ -67,7 +71,15 @@ export default function PipelinePage() {
   const [savingNextActionLeadId, setSavingNextActionLeadId] = useState<string | null>(null);
   const nextActionDialogRef = useRef<HTMLFormElement | null>(null);
   const nextActionTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const filteredLeads = filterPipelineLeads(leads, assigneeFilter, currentUserId);
+  const assigneeFilteredLeads = filterPipelineLeads(leads, assigneeFilter, currentUserId);
+  const now = new Date();
+  const nextActionCounts = {
+    overdue: filterLeadsByNextAction(assigneeFilteredLeads, "overdue", now).length,
+    today: filterLeadsByNextAction(assigneeFilteredLeads, "today", now).length,
+    soon: filterLeadsByNextAction(assigneeFilteredLeads, "soon", now).length,
+    missing: filterLeadsByNextAction(assigneeFilteredLeads, "missing", now).length,
+  };
+  const filteredLeads = sortLeadsByNextAction(filterLeadsByNextAction(assigneeFilteredLeads, nextActionFilter, now));
   const groups = pipelineGroups(filteredLeads);
   const draggedLead = leads.find(lead => lead.id === draggedLeadId);
 
@@ -290,10 +302,28 @@ export default function PipelinePage() {
         </button>)}
       </div>
 
+      <div className="mb-5 flex flex-wrap items-center gap-2" aria-label="Határidő szerinti szűrés">
+        <span className="mr-1 text-sm font-semibold text-slate-700">Teendő:</span>
+        {([
+          ["all", "Összes", null],
+          ["overdue", "Lejárt", nextActionCounts.overdue],
+          ["today", "Ma", nextActionCounts.today],
+          ["soon", "3 napon belül", nextActionCounts.soon],
+          ["missing", "Nincs teendő", nextActionCounts.missing],
+        ] as const).map(([value, label, count]) => <button key={value} type="button"
+          aria-pressed={nextActionFilter === value}
+          onClick={() => setNextActionFilter(value)}
+          className={nextActionFilter === value
+            ? "accent-bg rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-sm"
+            : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"}>
+          {label}{count === null ? "" : ` (${count})`}
+        </button>)}
+      </div>
+
       {updatedAt && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {PIPELINE_COLUMNS.map(column => {
           const columnLeads = groups.get(column.status) ?? [];
-          const closedCollapsed = column.status === "processed" && !showClosed;
+          const closedCollapsed = column.status === "processed" && nextActionFilter === "all" && !showClosed;
           const showDropPlaceholder = Boolean(draggedLead && draggedLead.status !== column.status && dragTargetStatus === column.status);
           return <section key={column.status} aria-label={column.label}
             onDragEnter={event => { event.preventDefault(); setDragTargetStatus(column.status); }}
@@ -322,7 +352,7 @@ export default function PipelinePage() {
             </div>
             {closedCollapsed ? <button type="button" onClick={() => setShowClosed(true)} className="w-full rounded-xl border border-slate-200 bg-white p-4 text-sm font-semibold text-slate-700 shadow-sm">Lezárt ügyek megjelenítése</button>
               : <div className="space-y-3">
-                {column.status === "processed" && <button type="button" onClick={() => setShowClosed(false)} className="w-full text-sm font-medium text-slate-600 underline">Lezárt ügyek összecsukása</button>}
+                {column.status === "processed" && nextActionFilter === "all" && <button type="button" onClick={() => setShowClosed(false)} className="w-full text-sm font-medium text-slate-600 underline">Lezárt ügyek összecsukása</button>}
                 {columnLeads.map(lead => {
                   const reply = replies.get(lead.id);
                   const automationWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) || missingAiDraftWarning(lead, replies.has(lead.id));

@@ -1,6 +1,15 @@
 export const NEXT_ACTION_MAX_LENGTH = 300;
 
 export type NextActionDueState = "overdue" | "today" | "soon" | "later" | "invalid";
+export type NextActionFilter = "all" | "overdue" | "today" | "soon" | "missing";
+
+type NextActionLead = {
+  id: string;
+  next_action: string | null;
+  next_action_due_date: string | null;
+  status: string | null;
+  created_at: string;
+};
 
 const dateOnlyPattern = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -61,4 +70,40 @@ export function displayNextActionDueDate(dueDate: string | null, now = new Date(
   if (difference === 1) return `Holnap · ${formatted}`;
   if (state === "soon") return `${difference} nap múlva · ${formatted}`;
   return `Határidő: ${formatted}`;
+}
+
+export function filterLeadsByNextAction<T extends NextActionLead>(
+  leads: T[],
+  filter: NextActionFilter,
+  now = new Date()
+) {
+  if (filter === "all") return leads;
+  return leads.filter(lead => {
+    if (lead.status === "processed") return false;
+    if (filter === "missing") return !lead.next_action;
+    if (!lead.next_action) return false;
+    return nextActionDueState(lead.next_action_due_date, now) === filter;
+  });
+}
+
+export function sortLeadsByNextAction<T extends NextActionLead>(leads: T[]) {
+  return [...leads].sort((left, right) => {
+    const leftHasDueDate = Boolean(left.next_action && isValidDateOnly(left.next_action_due_date));
+    const rightHasDueDate = Boolean(right.next_action && isValidDateOnly(right.next_action_due_date));
+    if (leftHasDueDate !== rightHasDueDate) return leftHasDueDate ? -1 : 1;
+    if (leftHasDueDate && rightHasDueDate) {
+      const dueComparison = (left.next_action_due_date ?? "").localeCompare(right.next_action_due_date ?? "");
+      if (dueComparison !== 0) return dueComparison;
+    }
+    const createdComparison = right.created_at.localeCompare(left.created_at);
+    return createdComparison || left.id.localeCompare(right.id);
+  });
+}
+
+export function urgentNextActionLeads<T extends NextActionLead>(leads: T[], now = new Date()) {
+  return sortLeadsByNextAction(leads.filter(lead => {
+    if (lead.status === "processed" || !lead.next_action) return false;
+    const state = nextActionDueState(lead.next_action_due_date, now);
+    return state === "overdue" || state === "today";
+  }));
 }
