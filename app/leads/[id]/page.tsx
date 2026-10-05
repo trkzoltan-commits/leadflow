@@ -1,14 +1,19 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, preferredReplyMessage } from "@/lib/lead-overview";
+import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, NEXT_ACTION_MAX_LENGTH, nextActionDueState } from "@/lib/lead-next-action";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 type Lead = {
   id: string;
   company_id: string;
+  assigned_user_id: string | null;
+  next_action: string | null;
+  next_action_due_date: string | null;
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -92,6 +97,15 @@ export default function LeadDetailsPage() {
   const [outcome, setOutcome] = useState("");
   const [saveError, setSaveError] = useState("");
   const [priority, setPriority] = useState("");
+  const [nextActionEditorOpen, setNextActionEditorOpen] = useState(false);
+  const [nextActionDraft, setNextActionDraft] = useState("");
+  const [nextActionDueDateDraft, setNextActionDueDateDraft] = useState("");
+  const [nextActionExpected, setNextActionExpected] = useState<{ nextAction: string | null; dueDate: string | null }>({ nextAction: null, dueDate: null });
+  const [nextActionSaving, setNextActionSaving] = useState(false);
+  const [nextActionError, setNextActionError] = useState("");
+  const [nextActionSuccess, setNextActionSuccess] = useState("");
+  const [nextActionCurrentUserId, setNextActionCurrentUserId] = useState<string | null>(null);
+  const [nextActionManagerAccess, setNextActionManagerAccess] = useState(false);
 
   useEffect(() => {
     async function initializePage() {
@@ -110,6 +124,9 @@ export default function LeadDetailsPage() {
           `
           id,
           company_id,
+          assigned_user_id,
+          next_action,
+          next_action_due_date,
           name,
           email,
           phone,
@@ -161,6 +178,20 @@ export default function LeadDetailsPage() {
         console.error("Üzenetek betöltési hiba:", messagesError);
       }
 
+      try {
+        const accessResponse = await fetch("/api/lead-assignees", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        if (accessResponse.ok) {
+          const accessResult = await accessResponse.json() as { currentUserId?: unknown; canAssign?: unknown };
+          setNextActionCurrentUserId(typeof accessResult.currentUserId === "string" ? accessResult.currentUserId : null);
+          setNextActionManagerAccess(accessResult.canAssign === true);
+        }
+      } catch {
+        // The task remains visible and can still be managed from the Pipeline.
+      }
+
       const messages = messagesData ?? [];
 
       setMessageHistory(messages);
@@ -188,7 +219,7 @@ export default function LeadDetailsPage() {
       running = true;
       try {
         const [leadResult, messagesResult] = await Promise.all([
-          supabase.from("leads").select("status, new_lead_dispatch_status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
+          supabase.from("leads").select("status, assigned_user_id, next_action, next_action_due_date, new_lead_dispatch_status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
           supabase.from("messages").select(messageSelect).eq("lead_id", leadId).order("created_at", { ascending: true }),
         ]);
         if (cancelled) return;
@@ -229,7 +260,7 @@ export default function LeadDetailsPage() {
   }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, markingSent, resolvingDelivery]);
 
   useEffect(() => {
-    if (!draftMessageId) { setDeliveryAudit(null); return; }
+    if (!draftMessageId) return;
     let cancelled = false;
     async function loadDeliveryAudit() {
       const { data: { session } } = await supabase.auth.getSession();
@@ -294,6 +325,8 @@ export default function LeadDetailsPage() {
       status,
       outcome: status === "processed" ? outcome : null,
       priority,
+      next_action: status === "processed" ? null : lead.next_action,
+      next_action_due_date: status === "processed" ? null : lead.next_action_due_date,
     });
 
     setSaving(false);
@@ -443,6 +476,7 @@ export default function LeadDetailsPage() {
         messageStatus === "sending"
       ) {
         setDraftMessageId(null);
+        setDeliveryAudit(null);
         setMessageStatus(null);
       }
     } catch (error) {
@@ -648,6 +682,77 @@ export default function LeadDetailsPage() {
     }
   }
 
+  function openNextActionEditor() {
+    if (!lead || lead.status === "processed") return;
+    setNextActionDraft(lead.next_action ?? "");
+    setNextActionDueDateDraft(lead.next_action_due_date ?? budapestDateOffset(1));
+    setNextActionExpected({ nextAction: lead.next_action, dueDate: lead.next_action_due_date });
+    setNextActionError("");
+    setNextActionSuccess("");
+    setNextActionEditorOpen(true);
+  }
+
+  function closeNextActionEditor() {
+    if (nextActionSaving) return;
+    setNextActionEditorOpen(false);
+    setNextActionError("");
+  }
+
+  async function persistNextAction(clear = false) {
+    if (!lead || nextActionSaving) return;
+    const nextAction = nextActionDraft.trim();
+    if (!clear && (!nextAction || nextAction.length > NEXT_ACTION_MAX_LENGTH || !isValidDateOnly(nextActionDueDateDraft))) {
+      setNextActionError(`Írd le a következő teendőt, és válassz határidőt. A leírás legfeljebb ${NEXT_ACTION_MAX_LENGTH} karakter lehet.`);
+      return;
+    }
+
+    setNextActionSaving(true);
+    setNextActionError("");
+    setNextActionSuccess("");
+    let failureMessage = "A következő teendő mentése nem sikerült. Frissítsd az oldalt, majd próbáld újra.";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        failureMessage = "A munkamenet lejárt. Jelentkezz be újra.";
+        throw new Error("missing session");
+      }
+      const response = await fetch("/api/lead-next-action", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          leadId: lead.id,
+          nextAction: clear ? null : nextAction,
+          dueDate: clear ? null : nextActionDueDateDraft,
+          expectedNextAction: nextActionExpected.nextAction,
+          expectedDueDate: nextActionExpected.dueDate,
+        }),
+      });
+      let result: { error?: unknown; nextAction?: string | null; dueDate?: string | null } = {};
+      try {
+        result = await response.json() as typeof result;
+      } catch {
+        result = {};
+      }
+      if (!response.ok) {
+        if (typeof result.error === "string" && result.error) failureMessage = result.error;
+        throw new Error("request failed");
+      }
+      const savedNextAction = typeof result.nextAction === "string" ? result.nextAction : null;
+      const savedDueDate = typeof result.dueDate === "string" ? result.dueDate : null;
+      setLead(current => current ? { ...current, next_action: savedNextAction, next_action_due_date: savedDueDate } : current);
+      setNextActionExpected({ nextAction: savedNextAction, dueDate: savedDueDate });
+      setNextActionEditorOpen(false);
+      setNextActionSuccess(clear ? "A teendő törölve." : "A teendő elmentve.");
+    } catch {
+      setNextActionError(failureMessage);
+    } finally {
+      setNextActionSaving(false);
+    }
+  }
+
   function getSourceLabel(source: string | null) {
     if (source === "manual") return "Kézi felvétel";
     if (source === "email") return "E-mail";
@@ -770,6 +875,15 @@ export default function LeadDetailsPage() {
   const delayedSending = isDelayedSending({ status: messageStatus, sending_started_at: sendingStartedAt ?? null });
   const dispatchWarning = newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at);
   const draftWarning = missingAiDraftWarning(lead, messageHistory.some(message => message.direction === "outgoing"));
+  const canEditNextAction = nextActionManagerAccess || Boolean(nextActionCurrentUserId && lead.assigned_user_id === nextActionCurrentUserId);
+  const currentNextActionDueState = nextActionDueState(lead.next_action_due_date);
+  const currentNextActionDueClass = currentNextActionDueState === "overdue"
+    ? "next-action-due-overdue"
+    : currentNextActionDueState === "today"
+      ? "next-action-due-today"
+      : currentNextActionDueState === "soon"
+        ? "next-action-due-soon"
+        : "bg-slate-100 text-slate-700";
 
   return (
     <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
@@ -1164,6 +1278,65 @@ export default function LeadDetailsPage() {
             </div>
 
             <div className="space-y-6">
+              <section id="next-action" className="scroll-mt-6 rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-900">Következő teendő</h2>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">Az ügyhöz tartozó aktuális feladat és határidő.</p>
+                  </div>
+                  {!nextActionEditorOpen && lead.status !== "processed" && canEditNextAction && <button type="button" onClick={openNextActionEditor}
+                    className="rounded-xl border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+                    {lead.next_action ? "Módosítás" : "+ Teendő"}
+                  </button>}
+                </div>
+
+                {lead.status === "processed" ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">A lezárt ügyhöz nincs aktív teendő.</p>
+                  : nextActionEditorOpen ? <div className="mt-5 space-y-4">
+                    <label className="block text-sm font-semibold text-slate-700">Mit kell elintézni?
+                      <textarea rows={4} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
+                        onChange={event => setNextActionDraft(event.target.value)} disabled={nextActionSaving}
+                        className="mt-2 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                        placeholder="Például: Telefonos egyeztetés az ajánlat részleteiről" />
+                    </label>
+                    <p className="text-right text-xs text-slate-500">{nextActionDraft.length}/{NEXT_ACTION_MAX_LENGTH}</p>
+                    <label className="block text-sm font-semibold text-slate-700">Határidő
+                      <input type="date" value={nextActionDueDateDraft} onChange={event => setNextActionDueDateDraft(event.target.value)} disabled={nextActionSaving}
+                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                    </label>
+                    <div className="flex flex-wrap gap-2" aria-label="Gyors határidő választás">
+                      {([[0, "Ma"], [1, "Holnap"], [3, "+3 nap"]] as const).map(([days, label]) => <button key={days} type="button"
+                        disabled={nextActionSaving} onClick={() => setNextActionDueDateDraft(budapestDateOffset(days))}
+                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
+                        {label}
+                      </button>)}
+                    </div>
+                    {nextActionError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button type="button" onClick={() => void persistNextAction()} disabled={nextActionSaving || !nextActionDraft.trim() || !isValidDateOnly(nextActionDueDateDraft)}
+                        className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">
+                        {nextActionSaving ? "Mentés…" : "Teendő mentése"}
+                      </button>
+                      <button type="button" onClick={closeNextActionEditor} disabled={nextActionSaving}
+                        className="rounded-xl border border-slate-200 px-4 py-3 font-semibold text-slate-700 disabled:opacity-50">Mégse</button>
+                    </div>
+                    {lead.next_action && <button type="button" disabled={nextActionSaving}
+                      onClick={() => { if (window.confirm("Biztosan törlöd az aktuális teendőt?")) void persistNextAction(true); }}
+                      className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
+                      Teendő törlése
+                    </button>}
+                  </div> : lead.next_action ? <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="break-words font-semibold text-slate-900">{lead.next_action}</p>
+                    <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${currentNextActionDueClass}`}>
+                      {displayNextActionDueDate(lead.next_action_due_date)}
+                    </span>
+                  </div> : <p className="mt-5 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">Ehhez az ügyhöz még nincs következő teendő.</p>}
+
+                {!canEditNextAction && lead.status !== "processed" && <p className="mt-4 text-xs leading-5 text-slate-500">A teendőt a felelős, a tulajdonos vagy egy adminisztrátor módosíthatja.</p>}
+                {nextActionSuccess && !nextActionEditorOpen && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">✓ {nextActionSuccess}</p>}
+                {nextActionError && !nextActionEditorOpen && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
+                <Link href="/pipeline" className="accent-text mt-4 inline-flex text-sm font-semibold">Pipeline megnyitása →</Link>
+              </section>
+
               <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="mb-6 text-xl font-bold">
                   Érdeklődő kezelése

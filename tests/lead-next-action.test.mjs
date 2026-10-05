@@ -13,6 +13,7 @@ import {
 } from "../lib/lead-next-action.ts";
 
 const route = readFileSync(new URL("../app/api/lead-next-action/route.ts", import.meta.url), "utf8");
+const leadDetail = readFileSync(new URL("../app/leads/[id]/page.tsx", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/202610040002_lead_next_actions.sql", import.meta.url), "utf8");
 
 test("date-only deadlines are validated as real calendar dates", () => {
@@ -95,6 +96,15 @@ test("next-action API is authenticated, tenant scoped and writes with the caller
   assert.match(route, /\.is\("next_action", null\)/);
   assert.match(route, /status: 409/);
   assert.doesNotMatch(route, /input\.company_id|body\.company_id/);
+});
+
+test("lead detail exposes the same tenant-scoped next-action workflow", () => {
+  assert.match(leadDetail, /assigned_user_id,[\s\S]*?next_action,[\s\S]*?next_action_due_date/);
+  assert.match(leadDetail, /fetch\("\/api\/lead-next-action"/);
+  assert.match(leadDetail, /expectedNextAction: nextActionExpected\.nextAction/);
+  assert.match(leadDetail, /Következő teendő/);
+  assert.match(leadDetail, /Teendő mentése/);
+  assert.match(leadDetail, /nextActionManagerAccess \|\| Boolean/);
 });
 
 test("database stores a paired task, protects writes and clears it on closure", () => {
