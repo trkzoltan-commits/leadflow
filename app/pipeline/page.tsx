@@ -29,8 +29,10 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 
-function priorityLabel(value: string | null) {
-  return value === "high" ? "Magas" : value === "low" ? "Alacsony" : "Közepes";
+type LeadPriority = "low" | "medium" | "high";
+
+function normalizedPriority(value: string | null): LeadPriority {
+  return value === "high" || value === "low" ? value : "medium";
 }
 
 const columnClass: Record<PipelineStatus, string> = {
@@ -177,6 +179,19 @@ export default function PipelinePage() {
     }).eq("id", lead.id);
     if (updateError) setSaveError("Az állapot módosítása nem sikerült. Próbáld újra.");
     else { setPendingClose(null); await refresh(); }
+    setSavingLeadId(null);
+  }
+
+  async function persistPriority(lead: OverviewLead, nextPriority: LeadPriority) {
+    if (normalizedPriority(lead.priority) === nextPriority || savingLeadId === lead.id) return;
+    setSavingLeadId(lead.id);
+    setSaveError("");
+    const { error: updateError } = await supabase.from("leads").update({
+      priority: nextPriority,
+      updated_at: new Date().toISOString(),
+    }).eq("id", lead.id);
+    if (updateError) setSaveError("A prioritás módosítása nem sikerült. Próbáld újra.");
+    else await refresh();
     setSavingLeadId(null);
   }
 
@@ -408,7 +423,15 @@ export default function PipelinePage() {
                     <Link href={`/leads/${lead.id}`} className="text-sm font-bold text-slate-900 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link>
                     <p className="mt-1 text-xs text-slate-600">{lead.service || "Nincs szolgáltatás"}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
-                      <span className="rounded-lg bg-slate-100 px-2 py-1 font-semibold">{priorityLabel(lead.priority)}</span>
+                      <label className="sr-only" htmlFor={`priority-${lead.id}`}>{lead.name || "Névtelen érdeklődő"} prioritása</label>
+                      <select id={`priority-${lead.id}`} aria-label={`${lead.name || "Névtelen érdeklődő"} prioritása`}
+                        value={normalizedPriority(lead.priority)} disabled={cardSaving}
+                        onChange={event => void persistPriority(lead, event.target.value as LeadPriority)}
+                        className="rounded-lg border-0 bg-slate-100 px-2 py-1 font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50">
+                        <option value="high">Magas</option>
+                        <option value="medium">Közepes</option>
+                        <option value="low">Alacsony</option>
+                      </select>
                       <span className="rounded-lg bg-slate-100 px-2 py-1">{displayReceivedAt(lead.created_at)}</span>
                     </div>
                     {column.status === "processed" && <p className="mt-3 text-xs font-semibold text-slate-600">{outcomeLabel(lead.outcome)}</p>}
