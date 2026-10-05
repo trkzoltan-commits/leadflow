@@ -11,7 +11,6 @@ import {
   isValidDateOnly,
   NEXT_ACTION_MAX_LENGTH,
   nextActionDueState,
-  sortLeadsByNextAction,
   type NextActionFilter,
   type NextActionDueState,
 } from "@/lib/lead-next-action";
@@ -26,6 +25,7 @@ import {
   type PipelinePriorityFilter,
   type PipelineStatus,
 } from "@/lib/lead-pipeline";
+import { sortPipelineLeads, type PipelineSort } from "@/lib/lead-pipeline-sort";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 
@@ -68,6 +68,7 @@ export default function PipelinePage() {
   const [assigneeFilter, setAssigneeFilter] = useState<PipelineAssigneeFilter>("all");
   const [nextActionFilter, setNextActionFilter] = useState<NextActionFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PipelinePriorityFilter>("all");
+  const [pipelineSort, setPipelineSort] = useState<PipelineSort>("due");
   const [searchQuery, setSearchQuery] = useState("");
   const [assigningLeadIds, setAssigningLeadIds] = useState<Set<string>>(() => new Set());
   const [pendingNextAction, setPendingNextAction] = useState<OverviewLead | null>(null);
@@ -87,7 +88,7 @@ export default function PipelinePage() {
     soon: filterLeadsByNextAction(scopedLeads, "soon", now).length,
     missing: filterLeadsByNextAction(scopedLeads, "missing", now).length,
   };
-  const filteredLeads = sortLeadsByNextAction(filterLeadsByNextAction(scopedLeads, nextActionFilter, now));
+  const filteredLeads = sortPipelineLeads(filterLeadsByNextAction(scopedLeads, nextActionFilter, now), pipelineSort);
   const groups = pipelineGroups(filteredLeads);
   const draggedLead = leads.find(lead => lead.id === draggedLeadId);
   const hasFocusedFilters = Boolean(searchQuery.trim()) || priorityFilter !== "all" || nextActionFilter !== "all";
@@ -308,7 +309,7 @@ export default function PipelinePage() {
       </div>
 
       <section aria-label="Pipeline keresés és prioritás" className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_auto] lg:items-end">
+        <div className="grid gap-4 lg:grid-cols-[minmax(16rem,1fr)_auto] lg:items-end xl:grid-cols-[minmax(16rem,1fr)_auto_auto]">
           <label className="block text-sm font-semibold text-slate-700">Keresés
             <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)}
               placeholder="Név, e-mail, telefonszám, szolgáltatás vagy helyszín"
@@ -326,6 +327,14 @@ export default function PipelinePage() {
               {label}
             </button>)}
           </div>
+          <label className="block text-sm font-semibold text-slate-700">Rendezés
+            <select value={pipelineSort} onChange={event => setPipelineSort(event.target.value as PipelineSort)}
+              className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+              <option value="due">Határidő szerint</option>
+              <option value="priority">Prioritás szerint</option>
+              <option value="newest">Legújabb érkezés</option>
+            </select>
+          </label>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
           <span>{filteredLeads.length} érdeklődő látható</span>

@@ -30,7 +30,6 @@ test("pipeline supports drag, direct status selection and explicit closure outco
   assert.match(source, /Határidő szerinti szűrés/);
   assert.match(source, /3 napon belül/);
   assert.match(source, /filterLeadsByNextAction/);
-  assert.match(source, /sortLeadsByNextAction/);
   assert.match(source, /Pipeline keresés és prioritás/);
   assert.match(source, /type="search"/);
   assert.match(source, /filterPipelineLeadsByPriority/);
@@ -39,6 +38,10 @@ test("pipeline supports drag, direct status selection and explicit closure outco
   assert.match(source, /persistPriority/);
   assert.match(source, /prioritása/);
   assert.match(source, /priority: nextPriority/);
+  assert.match(source, /sortPipelineLeads/);
+  assert.match(source, /Határidő szerint/);
+  assert.match(source, /Prioritás szerint/);
+  assert.match(source, /Legújabb érkezés/);
   assert.match(source, /nextStatus === "processed" \? \{ next_action: null, next_action_due_date: null \}/);
   assert.match(source, /closest\("a, button, input, select, textarea"\)/);
 });

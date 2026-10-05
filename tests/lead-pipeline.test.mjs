@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PIPELINE_COLUMNS, filterPipelineLeads, filterPipelineLeadsByPriority, isPipelineStatus, pipelineGroups } from "../lib/lead-pipeline.ts";
+import { sortPipelineLeads } from "../lib/lead-pipeline-sort.ts";
 
 test("pipeline contains the approved stages in business order", () => {
   assert.deepEqual(PIPELINE_COLUMNS.map(column => column.status), [
@@ -54,5 +55,18 @@ test("pipeline priority filters treat legacy missing priority as medium", () => 
   assert.deepEqual(filterPipelineLeadsByPriority(leads, "medium").map(lead => lead.id), ["medium", "legacy"]);
   assert.deepEqual(filterPipelineLeadsByPriority(leads, "low").map(lead => lead.id), ["low"]);
   assert.equal(filterPipelineLeadsByPriority(leads, "all"), leads);
+});
+
+test("pipeline cards can be ordered by deadline, priority or newest arrival", () => {
+  const leads = [
+    { id: "old-high", priority: "high", created_at: "2026-09-01T08:00:00Z", next_action: null, next_action_due_date: null, status: "contacted" },
+    { id: "new-low", priority: "low", created_at: "2026-10-01T08:00:00Z", next_action: null, next_action_due_date: null, status: "contacted" },
+    { id: "due-medium", priority: null, created_at: "2026-09-15T08:00:00Z", next_action: "Hívás", next_action_due_date: "2026-10-06", status: "contacted" },
+  ];
+
+  assert.deepEqual(sortPipelineLeads(leads, "due").map(lead => lead.id), ["due-medium", "new-low", "old-high"]);
+  assert.deepEqual(sortPipelineLeads(leads, "priority").map(lead => lead.id), ["old-high", "due-medium", "new-low"]);
+  assert.deepEqual(sortPipelineLeads(leads, "newest").map(lead => lead.id), ["new-low", "due-medium", "old-high"]);
+  assert.deepEqual(leads.map(lead => lead.id), ["old-high", "new-low", "due-medium"]);
 });
 
