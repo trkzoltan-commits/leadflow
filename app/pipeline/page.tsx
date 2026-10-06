@@ -26,6 +26,7 @@ import {
   type PipelineStatus,
 } from "@/lib/lead-pipeline";
 import { sortPipelineLeads, type PipelineSort } from "@/lib/lead-pipeline-sort";
+import { parsePipelineView, pipelineViewStorageKey, serializePipelineView } from "@/lib/lead-pipeline-view";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 
@@ -69,6 +70,7 @@ export default function PipelinePage() {
   const [nextActionFilter, setNextActionFilter] = useState<NextActionFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PipelinePriorityFilter>("all");
   const [pipelineSort, setPipelineSort] = useState<PipelineSort>("due");
+  const [pipelineViewHydrated, setPipelineViewHydrated] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [assigningLeadIds, setAssigningLeadIds] = useState<Set<string>>(() => new Set());
   const [pendingNextAction, setPendingNextAction] = useState<OverviewLead | null>(null);
@@ -129,6 +131,41 @@ export default function PipelinePage() {
     void loadAssignees();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (assigneesLoading) return;
+    if (!currentUserId) {
+      setPipelineViewHydrated(true);
+      return;
+    }
+    try {
+      const storedView = parsePipelineView(window.localStorage.getItem(pipelineViewStorageKey(currentUserId)), {
+        canAssign,
+        memberIds: new Set(assignees.map(member => member.id)),
+      });
+      setAssigneeFilter(storedView.assigneeFilter);
+      setNextActionFilter(storedView.nextActionFilter);
+      setPriorityFilter(storedView.priorityFilter);
+      setPipelineSort(storedView.sort);
+    } catch {
+      // A böngésző letilthatja a helyi tárolást; ilyenkor az alapnézet marad használatban.
+    }
+    setPipelineViewHydrated(true);
+  }, [assignees, assigneesLoading, canAssign, currentUserId]);
+
+  useEffect(() => {
+    if (!pipelineViewHydrated || !currentUserId) return;
+    try {
+      window.localStorage.setItem(pipelineViewStorageKey(currentUserId), serializePipelineView({
+        assigneeFilter,
+        nextActionFilter,
+        priorityFilter,
+        sort: pipelineSort,
+      }));
+    } catch {
+      // A Pipeline ettől még működik, csak a nézet nem marad meg a következő megnyitásig.
+    }
+  }, [assigneeFilter, currentUserId, nextActionFilter, pipelineSort, pipelineViewHydrated, priorityFilter]);
 
   useEffect(() => {
     if (!pendingNextAction) return;
@@ -341,7 +378,7 @@ export default function PipelinePage() {
           </label>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
-          <span>{filteredLeads.length} érdeklődő látható</span>
+          <span>{filteredLeads.length} érdeklődő látható · A nézet automatikusan megmarad</span>
           {(searchQuery.trim() || priorityFilter !== "all" || assigneeFilter !== "all" || nextActionFilter !== "all") && <button type="button"
             onClick={() => { setSearchQuery(""); setPriorityFilter("all"); setAssigneeFilter("all"); setNextActionFilter("all"); }}
             className="font-semibold text-blue-700 underline underline-offset-2">Szűrők törlése</button>}
