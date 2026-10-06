@@ -42,6 +42,8 @@ test("pipeline assignee filters isolate personal and unassigned work", () => {
   assert.deepEqual(filterPipelineLeads(leads, "mine", "user-a").map(lead => lead.id), ["a"]);
   assert.deepEqual(filterPipelineLeads(leads, "mine", null), []);
   assert.deepEqual(filterPipelineLeads(leads, "unassigned", "user-a").map(lead => lead.id), ["c"]);
+  assert.deepEqual(filterPipelineLeads(leads, "member:user-b", "user-a").map(lead => lead.id), ["b"]);
+  assert.deepEqual(filterPipelineLeads(leads, "member:", "user-a"), []);
 });
 
 test("pipeline priority filters treat legacy missing priority as medium", () => {

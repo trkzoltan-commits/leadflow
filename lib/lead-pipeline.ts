@@ -2,7 +2,7 @@ import type { OverviewLead } from "./lead-overview";
 
 export const PIPELINE_STATUSES = ["new", "contacted", "waiting", "offer_sent", "decision", "processed"] as const;
 export type PipelineStatus = typeof PIPELINE_STATUSES[number];
-export type PipelineAssigneeFilter = "all" | "mine" | "unassigned";
+export type PipelineAssigneeFilter = "all" | "mine" | "unassigned" | `member:${string}`;
 export type PipelinePriorityFilter = "all" | "high" | "medium" | "low";
 
 export type LeadAssignee = {
@@ -38,6 +38,10 @@ export function filterPipelineLeads(
     return leads.filter(lead => lead.assigned_user_id === currentUserId);
   }
   if (filter === "unassigned") return leads.filter(lead => !lead.assigned_user_id);
+  if (filter.startsWith("member:")) {
+    const memberId = filter.slice("member:".length);
+    return memberId ? leads.filter(lead => lead.assigned_user_id === memberId) : [];
+  }
   return leads;
 }
 

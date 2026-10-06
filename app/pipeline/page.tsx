@@ -90,6 +90,10 @@ export default function PipelinePage() {
   };
   const filteredLeads = sortPipelineLeads(filterLeadsByNextAction(scopedLeads, nextActionFilter, now), pipelineSort);
   const groups = pipelineGroups(filteredLeads);
+  const assigneeCounts = leads.reduce((counts, lead) => {
+    if (lead.assigned_user_id) counts.set(lead.assigned_user_id, (counts.get(lead.assigned_user_id) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
   const draggedLead = leads.find(lead => lead.id === draggedLeadId);
   const hasFocusedFilters = Boolean(searchQuery.trim()) || priorityFilter !== "all" || nextActionFilter !== "all";
 
@@ -359,6 +363,17 @@ export default function PipelinePage() {
             : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm disabled:opacity-50"}>
           {label}{count === null ? "" : ` (${count})`}
         </button>)}
+        {canAssign && assignees.length > 0 && <label className="ml-1 flex items-center gap-2 text-sm font-semibold text-slate-700">Munkatárs:
+          <select aria-label="Munkatárs ügyei"
+            value={assigneeFilter.startsWith("member:") ? assigneeFilter : ""}
+            onChange={event => setAssigneeFilter(event.target.value ? event.target.value as PipelineAssigneeFilter : "all")}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+            <option value="">Válassz munkatársat</option>
+            {assignees.map(member => <option key={member.id} value={`member:${member.id}`}>
+              {member.email} ({assigneeCounts.get(member.id) ?? 0})
+            </option>)}
+          </select>
+        </label>}
       </div>
 
       <div className="mb-5 flex flex-wrap items-center gap-2" aria-label="Határidő szerinti szűrés">
