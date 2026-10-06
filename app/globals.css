@@ -44,6 +44,33 @@ body {
 .accent-soft { background-color: var(--leadflow-accent-soft); }
 .accent-focus:focus { border-color: var(--leadflow-accent); }
 
+.dashboard-hero {
+  background: linear-gradient(135deg, var(--leadflow-accent-soft), #ffffff 68%);
+  border-color: color-mix(in srgb, var(--leadflow-accent) 22%, white);
+}
+.dashboard-focus-card {
+  --dashboard-focus-color: var(--leadflow-accent);
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--dashboard-focus-color) 24%, white);
+}
+.dashboard-focus-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--dashboard-focus-color);
+  content: "";
+}
+.dashboard-focus-dot { background-color: var(--dashboard-focus-color); }
+.dashboard-focus-accent { --dashboard-focus-color: var(--leadflow-accent); }
+.dashboard-focus-green { --dashboard-focus-color: #149a02; }
+.dashboard-focus-orange { --dashboard-focus-color: #e99800; }
+.dashboard-focus-red { --dashboard-focus-color: #dc2626; }
+.dashboard-panel-attention { border-top: 4px solid #e99800; }
+.dashboard-panel-activity { border-top: 4px solid #149a02; }
+.dashboard-panel-chart { border-top: 4px solid var(--leadflow-accent); }
+.dashboard-panel-latest { border-top: 4px solid #2563eb; }
+
 .partner-surface .bg-violet-600,
 .partner-surface .bg-violet-500 { background-color: var(--leadflow-accent); }
 .partner-surface .text-violet-600,
@@ -84,12 +111,16 @@ body {
 :root[data-color-mode="dark"] .partner-surface .bg-green-50 { background-color: #123524; }
 :root[data-color-mode="dark"] .partner-surface .bg-amber-50 { background-color: #3f2d13; }
 :root[data-color-mode="dark"] .partner-surface .bg-red-50 { background-color: #421f26; }
+:root[data-color-mode="dark"] .partner-surface .bg-blue-50 { background-color: #172554; }
 :root[data-color-mode="dark"] .partner-surface .bg-violet-50 { background-color: #243047; }
 :root[data-color-mode="dark"] .partner-surface .text-slate-900 { color: #f8fafc; }
+:root[data-color-mode="dark"] .partner-surface .text-slate-800 { color: #e2e8f0; }
 :root[data-color-mode="dark"] .partner-surface .text-slate-700,
 :root[data-color-mode="dark"] .partner-surface .text-slate-600 { color: #cbd5e1; }
 :root[data-color-mode="dark"] .partner-surface .text-slate-500 { color: #94a3b8; }
 :root[data-color-mode="dark"] .partner-surface .text-green-700 { color: #86efac; }
+:root[data-color-mode="dark"] .partner-surface .text-emerald-700 { color: #6ee7b7; }
+:root[data-color-mode="dark"] .partner-surface .text-blue-700 { color: #93c5fd; }
 :root[data-color-mode="dark"] .partner-surface .text-amber-700,
 :root[data-color-mode="dark"] .partner-surface .text-amber-800,
 :root[data-color-mode="dark"] .partner-surface .text-amber-900,
@@ -97,8 +128,17 @@ body {
 :root[data-color-mode="dark"] .partner-surface .text-red-700,
 :root[data-color-mode="dark"] .partner-surface .text-red-800 { color: #fca5a5; }
 :root[data-color-mode="dark"] .partner-surface .border-slate-100,
-:root[data-color-mode="dark"] .partner-surface .border-slate-200 { border-color: #334155; }
+:root[data-color-mode="dark"] .partner-surface .border-slate-200,
+:root[data-color-mode="dark"] .partner-surface .border-slate-300 { border-color: #334155; }
 :root[data-color-mode="dark"] .partner-surface .divide-slate-100 > :not(:last-child) { border-color: #334155; }
+:root[data-color-mode="dark"] .partner-surface .dashboard-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--leadflow-accent) 22%, #172033), #172033 68%);
+  border-color: color-mix(in srgb, var(--leadflow-accent) 45%, #334155);
+}
+:root[data-color-mode="dark"] .partner-surface .dashboard-focus-card {
+  border-color: color-mix(in srgb, var(--dashboard-focus-color) 42%, #334155);
+}
+:root[data-color-mode="dark"] .partner-surface .hover\:bg-blue-50:hover { background-color: #172554; }
 :root[data-color-mode="dark"] .partner-surface .pipeline-column { background: color-mix(in srgb, var(--pipeline-color) 18%, #172033); border-color: color-mix(in srgb, var(--pipeline-color) 45%, #334155); }
 :root[data-color-mode="dark"] .partner-surface .pipeline-column > div:first-child h2 { color: color-mix(in srgb, var(--pipeline-color) 45%, white); }
 :root[data-color-mode="dark"] .partner-surface .pipeline-drop-active { background: color-mix(in srgb, var(--pipeline-color) 28%, #172033); border-color: var(--pipeline-color); }

@@ -35,6 +35,7 @@ export type DashboardActivity = {
 
 export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "failed" | "delayed" | "make";
 export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
+export type DashboardLeadRange = "today" | "7days" | "30days";
 
 export const DELAYED_SEND_MINUTES = 60;
 export const MISSING_AI_DRAFT_MINUTES = 15;
@@ -175,6 +176,25 @@ export function displayReceivedAt(value: string | null) {
     hour: "2-digit", minute: "2-digit",
   }).format(date);
 }
+
+export function dashboardRecentLeads(leads: OverviewLead[], range: DashboardLeadRange, now = new Date()) {
+  const days = range === "today" ? 1 : range === "7days" ? 7 : 30;
+  const dateKey = (date: Date) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(date);
+  const dayNumber = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+  };
+  const today = dayNumber(dateKey(now));
+  return leads.filter(lead => {
+    const createdAt = new Date(lead.created_at);
+    if (Number.isNaN(createdAt.getTime())) return false;
+    const difference = today - dayNumber(dateKey(createdAt));
+    return difference >= 0 && difference < days;
+  });
+}
+
 export function dailyCounts(leads: OverviewLead[], now = new Date()) {
   const key = (date: Date) => new Intl.DateTimeFormat("en-CA", {timeZone:"Europe/Budapest",year:"numeric",month:"2-digit",day:"2-digit"}).format(date);
   const today = key(now);

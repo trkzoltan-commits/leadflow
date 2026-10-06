@@ -10,6 +10,7 @@ import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 const reportMonthNames = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
 const reportSegmentLabels: Record<ReportSegment, string> = { total: "Összes", won: "Megvalósult", lost: "Nem valósult meg", active: "Aktív", unknown: "Eredmény nélkül lezárt" };
+const leadListFilters: LeadListFilter[] = ["active", "closed", "draft", "failed", "make", "delayed", "sending", "all"];
 
 export default function LeadsPage() {
   return <Suspense fallback={<main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés...</main>}><LeadsContent /></Suspense>;
@@ -25,7 +26,10 @@ function LeadsContent() {
   const [listFilter, setListFilter] = useState<LeadListFilter | null>(null);
   const [closedOutcome, setClosedOutcome] = useState<ClosedOutcomeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const selectedFilter = listFilter ?? (searchParams.get("filter") === "make" ? "make" : reportSelection ? "all" : "active");
+  const requestedFilter = searchParams.get("filter");
+  const selectedFilter = listFilter ?? (requestedFilter && leadListFilters.includes(requestedFilter as LeadListFilter)
+    ? requestedFilter as LeadListFilter
+    : reportSelection ? "all" : "active");
   const scopedLeads = reportSelection ? filterReportLeads(leads, reportSelection) : leads;
   const visibleLeads = searchLeads(filterLeads(scopedLeads, replies, selectedFilter, closedOutcome), searchQuery);
 

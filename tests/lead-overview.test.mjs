@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage,recentActivities}=context.exports;
+const {latestReplies,dailyCounts,dashboardRecentLeads,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage,recentActivities}=context.exports;
 test("missing AI draft warning starts after 15 minutes only for accepted, open leads without an outgoing reply",()=>{
  const now=new Date("2026-09-20T12:00:00Z");
  const lead={new_lead_dispatch_status:"accepted",status:"new",created_at:"2026-09-20T11:45:01Z"};
@@ -135,6 +135,19 @@ test("equal timestamps select deterministically regardless of input order",()=>{
 test("seven day counts use Budapest midnight and exclude earlier records",()=>{
  const days=dailyCounts([{created_at:"2026-09-18T22:30:00Z"},{created_at:"2026-09-18T21:30:00Z"},{created_at:"2026-09-12T21:00:00Z"}],new Date("2026-09-19T10:00:00Z"));
  assert.equal(days.length,7); assert.equal(days[0].day,"2026-09-13"); assert.equal(days[6].count,1); assert.equal(days[5].count,1); assert.equal(days.reduce((sum,day)=>sum+day.count,0),2);
+});
+test("dashboard recent leads follow Budapest calendar-day ranges",()=>{
+ const leads=[
+  {id:"today",created_at:"2026-10-05T22:30:00Z"},
+  {id:"yesterday",created_at:"2026-10-05T21:30:00Z"},
+  {id:"seven-edge",created_at:"2026-09-30T10:00:00Z"},
+  {id:"too-old",created_at:"2026-09-29T10:00:00Z"},
+  {id:"invalid",created_at:"invalid"},
+ ];
+ const now=new Date("2026-10-06T10:00:00Z");
+ assert.deepEqual(dashboardRecentLeads(leads,"today",now).map(lead=>lead.id),["today"]);
+ assert.deepEqual(dashboardRecentLeads(leads,"7days",now).map(lead=>lead.id),["today","yesterday","seven-edge"]);
+ assert.deepEqual(dashboardRecentLeads(leads,"30days",now).map(lead=>lead.id),["today","yesterday","seven-edge","too-old"]);
 });
 test("empty data and DST boundary retain seven calendar days",()=>{
  const days=dailyCounts([],new Date("2026-03-29T22:30:00Z"));

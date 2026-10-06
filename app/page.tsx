@@ -6,7 +6,7 @@ import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, recentActivities, replyLabel, type OverviewLead } from "@/lib/lead-overview";
+import { dailyCounts, dashboardRecentLeads, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, recentActivities, replyLabel, type DashboardLeadRange, type OverviewLead } from "@/lib/lead-overview";
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
 import { useLeadAssignees } from "@/lib/use-lead-assignees";
 
@@ -22,6 +22,7 @@ export default function Home() {
   const [savingTaskLeadId, setSavingTaskLeadId] = useState<string | null>(null);
   const [taskActionError, setTaskActionError] = useState("");
   const [taskActionSuccess, setTaskActionSuccess] = useState("");
+  const [recentLeadRange, setRecentLeadRange] = useState<DashboardLeadRange>("today");
   if (loading || assigneesLoading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
   const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending", "failed"].includes(replies.get(lead.id)?.status ?? ""))
     .sort((a, b) => Number(replies.get(b.id)?.status === "failed") - Number(replies.get(a.id)?.status === "failed") || Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
@@ -43,17 +44,46 @@ export default function Home() {
   const todayNextActionCount = urgentNextActions.length - overdueNextActionCount;
   const assigneeById = new Map(assignees.map(member => [member.id, member.email]));
   const days = dailyCounts(leads);
+  const visibleRecentLeads = dashboardRecentLeads(leads, recentLeadRange, now);
   const max = Math.max(1, ...days.map(day => day.count));
   const leadMap = new Map(leads.map(lead => [lead.id, lead]));
   const activities = recentActivities(leads, messages);
-  const kpis = [
-    ["Összes érdeklődő", leads.length],
-    ["Új érdeklődő", leads.filter(lead => lead.status === "new").length],
-    ["Ellenőrizendő piszkozat", attention.filter(lead => replies.get(lead.id)?.status === "draft").length],
-    ["Küldési visszaigazolásra vár", attention.filter(lead => replies.get(lead.id)?.status === "sending").length],
-    ["Sikertelen küldés", failedCount],
-    ["Késő visszaigazolás", delayedCount],
-    ["Automatizálás ellenőrizendő", makeAttention.length],
+  const activeLeadCount = leads.filter(lead => lead.status !== "processed").length;
+  const newLeadCount = leads.filter(lead => lead.status === "new").length;
+  const draftCount = attention.filter(lead => replies.get(lead.id)?.status === "draft").length;
+  const sendingCount = attention.filter(lead => replies.get(lead.id)?.status === "sending").length;
+  const replyAttentionHref = failedCount > 0
+    ? "/leads?filter=failed"
+    : delayedCount > 0 ? "/leads?filter=delayed" : sendingCount > 0 ? "/leads?filter=sending" : "/leads?filter=draft";
+  const focusCards = [
+    {
+      label: "Új érdeklődők",
+      value: newLeadCount,
+      detail: `${activeLeadCount} aktív folyamat összesen`,
+      href: "/pipeline",
+      tone: "dashboard-focus-accent",
+    },
+    {
+      label: effectiveTaskScope === "mine" ? "Saját sürgős teendők" : "Sürgős teendők",
+      value: urgentNextActions.length,
+      detail: `${overdueNextActionCount} lejárt · ${todayNextActionCount} ma esedékes`,
+      href: "/pipeline",
+      tone: urgentNextActions.length > 0 ? "dashboard-focus-orange" : "dashboard-focus-green",
+    },
+    {
+      label: "Válaszok ellenőrzése",
+      value: attention.length,
+      detail: `Piszkozat: ${draftCount} · Küldés: ${sendingCount} · Sikertelen küldés: ${failedCount}`,
+      href: replyAttentionHref,
+      tone: attention.length > 0 ? "dashboard-focus-red" : "dashboard-focus-green",
+    },
+    {
+      label: "Automatizálás",
+      value: makeAttention.length,
+      detail: makeAttention.length > 0 ? `${missingDraftCount} késő AI-tervezet` : "Minden folyamat rendben",
+      href: "/leads?filter=make",
+      tone: makeAttention.length > 0 ? "dashboard-focus-orange" : "dashboard-focus-green",
+    },
   ];
 
   function canManageTask(lead: OverviewLead) {
@@ -122,23 +152,54 @@ export default function Home() {
 
   return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-5 md:p-8">
     <div className="mx-auto max-w-7xl">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div><DashboardBrandLink /><h1 className="mt-1 text-3xl font-bold">Áttekintés</h1><p className="mt-2 text-slate-600">Érdeklődők, válaszok és következő teendők.</p></div>
-        <nav aria-label="Fő navigáció" className="grid w-full grid-cols-2 gap-2 text-sm font-semibold sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
-          <Link href="/leads" className="rounded-xl bg-violet-600 px-4 py-3 text-white">Érdeklődők</Link>
-          <Link href="/pipeline" className="rounded-xl border border-slate-200 bg-white px-4 py-3">Pipeline</Link>
-          <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-3">Riportok</Link>
-          <Link href="/settings" aria-label="Saját adatok és beállítások" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center">⚙ Beállítások</Link>
-          <button onClick={async () => { await supabase.auth.signOut(); router.replace("/login"); }} className="rounded-xl border border-slate-200 bg-white px-4 py-3">Kijelentkezés</button>
-        </nav>
+      <header className="dashboard-hero mb-6 overflow-hidden rounded-3xl border p-5 shadow-sm sm:p-7">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <DashboardBrandLink />
+            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Áttekintés</h1>
+            <p className="mt-2 max-w-xl text-slate-600">A mai feladatok, a figyelmet igénylő válaszok és az érdeklődők egy helyen.</p>
+            <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold">
+              <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{leads.length} érdeklődő összesen</span>
+              <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{activeLeadCount} aktív folyamat</span>
+            </div>
+          </div>
+          <nav aria-label="Fő navigáció" className="grid w-full grid-cols-2 gap-2 text-sm font-semibold sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+            <Link href="/leads" className="accent-bg rounded-xl px-4 py-3 text-center text-white shadow-sm">Érdeklődők</Link>
+            <Link href="/pipeline" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">Pipeline</Link>
+            <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">Riportok</Link>
+            <Link href="/settings" aria-label="Saját adatok és beállítások" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">⚙ Beállítások</Link>
+            <button onClick={async () => { await supabase.auth.signOut(); router.replace("/login"); }} className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">Kijelentkezés</button>
+          </nav>
+        </div>
+        <div role="status" className={error ? "mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-800" : "mt-5 border-t border-slate-200 pt-4 text-sm text-slate-500"}>
+          {error ? (updatedAt ? "A frissítés nem sikerült. Az utolsó sikeresen betöltött adatokat látod." : "Az adatokat nem sikerült betölteni.") : "Automatikus frissítés 10 másodpercenként."}
+          {updatedAt && <span> Utolsó frissítés: {displayDate(updatedAt)}.</span>}
+          {error && <button onClick={() => void refresh()} className="ml-3 font-semibold underline">Újrapróbálás</button>}
+        </div>
       </header>
-      <div role="status" className={error ? "mb-6 rounded-xl bg-amber-50 p-4 text-amber-800" : "mb-6 text-sm text-slate-500"}>
-        {error ? (updatedAt ? "A frissítés nem sikerült. Az utolsó sikeresen betöltött adatokat látod." : "Az adatokat nem sikerült betölteni.") : "Automatikus frissítés 10 másodpercenként."}
-        {updatedAt && <span> Utolsó frissítés: {displayDate(updatedAt)}.</span>}
-        {error && <button onClick={() => void refresh()} className="ml-3 font-semibold underline">Újrapróbálás</button>}
-      </div>
       {updatedAt && <>
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{kpis.map(([label,count]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-600">{label}</p><p className="mt-2 text-3xl font-bold">{count}</p></div>)}</div>
+        <section aria-labelledby="daily-focus-heading" className="mb-6">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="accent-text text-sm font-bold uppercase tracking-wider">Napi munkaközpont</p>
+              <h2 id="daily-focus-heading" className="mt-1 text-2xl font-bold">Mai fókusz</h2>
+            </div>
+            <p className="text-sm text-slate-500">A kártyák a kapcsolódó munkanézetet nyitják meg.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            {focusCards.map(card => <Link key={card.label} href={card.href} className={`dashboard-focus-card ${card.tone} group rounded-xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md`}>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs font-bold text-slate-600 sm:text-sm">{card.label}</p>
+                <span aria-hidden="true" className="dashboard-focus-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full" />
+              </div>
+              <div className="mt-2 flex items-end justify-between gap-2">
+                <p className="text-3xl font-bold tracking-tight">{card.value}</p>
+                <span className="pb-1 text-xs font-bold accent-text">Megnyitás →</span>
+              </div>
+              <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500 sm:text-xs">{card.detail}</p>
+            </Link>)}
+          </div>
+        </section>
         {makeAttention.length > 0 && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
           <h2 className="font-bold">{makeAttention.length} érdeklődő automatizálása figyelmet igényel</h2>
           <p className="mt-2 text-sm">Ebből {missingDraftCount} esetben 15 perc után sincs AI-választervezet. Ellenőrizd a saját Make-futást, mielőtt bármit újraindítasz.</p>
@@ -212,25 +273,58 @@ export default function Home() {
           </ul>}
           {urgentNextActions.length > 6 && <p className="mt-4 text-sm text-slate-500">További {urgentNextActions.length - 6} sürgős teendő a Pipeline-ban látható.</p>}
         </section>
-        <section className="mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-bold">Figyelmet igénylő válaszok</h2>
-          <p className="mt-2 text-sm text-slate-500">A legutóbbi válasz állapota alapján. A piszkozatot az automatizálás még feldolgozhatja.</p>
-          {failedCount > 0 && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">{failedCount} igazoltan sikertelen küldés újrapróbálható. Nyisd meg az érintett érdeklődőt, ellenőrizd a választ, majd indítsd újra.</p>}
-          {delayedCount > 0 && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">{delayedCount} küldés visszaigazolása több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát; ne indíts újraküldést.</p>}
-          {attention.length === 0 ? <p className="mt-4 text-slate-600">Nincs ellenőrizendő piszkozat vagy küldési probléma.</p> : <ul className="mt-4 divide-y divide-slate-100">{attention.map(lead => <li key={lead.id}><Link href={`/leads/${lead.id}`} className="flex flex-wrap justify-between gap-2 rounded-lg py-3 hover:bg-violet-50"><span className="font-semibold">{lead.name || "Névtelen érdeklődő"} <span className="font-normal text-slate-500">· {lead.service || "Nincs szolgáltatás"}</span></span><span className={isDelayedSending(replies.get(lead.id)) || replies.get(lead.id)?.status === "failed" ? "text-sm font-semibold text-red-700" : "text-sm text-amber-800"}>{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)} →</span></Link></li>)}</ul>}
-        </section>
-        <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <div className="min-w-0 space-y-6">
-            <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-bold">Érdeklődők az elmúlt 7 napban</h2><p className="mt-1 text-sm text-slate-500">Érkezési dátum szerint, magyarországi időzónában.</p>
-              <div className="mt-6 flex h-44 items-end gap-2" aria-label="Napi érdeklődőszám">{days.map(day => <div key={day.day} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2 text-center"><span className="text-sm font-semibold">{day.count}</span><div className="rounded-t-lg bg-violet-500" style={{height: `${day.count / max * 105}px`}} /><span className="text-xs text-slate-500">{day.label}</span></div>)}</div>
-            </section>
-            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-wrap justify-between gap-3 p-6"><h2 className="text-xl font-bold">Legújabb érdeklődők</h2><Link className="font-semibold text-violet-600" href="/leads">Összes megtekintése →</Link></div>
-              {leads.length === 0 ? <p className="px-6 pb-6 text-slate-500">Még nincs érdeklődő.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Név / szolgáltatás","Érkezett","Állapot","Válasz"].map(label => <th key={label} className="px-5 py-3">{label}</th>)}</tr></thead><tbody>{leads.slice(0,10).map(lead => <tr key={lead.id} className="border-t border-slate-100"><td className="px-5 py-4"><Link href={`/leads/${lead.id}`} className="font-semibold text-violet-700 underline-offset-4 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link><p className="mt-1 text-slate-500">{lead.service || "—"}</p></td><td className="px-5 py-4">{displayDate(lead.created_at)}</td><td className="px-5 py-4">{leadLabel(lead.status)}{newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) && <p className="mt-1 text-xs font-semibold text-amber-800">Make-indítás ellenőrizendő</p>}{missingAiDraftWarning(lead, replies.has(lead.id)) && <p className="mt-1 text-xs font-semibold text-amber-800">AI-választervezet késik</p>}</td><td className="px-5 py-4">{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)}</td></tr>)}</tbody></table></div>}
-            </section>
-          </div>
-          <section className="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Legutóbbi események</h2><p className="mt-2 text-sm text-slate-500">Az érdeklődők és üzenetek létrehozási időpontja szerint.</p><ul className="mt-5 space-y-5">{activities.map(activity => <li key={activity.id}><Link href={`/leads/${activity.leadId}`} className="block rounded-lg hover:bg-violet-50"><p className="font-semibold">{activity.title}</p><p className="text-sm text-slate-600">{leadMap.get(activity.leadId)?.name || "Névtelen érdeklődő"}</p><p className="mt-1 text-xs text-slate-500">{displayDate(activity.date)}</p></Link></li>)}</ul>{activities.length === 0 && <p className="mt-4 text-slate-500">Még nincs megjeleníthető esemény.</p>}</section>
+        <div className="mb-6 grid gap-6 lg:grid-cols-[3fr_2fr]">
+          <section className="dashboard-panel-attention rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-700">Beavatkozás</p>
+                <h2 className="mt-1 text-xl font-bold">Figyelmet igénylő válaszok</h2>
+              </div>
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-bold text-amber-800">{attention.length}</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-500">A legutóbbi válasz állapota alapján. A piszkozatot az automatizálás még feldolgozhatja.</p>
+            {failedCount > 0 && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">{failedCount} igazoltan sikertelen küldés újrapróbálható. Nyisd meg az érintett érdeklődőt, ellenőrizd a választ, majd indítsd újra.</p>}
+            {delayedCount > 0 && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-semibold text-red-800">{delayedCount} küldés visszaigazolása több mint 60 perce késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát; ne indíts újraküldést.</p>}
+            {attention.length === 0 ? <p className="mt-4 rounded-xl bg-green-50 p-4 font-medium text-green-700">Nincs ellenőrizendő piszkozat vagy küldési probléma.</p> : <ul className="mt-4 divide-y divide-slate-100">{attention.slice(0, 6).map(lead => <li key={lead.id}><Link href={`/leads/${lead.id}`} className="flex flex-wrap justify-between gap-2 rounded-lg py-3 hover:bg-violet-50"><span className="font-semibold">{lead.name || "Névtelen érdeklődő"} <span className="font-normal text-slate-500">· {lead.service || "Nincs szolgáltatás"}</span></span><span className={isDelayedSending(replies.get(lead.id)) || replies.get(lead.id)?.status === "failed" ? "text-sm font-semibold text-red-700" : "text-sm text-amber-800"}>{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)} →</span></Link></li>)}</ul>}
+            {attention.length > 6 && <Link href={replyAttentionHref} className="mt-4 inline-block text-sm font-semibold accent-text">További {attention.length - 6} kiemelt válasz megnyitása →</Link>}
+          </section>
+          <section className="dashboard-panel-activity h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Történet</p>
+            <h2 className="mt-1 text-xl font-bold">Legutóbbi események</h2>
+            <p className="mt-2 text-sm text-slate-500">A legfontosabb érdeklődő- és üzenetesemények időrendben.</p>
+            <ul className="mt-5 space-y-2">{activities.map(activity => <li key={activity.id}><Link href={`/leads/${activity.leadId}`} className="block rounded-xl border border-transparent px-3 py-2 transition hover:border-slate-200 hover:bg-violet-50"><p className="font-semibold">{activity.title}</p><p className="text-sm text-slate-600">{leadMap.get(activity.leadId)?.name || "Névtelen érdeklődő"}</p><p className="mt-1 text-xs text-slate-500">{displayDate(activity.date)}</p></Link></li>)}</ul>
+            {activities.length === 0 && <p className="mt-4 text-slate-500">Még nincs megjeleníthető esemény.</p>}
+          </section>
+        </div>
+        <div className="grid gap-6 xl:grid-cols-[2fr_3fr]">
+          <section className="dashboard-panel-chart rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-wider accent-text">Forgalom</p>
+            <h2 className="mt-1 text-xl font-bold">Érdeklődők az elmúlt 7 napban</h2>
+            <p className="mt-1 text-sm text-slate-500">Érkezési dátum szerint, magyarországi időzónában.</p>
+            <div className="mt-6 flex h-44 items-end gap-2" aria-label="Napi érdeklődőszám">{days.map(day => <div key={day.day} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2 text-center"><span className="text-sm font-semibold">{day.count}</span><div className="rounded-t-lg bg-violet-500" style={{height: `${day.count / max * 105}px`}} /><span className="text-xs text-slate-500">{day.label}</span></div>)}</div>
+          </section>
+          <section className="dashboard-panel-latest min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div><p className="text-xs font-bold uppercase tracking-wider text-blue-700">Beérkezések</p><h2 className="mt-1 text-xl font-bold">Legújabb érdeklődők</h2></div>
+                <Link className="font-semibold text-violet-600" href="/leads">Összes megtekintése →</Link>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <div role="group" aria-label="Megjelenített beérkezési időszak" className="flex rounded-xl bg-slate-100 p-1">
+                  {([
+                    ["today", "Ma"], ["7days", "7 nap"], ["30days", "30 nap"],
+                  ] as const).map(([range, label]) => <button key={range} type="button" aria-pressed={recentLeadRange === range}
+                    onClick={() => setRecentLeadRange(range)} className={recentLeadRange === range
+                      ? "accent-bg rounded-lg px-3 py-1.5 text-xs font-bold text-white shadow-sm"
+                      : "rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600"}>
+                    {label}
+                  </button>)}
+                </div>
+                <p role="status" className="text-sm font-semibold text-slate-500">{visibleRecentLeads.length} beérkezés</p>
+              </div>
+            </div>
+            {visibleRecentLeads.length === 0 ? <p className="border-t border-slate-100 px-6 py-6 text-slate-500">A kiválasztott időszakban nem érkezett új érdeklődő.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr>{["Név / szolgáltatás","Érkezett","Állapot","Válasz"].map(label => <th key={label} className="px-5 py-3">{label}</th>)}</tr></thead><tbody>{visibleRecentLeads.slice(0,10).map(lead => <tr key={lead.id} className="border-t border-slate-100"><td className="px-5 py-4"><Link href={`/leads/${lead.id}`} className="font-semibold text-violet-700 underline-offset-4 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link><p className="mt-1 text-slate-500">{lead.service || "—"}</p></td><td className="px-5 py-4">{displayDate(lead.created_at)}</td><td className="px-5 py-4">{leadLabel(lead.status)}{newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) && <p className="mt-1 text-xs font-semibold text-amber-800">Make-indítás ellenőrizendő</p>}{missingAiDraftWarning(lead, replies.has(lead.id)) && <p className="mt-1 text-xs font-semibold text-amber-800">AI-választervezet késik</p>}</td><td className="px-5 py-4">{replyLabel(replies.get(lead.id)?.status, replies.get(lead.id)?.sending_started_at)}</td></tr>)}</tbody></table></div>}
+          </section>
         </div>
       </>}
     </div>
