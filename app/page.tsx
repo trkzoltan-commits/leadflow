@@ -6,8 +6,8 @@ import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, replyLabel } from "@/lib/lead-overview";
-import { displayNextActionDueDate, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
+import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, replyLabel, type OverviewLead } from "@/lib/lead-overview";
+import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
 import { useLeadAssignees } from "@/lib/use-lead-assignees";
 
 type DashboardTaskScope = "mine" | "unassigned" | "team";
@@ -17,6 +17,11 @@ export default function Home() {
   const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
   const { assignees, currentUserId, canAssign, loading: assigneesLoading, error: assigneeError } = useLeadAssignees();
   const [taskScope, setTaskScope] = useState<DashboardTaskScope>("mine");
+  const [reschedulingLeadId, setReschedulingLeadId] = useState<string | null>(null);
+  const [rescheduleDueDate, setRescheduleDueDate] = useState("");
+  const [savingTaskLeadId, setSavingTaskLeadId] = useState<string | null>(null);
+  const [taskActionError, setTaskActionError] = useState("");
+  const [taskActionSuccess, setTaskActionSuccess] = useState("");
   if (loading || assigneesLoading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
   const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending", "failed"].includes(replies.get(lead.id)?.status ?? ""))
     .sort((a, b) => Number(replies.get(b.id)?.status === "failed") - Number(replies.get(a.id)?.status === "failed") || Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
@@ -53,6 +58,71 @@ export default function Home() {
     ["Késő visszaigazolás", delayedCount],
     ["Automatizálás ellenőrizendő", makeAttention.length],
   ];
+
+  function canManageTask(lead: OverviewLead) {
+    return canAssign || Boolean(currentUserId && lead.assigned_user_id === currentUserId);
+  }
+
+  function startRescheduling(lead: OverviewLead) {
+    setReschedulingLeadId(lead.id);
+    setRescheduleDueDate(budapestDateOffset(1));
+    setTaskActionError("");
+    setTaskActionSuccess("");
+  }
+
+  async function persistDashboardTask(lead: OverviewLead, dueDate: string | null) {
+    if (savingTaskLeadId || !lead.next_action || (dueDate !== null && !isValidDateOnly(dueDate))) return;
+    setSavingTaskLeadId(lead.id);
+    setTaskActionError("");
+    setTaskActionSuccess("");
+    let failureMessage = "A teendő módosítása nem sikerült. Frissítsd az oldalt, majd próbáld újra.";
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        failureMessage = "A munkamenet lejárt. Jelentkezz be újra.";
+        throw new Error("missing session");
+      }
+      const response = await fetch("/api/lead-next-action", {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          leadId: lead.id,
+          nextAction: dueDate === null ? null : lead.next_action,
+          dueDate,
+          expectedNextAction: lead.next_action,
+          expectedDueDate: lead.next_action_due_date,
+        }),
+      });
+      let result: { error?: unknown } = {};
+      try {
+        result = await response.json() as typeof result;
+      } catch {
+        result = {};
+      }
+      if (!response.ok) {
+        if (typeof result.error === "string" && result.error) failureMessage = result.error;
+        throw new Error("request failed");
+      }
+      setReschedulingLeadId(null);
+      setTaskActionSuccess(dueDate === null
+        ? `${lead.name || "Az érdeklődő"} teendője elvégezve. Az érdeklődő és a riportadatai megmaradtak.`
+        : `${lead.name || "Az érdeklődő"} teendője átütemezve.`);
+      await refresh();
+    } catch {
+      setTaskActionError(failureMessage);
+    } finally {
+      setSavingTaskLeadId(null);
+    }
+  }
+
+  function completeTask(lead: OverviewLead) {
+    const confirmed = window.confirm("Elvégezted ezt a teendőt? A teendő eltűnik a napi listából, de az érdeklődő és a riportadatai megmaradnak.");
+    if (confirmed) void persistDashboardTask(lead, null);
+  }
+
   return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-5 md:p-8">
     <div className="mx-auto max-w-7xl">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -104,11 +174,15 @@ export default function Home() {
             </button>)}
           </div>}
           {assigneeError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">A felelősök adatai most nem tölthetők be, ezért a teljes csapat teendőit látod.</p>}
+          {taskActionError && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-800">{taskActionError}</p>}
+          {taskActionSuccess && <p role="status" className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">{taskActionSuccess}</p>}
           {urgentNextActions.length > 0 && <ul className="mt-5 grid gap-3 md:grid-cols-2">
             {urgentNextActions.slice(0, 6).map(lead => {
               const dueState = nextActionDueState(lead.next_action_due_date, now);
-              return <li key={lead.id}>
-                <Link href={`/leads/${lead.id}`} className="block h-full rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50">
+              const isSaving = savingTaskLeadId === lead.id;
+              const isRescheduling = reschedulingLeadId === lead.id;
+              return <li key={lead.id} className="flex h-full flex-col rounded-xl border border-slate-200 p-4 transition hover:border-blue-300 hover:bg-blue-50">
+                <Link href={`/leads/${lead.id}`} className="block">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <span className="font-bold text-slate-900">{lead.name || "Névtelen érdeklődő"}</span>
                     <span className={`rounded-full px-2 py-1 text-xs font-semibold ${dueState === "overdue" ? "next-action-due-overdue" : "next-action-due-today"}`}>
@@ -119,6 +193,23 @@ export default function Home() {
                   <p className="mt-1 text-xs text-slate-500">{lead.service || "Nincs szolgáltatás"}</p>
                   {effectiveTaskScope !== "mine" && <p className="mt-2 text-xs font-medium text-slate-600">Felelős: {lead.assigned_user_id ? assigneeById.get(lead.assigned_user_id) || "Inaktív vagy már nem elérhető" : "Nincs felelős"}</p>}
                 </Link>
+                {canManageTask(lead) && (isRescheduling ? <form className="mt-4 border-t border-slate-200 pt-3" onSubmit={event => { event.preventDefault(); void persistDashboardTask(lead, rescheduleDueDate); }}>
+                  <label htmlFor={`dashboard-task-date-${lead.id}`} className="text-xs font-semibold text-slate-700">Új határidő</label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <input id={`dashboard-task-date-${lead.id}`} type="date" required min={budapestDateOffset(0, now)} value={rescheduleDueDate}
+                      onChange={event => setRescheduleDueDate(event.target.value)} disabled={isSaving}
+                      className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+                    <button type="submit" disabled={isSaving || !isValidDateOnly(rescheduleDueDate)} className="accent-bg rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                      {isSaving ? "Mentés…" : "Mentés"}
+                    </button>
+                    <button type="button" disabled={isSaving} onClick={() => setReschedulingLeadId(null)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Mégse</button>
+                  </div>
+                </form> : <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-200 pt-3">
+                  <button type="button" disabled={isSaving} onClick={() => completeTask(lead)} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                    {isSaving ? "Mentés…" : "Elvégezve"}
+                  </button>
+                  <button type="button" disabled={isSaving} onClick={() => startRescheduling(lead)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">Átütemezés</button>
+                </div>)}
               </li>;
             })}
           </ul>}
