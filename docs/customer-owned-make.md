@@ -215,6 +215,43 @@ A parancs csak akkor írja ki, hogy a cég pilotra kész, ha az összes technika
 feltétel és mind a négy élő próba teljesült. A visszaigazolások személyes adatot,
 webhookcímet és titkot nem tárolnak.
 
+### Vezetett helyi onboarding
+
+A pilotokhoz a különálló parancsok helyett használható az egységes, helyi operátori
+folyamat. Hozz létre a projektmappán kívül egy kis manifesztumot; ebbe titok és
+webhookcím nem kerülhet:
+
+```json
+{
+  "companyName": "Példa Kft.",
+  "companySlug": "pelda-kft",
+  "ownerEmail": "owner@example.com",
+  "makeKeyPath": "C:\\biztonsagos-hely\\pelda-kft-make-key.txt",
+  "webhookConfigPath": "C:\\biztonsagos-hely\\pelda-kft-webhooks.json"
+}
+```
+
+Az első futás mindig csak ellenőriz és egyetlen következő lépést ír ki:
+
+```powershell
+npm run onboard -- "C:\biztonsagos-hely\pelda-kft-onboarding.json"
+```
+
+A `--apply` kizárólag a kijelzett következő konfigurációs lépést hajtja végre. A
+Make-kapcsolat engedélyezéséhez külön `--activate` szükséges, miután a két scenario,
+a Gmail-kapcsolat és a kulcs kézzel ellenőrzött. Élő tesztpontot a rendszer nem
+igazol automatikusan; azt a sikeres próba után kell rögzíteni:
+
+```powershell
+npm run onboard -- "C:\biztonsagos-hely\pelda-kft-onboarding.json" --apply
+npm run onboard -- "C:\biztonsagos-hely\pelda-kft-onboarding.json" --activate
+npm run onboard -- "C:\biztonsagos-hely\pelda-kft-onboarding.json" --confirm owner-login
+```
+
+Ugyanaz a parancs bármikor újrafuttatható állapotellenőrzésre és a következő lépés
+megállapítására. Nem ír ki e-mail-címet, kulcsot vagy webhookcímet. A kulcs- és
+webhookfájlt a Make beállítása után törölni kell.
+
 ### Webhookok beállítása és engedélyezés
 
 A két Make-webhook cím titoknak számít, ezért ne kerüljön parancssorba vagy Gitbe.
