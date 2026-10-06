@@ -6,7 +6,7 @@ import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, replyLabel, type OverviewLead } from "@/lib/lead-overview";
+import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, recentActivities, replyLabel, type OverviewLead } from "@/lib/lead-overview";
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
 import { useLeadAssignees } from "@/lib/use-lead-assignees";
 
@@ -45,10 +45,7 @@ export default function Home() {
   const days = dailyCounts(leads);
   const max = Math.max(1, ...days.map(day => day.count));
   const leadMap = new Map(leads.map(lead => [lead.id, lead]));
-  const activities = [
-    ...leads.map(lead => ({ id: "lead-" + lead.id, leadId: lead.id, title: "Új érdeklődő érkezett", date: lead.created_at })),
-    ...messages.filter(message => leadMap.has(message.lead_id)).map(message => ({ id: "message-" + message.id, leadId: message.lead_id, title: "Kimenő üzenet létrehozva", date: message.created_at })),
-  ].sort((a,b) => b.date.localeCompare(a.date)).slice(0,6);
+  const activities = recentActivities(leads, messages);
   const kpis = [
     ["Összes érdeklődő", leads.length],
     ["Új érdeklődő", leads.filter(lead => lead.status === "new").length],

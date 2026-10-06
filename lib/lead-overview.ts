@@ -15,7 +15,23 @@ export type OverviewLead = {
   new_lead_dispatch_status: string | null;
   created_at: string;
 };
-export type OverviewMessage = { id: string; lead_id: string; status: string | null; sender?: string | null; created_at: string; sending_started_at: string | null };
+export type OverviewMessage = {
+  id: string;
+  lead_id: string;
+  status: string | null;
+  sender?: string | null;
+  created_at: string;
+  sending_started_at: string | null;
+  delivery_confirmed_at?: string | null;
+  delivery_failed_at?: string | null;
+};
+
+export type DashboardActivity = {
+  id: string;
+  leadId: string;
+  title: string;
+  date: string;
+};
 
 export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "failed" | "delayed" | "make";
 export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
@@ -107,6 +123,34 @@ export function latestReplies(messages: OverviewMessage[]) {
         (message.created_at === prior.created_at && message.id > prior.id)) result.set(message.lead_id, message);
   }
   return result;
+}
+
+export function recentActivities(leads: OverviewLead[], messages: OverviewMessage[], limit = 6): DashboardActivity[] {
+  const leadIds = new Set(leads.map(lead => lead.id));
+  const messageActivities = Array.from(latestReplies(messages).values())
+    .filter(message => leadIds.has(message.lead_id))
+    .map(message => ({
+      id: `message-${message.id}`,
+      leadId: message.lead_id,
+      title: message.status === "draft" ? "Választervezet elkészült"
+        : message.status === "sending" ? "Válasz küldése folyamatban"
+        : message.status === "sent" ? "Válasz elküldve"
+        : message.status === "failed" ? "Válasz küldése sikertelen"
+        : "Kimenő üzenet létrehozva",
+      date: message.status === "sent" ? message.delivery_confirmed_at || message.created_at
+        : message.status === "failed" ? message.delivery_failed_at || message.created_at
+        : message.status === "sending" ? message.sending_started_at || message.created_at
+        : message.created_at,
+    }));
+  return [
+    ...leads.map(lead => ({
+      id: `lead-${lead.id}`,
+      leadId: lead.id,
+      title: "Új érdeklődő érkezett",
+      date: lead.created_at,
+    })),
+    ...messageActivities,
+  ].sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id)).slice(0, Math.max(0, limit));
 }
 export function replyLabel(status?: string | null, sendingStartedAt?: string | null) {
   if (status === "draft") return "Ellenőrizendő piszkozat";

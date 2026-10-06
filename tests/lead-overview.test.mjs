@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage}=context.exports;
+const {latestReplies,dailyCounts,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage,recentActivities}=context.exports;
 test("missing AI draft warning starts after 15 minutes only for accepted, open leads without an outgoing reply",()=>{
  const now=new Date("2026-09-20T12:00:00Z");
  const lead={new_lead_dispatch_status:"accepted",status:"new",created_at:"2026-09-20T11:45:01Z"};
@@ -108,6 +108,25 @@ test("overview ignores a newer automatic acknowledgement when an AI reply exists
  ]);
  assert.equal(result.get("a").id,"reply");
  assert.equal(replyLabel("failed"),"Küldés sikertelen");
+});
+test("dashboard activities keep one meaningful message event per lead",()=>{
+ const leads=[
+  {id:"a",created_at:"2026-09-25T19:00:00Z"},
+  {id:"b",created_at:"2026-09-25T18:00:00Z"},
+ ];
+ const messages=[
+  {id:"ack",lead_id:"a",sender:"LeadFlow",status:"sent",created_at:"2026-09-25T19:59:54Z",sending_started_at:null,delivery_confirmed_at:"2026-09-25T20:01:00Z"},
+  {id:"reply",lead_id:"a",sender:"LeadFlow AI",status:"sent",created_at:"2026-09-25T19:59:52Z",sending_started_at:null,delivery_confirmed_at:"2026-09-25T20:00:00Z"},
+  {id:"failed",lead_id:"b",sender:"LeadFlow AI",status:"failed",created_at:"2026-09-25T18:30:00Z",sending_started_at:null,delivery_failed_at:"2026-09-25T18:35:00Z"},
+  {id:"orphan",lead_id:"missing",sender:"LeadFlow AI",status:"draft",created_at:"2026-09-25T21:00:00Z",sending_started_at:null},
+ ];
+ const activities=recentActivities(leads,messages,10);
+ assert.equal(activities.filter(activity=>activity.leadId==="a"&&activity.id.startsWith("message-")).length,1);
+ assert.equal(activities.find(activity=>activity.leadId==="a"&&activity.id.startsWith("message-")).title,"Válasz elküldve");
+ assert.equal(activities.find(activity=>activity.leadId==="a"&&activity.id.startsWith("message-")).date,"2026-09-25T20:00:00Z");
+ assert.equal(activities.find(activity=>activity.leadId==="b"&&activity.id.startsWith("message-")).title,"Válasz küldése sikertelen");
+ assert.equal(activities.some(activity=>activity.leadId==="missing"),false);
+ assert.equal(activities.filter(activity=>activity.id.startsWith("lead-")).length,2);
 });
 test("equal timestamps select deterministically regardless of input order",()=>{
  const rows=[{id:"a",lead_id:"a",status:"draft",created_at:"2026-09-19T10:00:00Z"},{id:"b",lead_id:"a",status:"sent",created_at:"2026-09-19T10:00:00Z"}];

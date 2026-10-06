@@ -39,5 +39,7 @@ test("dashboard and lead list expose the pipeline", () => {
   assert.match(dashboard, /fetch\("\/api\/lead-next-action"/);
   assert.match(dashboard, /expectedNextAction: lead\.next_action/);
   assert.match(dashboard, /az érdeklődő és a riportadatai megmaradnak/i);
+  assert.match(dashboard, /recentActivities\(leads, messages\)/);
+  assert.doesNotMatch(dashboard, /title: "Kimenő üzenet létrehozva"/);
   assert.match(read("app/leads/page.tsx"), /href="\/pipeline"/);
 });
