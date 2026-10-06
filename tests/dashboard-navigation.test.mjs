@@ -24,7 +24,14 @@ test("every authenticated partner page exposes the shared Dashboard brand link",
 test("dashboard and lead list expose the pipeline", () => {
   const dashboard = read("app/page.tsx");
   assert.match(dashboard, /href="\/pipeline"/);
-  assert.match(dashboard, /Mai és lejárt teendők/);
+  assert.match(dashboard, /Saját mai és lejárt teendők/);
+  assert.match(dashboard, /Kiosztatlan mai és lejárt teendők/);
+  assert.match(dashboard, /A csapat mai és lejárt teendői/);
+  assert.match(dashboard, /useLeadAssignees/);
+  assert.match(dashboard, /assigned_user_id === currentUserId/);
+  assert.match(dashboard, /!canAssign \? "mine"/);
+  assert.match(dashboard, /canAssign && <div[^>]+aria-label="Teendők hatóköre"/);
+  assert.match(dashboard, /Teendők hatóköre/);
   assert.match(dashboard, /urgentNextActionLeads/);
   assert.match(dashboard, /href=\{`\/leads\/\$\{lead\.id\}`\}/);
   assert.match(read("app/leads/page.tsx"), /href="\/pipeline"/);

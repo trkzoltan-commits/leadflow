@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const route = readFileSync(new URL("../app/api/lead-assignees/route.ts", import.meta.url), "utf8");
+const hook = readFileSync(new URL("../lib/use-lead-assignees.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/202610040001_lead_assignees.sql", import.meta.url), "utf8");
 
 test("assignee directory returns only active members of the authenticated tenant", () => {
@@ -12,6 +13,13 @@ test("assignee directory returns only active members of the authenticated tenant
   assert.match(route, /eq\("is_active", true\)/);
   assert.match(route, /currentUserId: access\.userId/);
   assert.match(route, /canAssign: assignmentRoles\.has/);
+});
+
+test("partner pages share the same authenticated assignee directory hook", () => {
+  assert.match(hook, /supabase\.auth\.getSession/);
+  assert.match(hook, /fetch\("\/api\/lead-assignees"/);
+  assert.match(hook, /currentUserId/);
+  assert.match(hook, /canAssign/);
 });
 
 test("only owner and admin can assign a same-tenant active member", () => {

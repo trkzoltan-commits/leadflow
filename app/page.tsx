@@ -1,17 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { dailyCounts, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, replyLabel } from "@/lib/lead-overview";
 import { displayNextActionDueDate, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
+import { useLeadAssignees } from "@/lib/use-lead-assignees";
+
+type DashboardTaskScope = "mine" | "unassigned" | "team";
 
 export default function Home() {
   const router = useRouter();
   const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
-  if (loading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
+  const { assignees, currentUserId, canAssign, loading: assigneesLoading, error: assigneeError } = useLeadAssignees();
+  const [taskScope, setTaskScope] = useState<DashboardTaskScope>("mine");
+  if (loading || assigneesLoading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
   const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending", "failed"].includes(replies.get(lead.id)?.status ?? ""))
     .sort((a, b) => Number(replies.get(b.id)?.status === "failed") - Number(replies.get(a.id)?.status === "failed") || Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
   const delayedCount = attention.filter(lead => isDelayedSending(replies.get(lead.id))).length;
@@ -19,9 +25,18 @@ export default function Home() {
   const makeAttention = filterLeads(leads, replies, "make");
   const missingDraftCount = makeAttention.filter(lead => missingAiDraftWarning(lead, replies.has(lead.id)) !== null).length;
   const now = new Date();
-  const urgentNextActions = urgentNextActionLeads(leads, now);
+  const allUrgentNextActions = urgentNextActionLeads(leads, now);
+  const myUrgentNextActions = currentUserId
+    ? allUrgentNextActions.filter(lead => lead.assigned_user_id === currentUserId)
+    : [];
+  const unassignedUrgentNextActions = allUrgentNextActions.filter(lead => !lead.assigned_user_id);
+  const effectiveTaskScope = !currentUserId ? "team" : !canAssign ? "mine" : taskScope;
+  const urgentNextActions = effectiveTaskScope === "mine"
+    ? myUrgentNextActions
+    : effectiveTaskScope === "unassigned" ? unassignedUrgentNextActions : allUrgentNextActions;
   const overdueNextActionCount = urgentNextActions.filter(lead => nextActionDueState(lead.next_action_due_date, now) === "overdue").length;
   const todayNextActionCount = urgentNextActions.length - overdueNextActionCount;
+  const assigneeById = new Map(assignees.map(member => [member.id, member.email]));
   const days = dailyCounts(leads);
   const max = Math.max(1, ...days.map(day => day.count));
   const leadMap = new Map(leads.map(lead => [lead.id, lead]));
@@ -65,7 +80,7 @@ export default function Home() {
         <section className="mb-6 rounded-2xl border border-blue-200 bg-white p-5 shadow-sm sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-xl font-bold">Mai és lejárt teendők</h2>
+              <h2 className="text-xl font-bold">{effectiveTaskScope === "mine" ? "Saját mai és lejárt teendők" : effectiveTaskScope === "unassigned" ? "Kiosztatlan mai és lejárt teendők" : "A csapat mai és lejárt teendői"}</h2>
               <p className="mt-2 text-sm text-slate-500">
                 {urgentNextActions.length === 0
                   ? "Nincs mára esedékes vagy lejárt teendő."
@@ -74,6 +89,21 @@ export default function Home() {
             </div>
             <Link href="/pipeline" className="accent-text text-sm font-semibold">Pipeline megnyitása →</Link>
           </div>
+          {canAssign && <div className="mt-4 flex flex-wrap gap-2" aria-label="Teendők hatóköre">
+            {([
+              ["mine", "Saját", myUrgentNextActions.length],
+              ["unassigned", "Kiosztatlan", unassignedUrgentNextActions.length],
+              ["team", "Csapat összes", allUrgentNextActions.length],
+            ] as const).map(([scope, label, count]) => <button key={scope} type="button"
+              aria-pressed={effectiveTaskScope === scope}
+              onClick={() => setTaskScope(scope)}
+              className={effectiveTaskScope === scope
+                ? "accent-bg rounded-xl px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                : "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"}>
+              {label} ({count})
+            </button>)}
+          </div>}
+          {assigneeError && <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">A felelősök adatai most nem tölthetők be, ezért a teljes csapat teendőit látod.</p>}
           {urgentNextActions.length > 0 && <ul className="mt-5 grid gap-3 md:grid-cols-2">
             {urgentNextActions.slice(0, 6).map(lead => {
               const dueState = nextActionDueState(lead.next_action_due_date, now);
@@ -87,6 +117,7 @@ export default function Home() {
                   </div>
                   <p className="mt-2 break-words text-sm font-semibold text-slate-800">{lead.next_action}</p>
                   <p className="mt-1 text-xs text-slate-500">{lead.service || "Nincs szolgáltatás"}</p>
+                  {effectiveTaskScope !== "mine" && <p className="mt-2 text-xs font-medium text-slate-600">Felelős: {lead.assigned_user_id ? assigneeById.get(lead.assigned_user_id) || "Inaktív vagy már nem elérhető" : "Nincs felelős"}</p>}
                 </Link>
               </li>;
             })}

@@ -20,7 +20,6 @@ import {
   filterPipelineLeadsByPriority,
   isPipelineStatus,
   pipelineGroups,
-  type LeadAssignee,
   type PipelineAssigneeFilter,
   type PipelinePriorityFilter,
   type PipelineStatus,
@@ -28,6 +27,7 @@ import {
 import { sortPipelineLeads, type PipelineSort } from "@/lib/lead-pipeline-sort";
 import { parsePipelineView, pipelineViewStorageKey, serializePipelineView } from "@/lib/lead-pipeline-view";
 import { supabase } from "@/lib/supabase";
+import { useLeadAssignees } from "@/lib/use-lead-assignees";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 
 type LeadPriority = "low" | "medium" | "high";
@@ -61,11 +61,13 @@ export default function PipelinePage() {
   const [pendingClose, setPendingClose] = useState<OverviewLead | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [assigneeError, setAssigneeError] = useState("");
-  const [assignees, setAssignees] = useState<LeadAssignee[]>([]);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [canAssign, setCanAssign] = useState(false);
-  const [assigneesLoading, setAssigneesLoading] = useState(true);
+  const {
+    assignees,
+    currentUserId,
+    canAssign,
+    loading: assigneesLoading,
+    error: assigneeError,
+  } = useLeadAssignees();
   const [assigneeFilter, setAssigneeFilter] = useState<PipelineAssigneeFilter>("all");
   const [nextActionFilter, setNextActionFilter] = useState<NextActionFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<PipelinePriorityFilter>("all");
@@ -104,53 +106,27 @@ export default function PipelinePage() {
   }
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadAssignees() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        const response = await fetch("/api/lead-assignees", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          cache: "no-store",
-        });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result?.error || "A felelősök nem tölthetők be.");
-        if (!cancelled) {
-          setAssignees(Array.isArray(result.members) ? result.members : []);
-          setCurrentUserId(typeof result.currentUserId === "string" ? result.currentUserId : null);
-          setCanAssign(result.canAssign === true);
-        }
-      } catch (loadError) {
-        if (!cancelled) setAssigneeError(loadError instanceof Error
-          ? loadError.message
-          : "A felelősök listája nem tölthető be. Frissítsd az oldalt, majd próbáld újra.");
-      } finally {
-        if (!cancelled) setAssigneesLoading(false);
-      }
-    }
-    void loadAssignees();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
     if (assigneesLoading) return;
-    if (!currentUserId) {
+    const frame = window.requestAnimationFrame(() => {
+      if (!currentUserId) {
+        setPipelineViewHydrated(true);
+        return;
+      }
+      try {
+        const storedView = parsePipelineView(window.localStorage.getItem(pipelineViewStorageKey(currentUserId)), {
+          canAssign,
+          memberIds: new Set(assignees.map(member => member.id)),
+        });
+        setAssigneeFilter(storedView.assigneeFilter);
+        setNextActionFilter(storedView.nextActionFilter);
+        setPriorityFilter(storedView.priorityFilter);
+        setPipelineSort(storedView.sort);
+      } catch {
+        // A böngésző letilthatja a helyi tárolást; ilyenkor az alapnézet marad használatban.
+      }
       setPipelineViewHydrated(true);
-      return;
-    }
-    try {
-      const storedView = parsePipelineView(window.localStorage.getItem(pipelineViewStorageKey(currentUserId)), {
-        canAssign,
-        memberIds: new Set(assignees.map(member => member.id)),
-      });
-      setAssigneeFilter(storedView.assigneeFilter);
-      setNextActionFilter(storedView.nextActionFilter);
-      setPriorityFilter(storedView.priorityFilter);
-      setPipelineSort(storedView.sort);
-    } catch {
-      // A böngésző letilthatja a helyi tárolást; ilyenkor az alapnézet marad használatban.
-    }
-    setPipelineViewHydrated(true);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [assignees, assigneesLoading, canAssign, currentUserId]);
 
   useEffect(() => {

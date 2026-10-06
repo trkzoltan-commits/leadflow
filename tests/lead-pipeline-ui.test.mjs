@@ -27,7 +27,7 @@ test("pipeline supports drag, direct status selection and explicit closure outco
   assert.match(source, /localStorage\.getItem/);
   assert.match(source, /localStorage\.setItem/);
   assert.match(source, /A nézet automatikusan megmarad/);
-  assert.match(source, /fetch\("\/api\/lead-assignees"/);
+  assert.match(source, /useLeadAssignees/);
   assert.match(source, /assigned_user_id/);
   assert.match(source, /fetch\("\/api\/lead-next-action"/);
   assert.match(source, /Következő teendő/);
