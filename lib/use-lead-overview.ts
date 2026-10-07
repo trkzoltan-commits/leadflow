@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { latestReplies, type OverviewLead, type OverviewMessage } from "@/lib/lead-overview";
+import { countLeadNotes } from "@/lib/lead-notes";
 
-export function useLeadOverview() {
+export function useLeadOverview({ includeNoteCounts = false }: { includeNoteCounts?: boolean } = {}) {
   const router = useRouter();
   const [leads, setLeads] = useState<OverviewLead[]>([]);
   const [messages, setMessages] = useState<OverviewMessage[]>([]);
@@ -39,10 +40,25 @@ export function useLeadOverview() {
               .order("created_at", { ascending: false }).order("id", { ascending: false })
               .range(offset, offset + 499);
             if (error) throw error;
-            rows.push(...(data ?? []));
+            rows.push(...(data ?? []).map((lead) => ({ ...lead, note_count: 0 })));
             if (!data || data.length < 500) break;
           }
           return rows;
+        };
+        const loadNoteCounts = async () => {
+          if (!includeNoteCounts) return new Map<string, number>();
+          const rows: Array<{ lead_id: string }> = [];
+          for (let offset = 0; !cancelled; offset += 500) {
+            // Only the tenant-scoped relation key is loaded; note text and authors stay private.
+            const { data, error } = await supabase.from("lead_notes")
+              .select("lead_id")
+              .order("id", { ascending: true })
+              .range(offset, offset + 499);
+            if (error) throw error;
+            rows.push(...(data ?? []));
+            if (!data || data.length < 500) break;
+          }
+          return countLeadNotes(rows);
         };
         const loadMessages = async () => {
           const rows: OverviewMessage[] = [];
@@ -58,9 +74,12 @@ export function useLeadOverview() {
           }
           return rows;
         };
-        const [nextLeads, nextMessages] = await Promise.all([loadLeads(), loadMessages()]);
+        const [nextLeads, nextMessages, nextNoteCounts] = await Promise.all([
+          loadLeads(), loadMessages(), loadNoteCounts(),
+        ]);
         if (cancelled) return;
-        setLeads(nextLeads); setMessages(nextMessages);
+        setLeads(nextLeads.map((lead) => ({ ...lead, note_count: nextNoteCounts.get(lead.id) || 0 })));
+        setMessages(nextMessages);
         setUpdatedAt(new Date().toISOString()); setError(false);
       } catch {
         if (!cancelled) setError(true);
@@ -95,7 +114,7 @@ export function useLeadOverview() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", tick);
     };
-  }, [router]);
+  }, [includeNoteCounts, router]);
 
   return { leads, messages, replies: latestReplies(messages), loading, error, updatedAt, refresh };
 }

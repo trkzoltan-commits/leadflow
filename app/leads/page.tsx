@@ -21,7 +21,7 @@ function LeadsContent() {
   const searchParams = useSearchParams();
   const reportSelection = parseReportSelection(searchParams);
 
-  const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview();
+  const { leads, replies, loading, error: loadError, updatedAt, refresh } = useLeadOverview({ includeNoteCounts: true });
 
   const [listFilter, setListFilter] = useState<LeadListFilter | null>(null);
   const [closedOutcome, setClosedOutcome] = useState<ClosedOutcomeFilter>("all");
@@ -210,6 +210,17 @@ function LeadsContent() {
                         <div className="text-xs text-slate-400">
                           {lead.phone || lead.email || "—"}
                         </div>
+                        {lead.note_count > 0 && (
+                          <Link
+                            href={`/leads/${lead.id}#internal-notes`}
+                            onClick={(event) => event.stopPropagation()}
+                            aria-label={`${lead.note_count} belső megjegyzés megnyitása`}
+                            className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+                          >
+                            <span aria-hidden="true">📝</span>
+                            {lead.note_count} belső megjegyzés
+                          </Link>
+                        )}
                       </td>
 
                       <td className="whitespace-nowrap px-6 py-4">{displayReceivedAt(lead.created_at)}</td>

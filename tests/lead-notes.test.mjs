@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { LEAD_NOTE_MAX_LENGTH, normalizeLeadNoteContent } from "../lib/lead-notes.ts";
+import { countLeadNotes, LEAD_NOTE_MAX_LENGTH, normalizeLeadNoteContent } from "../lib/lead-notes.ts";
 
 const route = readFileSync(new URL("../app/api/lead-notes/route.ts", import.meta.url), "utf8");
 const component = readFileSync(new URL("../components/lead-notes.tsx", import.meta.url), "utf8");
 const leadDetail = readFileSync(new URL("../app/leads/[id]/page.tsx", import.meta.url), "utf8");
+const leadList = readFileSync(new URL("../app/leads/page.tsx", import.meta.url), "utf8");
+const overviewHook = readFileSync(new URL("../lib/use-lead-overview.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/202610060001_lead_notes.sql", import.meta.url), "utf8");
 
 test("lead note content is trimmed and bounded", () => {
@@ -15,6 +17,16 @@ test("lead note content is trimmed and bounded", () => {
   assert.equal(normalizeLeadNoteContent("a".repeat(2000)), "a".repeat(2000));
   assert.equal(normalizeLeadNoteContent("a".repeat(2001)), null);
   assert.equal(normalizeLeadNoteContent(null), null);
+});
+
+test("note rows are counted by lead and malformed rows are ignored", () => {
+  const counts = countLeadNotes([
+    { lead_id: "lead-a" }, { lead_id: "lead-b" }, { lead_id: "lead-a" },
+    { lead_id: null }, {},
+  ]);
+  assert.equal(counts.get("lead-a"), 2);
+  assert.equal(counts.get("lead-b"), 1);
+  assert.equal(counts.size, 2);
 });
 
 test("lead notes are tenant bound, immutable for clients and attributed by the database", () => {
@@ -50,4 +62,15 @@ test("lead detail labels notes as internal and provides no edit or delete action
   assert.match(component, /response\.status !== 401/);
   assert.match(component, /supabase\.auth\.refreshSession\(\)/);
   assert.doesNotMatch(component, />\s*(Szerkesztés|Törlés)\s*</);
+});
+
+test("lead list loads only RLS-protected note references and links the badge to internal notes", () => {
+  assert.match(overviewHook, /\.from\("lead_notes"\)[\s\S]*?\.select\("lead_id"\)[\s\S]*?\.range\(offset, offset \+ 499\)/);
+  const noteQuery = overviewHook.match(/\.from\("lead_notes"\)[\s\S]*?return countLeadNotes\(rows\);/)?.[0] || "";
+  assert.doesNotMatch(noteQuery, /content|author_user_id|created_at/);
+  assert.match(overviewHook, /countLeadNotes\(rows\)/);
+  assert.match(leadList, /useLeadOverview\(\{ includeNoteCounts: true \}\)/);
+  assert.match(leadList, /lead\.note_count > 0/);
+  assert.match(leadList, /href=\{`\/leads\/\$\{lead\.id\}#internal-notes`\}/);
+  assert.match(leadList, /aria-label=\{`\$\{lead\.note_count\} belső megjegyzés megnyitása`\}/);
 });
