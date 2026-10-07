@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, preferredReplyMessage } from "@/lib/lead-overview";
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, NEXT_ACTION_MAX_LENGTH, nextActionDueState } from "@/lib/lead-next-action";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { LeadNotes } from "@/components/lead-notes";
 
 type Lead = {
   id: string;
@@ -1050,6 +1051,8 @@ export default function LeadDetailsPage() {
                   </div>
                 </div>
               </div>
+
+              <LeadNotes leadId={lead.id} />
 
               <div id="reply" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-bold text-slate-900">
