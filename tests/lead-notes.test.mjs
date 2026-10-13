@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { countLeadNotes, LEAD_NOTE_MAX_LENGTH, normalizeLeadNoteContent } from "../lib/lead-notes.ts";
+import { LEAD_NOTE_MAX_LENGTH, normalizeLeadNoteContent, parseLeadNoteCounts } from "../lib/lead-notes.ts";
 
 const route = readFileSync(new URL("../app/api/lead-notes/route.ts", import.meta.url), "utf8");
 const component = readFileSync(new URL("../components/lead-notes.tsx", import.meta.url), "utf8");
@@ -10,6 +10,7 @@ const leadList = readFileSync(new URL("../app/leads/page.tsx", import.meta.url),
 const pipeline = readFileSync(new URL("../app/pipeline/page.tsx", import.meta.url), "utf8");
 const overviewHook = readFileSync(new URL("../lib/use-lead-overview.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/202610060001_lead_notes.sql", import.meta.url), "utf8");
+const countMigration = readFileSync(new URL("../supabase/migrations/202610130001_lead_note_counts.sql", import.meta.url), "utf8");
 
 test("lead note content is trimmed and bounded", () => {
   assert.equal(LEAD_NOTE_MAX_LENGTH, 2000);
@@ -20,14 +21,30 @@ test("lead note content is trimmed and bounded", () => {
   assert.equal(normalizeLeadNoteContent(null), null);
 });
 
-test("note rows are counted by lead and malformed rows are ignored", () => {
-  const counts = countLeadNotes([
-    { lead_id: "lead-a" }, { lead_id: "lead-b" }, { lead_id: "lead-a" },
-    { lead_id: null }, {},
+test("aggregated note counts accept safe database values and ignore malformed rows", () => {
+  const counts = parseLeadNoteCounts([
+    { lead_id: "lead-a", note_count: 2 },
+    { lead_id: "lead-b", note_count: "3" },
+    { lead_id: "lead-c", note_count: 0 },
+    { lead_id: null, note_count: 1 },
+    { lead_id: "lead-d", note_count: "invalid" },
   ]);
   assert.equal(counts.get("lead-a"), 2);
-  assert.equal(counts.get("lead-b"), 1);
+  assert.equal(counts.get("lead-b"), 3);
   assert.equal(counts.size, 2);
+});
+
+test("note-count RPC is tenant scoped, invoker secured and exposes no note content", () => {
+  assert.match(countMigration, /returns table\s*\(lead_id uuid, note_count bigint\)/i);
+  assert.match(countMigration, /security invoker/i);
+  assert.match(countMigration, /set search_path = pg_catalog/i);
+  assert.match(countMigration, /set row_security = on/i);
+  assert.match(countMigration, /where ln\.company_id = public\.current_company_id\(\)/i);
+  assert.match(countMigration, /group by ln\.lead_id/i);
+  assert.match(countMigration, /revoke all on function public\.current_company_lead_note_counts\(\) from public, anon, authenticated/i);
+  assert.match(countMigration, /grant execute on function public\.current_company_lead_note_counts\(\) to authenticated/i);
+  const functionBody = countMigration.match(/as \$\$([\s\S]*?)\$\$;/i)?.[1] || "";
+  assert.doesNotMatch(functionBody, /\bcontent\b|\bauthor_user_id\b/);
 });
 
 test("lead notes are tenant bound, immutable for clients and attributed by the database", () => {
@@ -65,11 +82,12 @@ test("lead detail labels notes as internal and provides no edit or delete action
   assert.doesNotMatch(component, />\s*(Szerkesztés|Törlés)\s*</);
 });
 
-test("lead list loads only RLS-protected note references and links the badge to internal notes", () => {
-  assert.match(overviewHook, /\.from\("lead_notes"\)[\s\S]*?\.select\("lead_id"\)[\s\S]*?\.range\(offset, offset \+ 499\)/);
-  const noteQuery = overviewHook.match(/\.from\("lead_notes"\)[\s\S]*?return countLeadNotes\(rows\);/)?.[0] || "";
-  assert.doesNotMatch(noteQuery, /content|author_user_id|created_at/);
-  assert.match(overviewHook, /countLeadNotes\(rows\)/);
+test("lead list loads aggregated counts with a non-blocking fallback and links badges to internal notes", () => {
+  assert.match(overviewHook, /\.rpc\("current_company_lead_note_counts"\)/);
+  assert.match(overviewHook, /if \(error\) return new Map<string, number>\(\)/);
+  assert.match(overviewHook, /catch \{\s*return new Map<string, number>\(\)/);
+  assert.doesNotMatch(overviewHook, /\.from\("lead_notes"\)/);
+  assert.match(overviewHook, /parseLeadNoteCounts\(data \?\? \[\]\)/);
   assert.match(leadList, /useLeadOverview\(\{ includeNoteCounts: true \}\)/);
   assert.match(leadList, /lead\.note_count > 0/);
   assert.match(leadList, /href=\{`\/leads\/\$\{lead\.id\}#internal-notes`\}/);

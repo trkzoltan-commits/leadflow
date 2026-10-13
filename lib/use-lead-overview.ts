@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { latestReplies, type OverviewLead, type OverviewMessage } from "@/lib/lead-overview";
-import { countLeadNotes } from "@/lib/lead-notes";
+import { parseLeadNoteCounts } from "@/lib/lead-notes";
 
 export function useLeadOverview({ includeNoteCounts = false }: { includeNoteCounts?: boolean } = {}) {
   const router = useRouter();
@@ -47,18 +47,15 @@ export function useLeadOverview({ includeNoteCounts = false }: { includeNoteCoun
         };
         const loadNoteCounts = async () => {
           if (!includeNoteCounts) return new Map<string, number>();
-          const rows: Array<{ lead_id: string }> = [];
-          for (let offset = 0; !cancelled; offset += 500) {
-            // Only the tenant-scoped relation key is loaded; note text and authors stay private.
-            const { data, error } = await supabase.from("lead_notes")
-              .select("lead_id")
-              .order("id", { ascending: true })
-              .range(offset, offset + 499);
-            if (error) throw error;
-            rows.push(...(data ?? []));
-            if (!data || data.length < 500) break;
+          try {
+            // The authenticated SECURITY INVOKER RPC aggregates only the active tenant's rows.
+            // A badge failure must never prevent the lead list, Pipeline or messages from loading.
+            const { data, error } = await supabase.rpc("current_company_lead_note_counts");
+            if (error) return new Map<string, number>();
+            return parseLeadNoteCounts(data ?? []);
+          } catch {
+            return new Map<string, number>();
           }
-          return countLeadNotes(rows);
         };
         const loadMessages = async () => {
           const rows: OverviewMessage[] = [];
