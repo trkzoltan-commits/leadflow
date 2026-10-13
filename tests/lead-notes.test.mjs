@@ -7,6 +7,7 @@ const route = readFileSync(new URL("../app/api/lead-notes/route.ts", import.meta
 const component = readFileSync(new URL("../components/lead-notes.tsx", import.meta.url), "utf8");
 const leadDetail = readFileSync(new URL("../app/leads/[id]/page.tsx", import.meta.url), "utf8");
 const leadList = readFileSync(new URL("../app/leads/page.tsx", import.meta.url), "utf8");
+const pipeline = readFileSync(new URL("../app/pipeline/page.tsx", import.meta.url), "utf8");
 const overviewHook = readFileSync(new URL("../lib/use-lead-overview.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../supabase/migrations/202610060001_lead_notes.sql", import.meta.url), "utf8");
 
@@ -73,4 +74,12 @@ test("lead list loads only RLS-protected note references and links the badge to 
   assert.match(leadList, /lead\.note_count > 0/);
   assert.match(leadList, /href=\{`\/leads\/\$\{lead\.id\}#internal-notes`\}/);
   assert.match(leadList, /aria-label=\{`\$\{lead\.note_count\} belső megjegyzés megnyitása`\}/);
+});
+
+test("pipeline opts into note counts and links compact card badges to internal notes", () => {
+  assert.match(pipeline, /useLeadOverview\(\{ includeNoteCounts: true \}\)/);
+  assert.match(pipeline, /lead\.note_count > 0/);
+  assert.match(pipeline, /href=\{`\/leads\/\$\{lead\.id\}#internal-notes`\}/);
+  assert.match(pipeline, /aria-label=\{`\$\{lead\.note_count\} belső megjegyzés megnyitása`\}/);
+  assert.match(pipeline, /title=\{`\$\{lead\.note_count\} belső megjegyzés`\}/);
 });

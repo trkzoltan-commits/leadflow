@@ -54,7 +54,7 @@ const nextActionDueClass: Record<NextActionDueState, string> = {
 };
 
 export default function PipelinePage() {
-  const { leads, replies, loading, error, updatedAt, refresh } = useLeadOverview();
+  const { leads, replies, loading, error, updatedAt, refresh } = useLeadOverview({ includeNoteCounts: true });
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragTargetStatus, setDragTargetStatus] = useState<PipelineStatus | null>(null);
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
@@ -457,7 +457,17 @@ export default function PipelinePage() {
                     }}
                     onDragEnd={() => { setDraggedLeadId(null); setDragTargetStatus(null); }}
                     className={`pipeline-card rounded-xl border bg-white p-3 shadow-sm ${automationWarning || replyWarning ? "border-amber-300" : "border-slate-200"} ${cardSaving ? "opacity-50" : "cursor-grab"}`}>
-                    <Link href={`/leads/${lead.id}`} className="text-sm font-bold text-slate-900 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link>
+                    <div className="flex items-start justify-between gap-2">
+                      <Link href={`/leads/${lead.id}`} className="min-w-0 break-words text-sm font-bold text-slate-900 hover:underline">{lead.name || "Névtelen érdeklődő"}</Link>
+                      {lead.note_count > 0 && <Link
+                        href={`/leads/${lead.id}#internal-notes`}
+                        aria-label={`${lead.note_count} belső megjegyzés megnyitása`}
+                        title={`${lead.note_count} belső megjegyzés`}
+                        className="inline-flex flex-none items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-200">
+                        <span aria-hidden="true">📝</span>
+                        {lead.note_count}
+                      </Link>}
+                    </div>
                     <p className="mt-1 text-xs text-slate-600">{lead.service || "Nincs szolgáltatás"}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[11px]">
                       <label className="sr-only" htmlFor={`priority-${lead.id}`}>{lead.name || "Névtelen érdeklődő"} prioritása</label>
