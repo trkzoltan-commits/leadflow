@@ -139,6 +139,24 @@ automatikusan újra, mert a Make átvételének hiánya nem bizonyítható. Az a
 illetve amikor a Gmail-küldés eredményét visszaigazolta. A még nyitott bejegyzések
 az üzemeltetői ellenőrzővel külön láthatók.
 
+A `202610130002_automation_dispatch_tenant_key.sql` migráció hozzáadja az
+auditbejegyzések `company_id` határán belüli egyediségét, és indexeli a cégenkénti
+állapotösszesítést, valamint az aktív leadek és kimenő üzenetek állapotlekérdezését.
+Az átállás idejére megtartja a korábbi egyediségi kulcsot is,
+így a már telepített alkalmazás és az új kiadás egyszerre működőképes. A migráció
+újrafuttatható: ha egy korábbi változat eltávolította a régi kulcsot, visszaállítja.
+Ezt a hozzá tartozó alkalmazáskód kiadása előtt kell alkalmazni; a régi kulcs csak
+egy későbbi, külön ellenőrzött kiadásban távolítható el.
+
+A partner felülete a hitelesített `/api/automation-health` végponton kizárólag
+összesített működési állapotot kap. A vállalkozást a szerver a belépett, aktív
+felhasználó profiljából határozza meg; kérésből érkező `company_id` nem használható.
+A válasz nem tartalmaz lead- vagy üzenetazonosítót, címet, levélszöveget, webhookot,
+kulcsot vagy nyers hibát. A Dashboard és a Beállítások oldal a rövid ideje futó
+folyamatot elkülöníti az elakadástól: új indításnál 1 perc, AI-tervezetnél 15 perc,
+levélküldési visszaigazolásnál 60 perc a türelmi idő. Bizonytalan eredménynél itt
+sem indul automatikus újraküldés.
+
 ### Gmail-küldési visszaigazolás
 
 A `202609270003_message_delivery_receipts.sql` migráció az üzenethez menti a Gmail

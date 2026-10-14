@@ -9,13 +9,23 @@ import { useLeadOverview } from "@/lib/use-lead-overview";
 import { dailyCounts, dashboardRecentLeads, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, recentActivities, replyLabel, type DashboardLeadRange, type OverviewLead } from "@/lib/lead-overview";
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
 import { useLeadAssignees } from "@/lib/use-lead-assignees";
+import { useAutomationHealth } from "@/lib/use-automation-health";
 
 type DashboardTaskScope = "mine" | "unassigned" | "team";
+type DashboardFocusCard = {
+  label: string;
+  value: string | number;
+  detail: string;
+  href: string;
+  tone: string;
+  compactValue?: boolean;
+};
 
 export default function Home() {
   const router = useRouter();
   const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
   const { assignees, currentUserId, canAssign, loading: assigneesLoading, error: assigneeError } = useLeadAssignees();
+  const { health: automationHealth, loading: automationHealthLoading, error: automationHealthError } = useAutomationHealth();
   const [taskScope, setTaskScope] = useState<DashboardTaskScope>("mine");
   const [reschedulingLeadId, setReschedulingLeadId] = useState<string | null>(null);
   const [rescheduleDueDate, setRescheduleDueDate] = useState("");
@@ -55,7 +65,26 @@ export default function Home() {
   const replyAttentionHref = failedCount > 0
     ? "/leads?filter=failed"
     : delayedCount > 0 ? "/leads?filter=delayed" : sendingCount > 0 ? "/leads?filter=sending" : "/leads?filter=draft";
-  const focusCards = [
+  const automationUnavailable = Boolean(automationHealthError) || (!automationHealthLoading && !automationHealth);
+  const automationValue = automationUnavailable
+    ? "Nem ellenőrizhető"
+    : automationHealth?.status === "attention_required" ? "Figyelmet igényel"
+    : automationHealthLoading ? "Ellenőrzés…"
+      : automationHealth?.status === "processing" ? "Folyamatban"
+        : automationHealth?.status === "healthy" ? "Rendben" : "Még nincs futás";
+  const automationDetail = automationUnavailable
+    ? "Az állapot most nem ellenőrizhető."
+    : automationHealthLoading ? "A működési állapot betöltése folyamatban van."
+      : automationHealth?.connectionStatus === "setup_required"
+        ? "A Make-kapcsolat beállítása szükséges."
+        : automationHealth?.status === "attention_required"
+          ? `${automationHealth.totals.attentionRequired} folyamat ellenőrzést kér.`
+          : automationHealth?.status === "processing"
+            ? `${automationHealth.totals.processing} feldolgozás vagy levélküldés visszaigazolásra vár.`
+            : automationHealth?.status === "healthy"
+              ? "Nincs észlelt elakadás."
+              : "Még nincs naplózott automatizálási futás.";
+  const focusCards: DashboardFocusCard[] = [
     {
       label: "Új érdeklődők",
       value: newLeadCount,
@@ -79,10 +108,13 @@ export default function Home() {
     },
     {
       label: "Automatizálás",
-      value: makeAttention.length,
-      detail: makeAttention.length > 0 ? `${missingDraftCount} késő AI-tervezet` : "Minden folyamat rendben",
-      href: "/leads?filter=make",
-      tone: makeAttention.length > 0 ? "dashboard-focus-orange" : "dashboard-focus-green",
+      value: automationValue,
+      detail: automationDetail,
+      href: automationUnavailable || automationHealth?.connectionStatus === "setup_required" ? "/settings#automation" : "/leads",
+      tone: automationUnavailable || automationHealth?.status === "attention_required"
+        ? "dashboard-focus-orange"
+        : automationHealth?.status === "healthy" ? "dashboard-focus-green" : "dashboard-focus-accent",
+      compactValue: true,
     },
   ];
 
@@ -193,7 +225,7 @@ export default function Home() {
                 <span aria-hidden="true" className="dashboard-focus-dot mt-1 h-2.5 w-2.5 shrink-0 rounded-full" />
               </div>
               <div className="mt-2 flex items-end justify-between gap-2">
-                <p className="text-3xl font-bold tracking-tight">{card.value}</p>
+                <p className={card.compactValue ? "text-lg font-bold leading-6 tracking-tight sm:text-xl" : "text-3xl font-bold tracking-tight"}>{card.value}</p>
                 <span className="pb-1 text-xs font-bold accent-text">Megnyitás →</span>
               </div>
               <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500 sm:text-xs">{card.detail}</p>

@@ -7,12 +7,14 @@ import { applyPreferences, readLocalPreferences } from "@/components/theme-prefe
 import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { TeamManagement } from "@/components/team-management";
+import { useAutomationHealth } from "@/lib/use-automation-health";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { health: automationHealth, loading: automationHealthLoading, error: automationHealthError } = useAutomationHealth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,8 +31,6 @@ export default function SettingsPage() {
   const [accentTheme, setAccentTheme] = useState<AccentTheme>("blue");
   const [colorMode, setColorMode] = useState<ColorMode>("system");
   const [linkCopied, setLinkCopied] = useState(false);
-  const [makeStatus, setMakeStatus] = useState<MakeConnectionStatus | null>(null);
-  const [makeStatusError, setMakeStatusError] = useState(false);
   const [autoReplyMode, setAutoReplyMode] =
     useState<AutoReplyMode>("manual");
   const [companyLogoUrl, setCompanyLogoUrl] = useState("");
@@ -44,6 +44,31 @@ export default function SettingsPage() {
   const [signatureWebsite, setSignatureWebsite] = useState("");
   const [signatureLegalText, setSignatureLegalText] = useState("");
   const canManageCompany = userRole === "owner" || userRole === "admin";
+  const makeStatus: MakeConnectionStatus | null = automationHealth?.connectionStatus === "legacy_fallback"
+    ? "legacy" : automationHealth?.connectionStatus ?? null;
+  const makeStatusError = Boolean(automationHealthError);
+  const latestAutomationSuccess = [
+    automationHealth?.flows.newLead.lastCompletedAt,
+    automationHealth?.flows.approvedReply.lastCompletedAt,
+  ].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null;
+  const automationRuntimeLabel = makeStatusError
+    ? "Nem ellenőrizhető"
+    : automationHealth?.status === "attention_required" ? "Figyelmet igényel"
+    : automationHealthLoading ? "Ellenőrzés…"
+      : automationHealth?.status === "processing" ? "Folyamatban"
+        : automationHealth?.status === "healthy" ? "Rendben" : "Még nincs futás";
+  const automationRuntimeText = makeStatusError
+    ? "Az állapot most nem ellenőrizhető."
+    : automationHealthLoading ? "A tényleges működési állapot betöltése folyamatban van."
+      : automationHealth?.connectionStatus === "setup_required"
+        ? "A Make-kapcsolat beállítása szükséges."
+        : automationHealth?.status === "attention_required"
+          ? `${automationHealth.totals.attentionRequired} folyamat ellenőrzést kér.`
+          : automationHealth?.status === "processing"
+            ? `${automationHealth.totals.processing} feldolgozás vagy levélküldés visszaigazolásra vár.`
+            : automationHealth?.status === "healthy"
+              ? `Nincs észlelt elakadás. Az elmúlt 24 órában ${automationHealth.totals.completed24h} sikeres folyamat fejeződött be.`
+              : "Még nincs naplózott automatizálási futás.";
 
   useEffect(() => {
     async function loadSettings() {
@@ -115,20 +140,6 @@ export default function SettingsPage() {
       applyPreferences(preferences.accentTheme, preferences.colorMode);
 
       setLoading(false);
-      try {
-        const response = await fetch("/api/make-connection-status", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          cache: "no-store",
-        });
-        if (!response.ok) throw new Error("Make status unavailable");
-        const result: { status?: MakeConnectionStatus } = await response.json();
-        if (!["company_active", "legacy", "setup_required"].includes(result.status || "")) {
-          throw new Error("Unknown Make status");
-        }
-        setMakeStatus(result.status!);
-      } catch {
-        setMakeStatusError(true);
-      }
     }
 
     loadSettings();
@@ -296,11 +307,16 @@ export default function SettingsPage() {
               </p>
             </div>
             <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
-              makeStatus === "company_active" || makeStatus === "legacy"
-                ? "bg-green-100 text-green-700"
-                : "bg-amber-100 text-amber-700"
+              makeStatusError
+                ? "bg-amber-100 text-amber-700"
+                : automationHealthLoading
+                  ? "bg-slate-100 text-slate-600"
+                  : makeStatus === "company_active" || makeStatus === "legacy"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-amber-100 text-amber-700"
             }`}>
-              {makeStatus === "company_active" || makeStatus === "legacy" ? "Használatra kész" : "Beállítás alatt"}
+              {makeStatusError ? "Nem ellenőrizhető" : automationHealthLoading ? "Ellenőrzés…" :
+                makeStatus === "company_active" || makeStatus === "legacy" ? "Használatra kész" : "Beállítás alatt"}
             </span>
           </div>
 
@@ -343,23 +359,27 @@ export default function SettingsPage() {
             </div>
 
             <div className={`flex items-start gap-3 rounded-xl p-4 ${
-              makeStatus === "company_active" || makeStatus === "legacy" ? "bg-green-50" : "bg-amber-50"
+              automationHealthLoading ? "bg-slate-50" : makeStatusError ? "bg-amber-50" :
+                makeStatus === "company_active" || makeStatus === "legacy" ? "bg-green-50" : "bg-amber-50"
             }`}>
               <span className={`font-bold ${
-                makeStatus === "company_active" || makeStatus === "legacy" ? "text-green-700" : "text-amber-700"
+                automationHealthLoading ? "text-slate-500" : makeStatusError ? "text-amber-700" :
+                  makeStatus === "company_active" || makeStatus === "legacy" ? "text-green-700" : "text-amber-700"
               }`}>
-                {makeStatus === "company_active" || makeStatus === "legacy" ? "✓" : "!"}
+                {automationHealthLoading ? "…" : makeStatusError ? "!" : makeStatus === "company_active" || makeStatus === "legacy" ? "✓" : "!"}
               </span>
               <div>
                 <p className="font-semibold text-slate-900">Automatikus feldolgozás</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {makeStatus === "company_active"
+                  {automationHealthLoading
+                    ? "A Make-kapcsolat állapotának ellenőrzése folyamatban van."
+                    : makeStatusError
+                    ? "Az állapot most nem ellenőrizhető."
+                    : makeStatus === "company_active"
                     ? "A saját Make-kapcsolat aktív."
                     : makeStatus === "legacy"
                       ? "Az átmeneti LeadFlow-kapcsolat aktív."
-                      : makeStatusError
-                        ? "Az állapot most nem ellenőrizhető."
-                        : "A Make-kapcsolat beállítása még folyamatban van."}
+                      : "A Make-kapcsolat beállítása még folyamatban van."}
                 </p>
               </div>
             </div>
@@ -483,7 +503,7 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div id="automation" className="mt-6 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900">Make-kapcsolat</h2>
           <p className="mt-2 text-sm text-slate-500">A vállalkozás automatizálási kapcsolatának állapota.</p>
           <div className="mt-4 rounded-xl bg-slate-50 p-4">
@@ -495,13 +515,37 @@ export default function SettingsPage() {
             </p>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               {makeStatus === "company_active"
-                ? "A saját Make webhookok és a céges kulcs be vannak állítva. Ez nem ellenőrzi a Make-forgatókönyv vagy a Gmail-küldés működését."
+                ? "A saját Make webhookok és a céges kulcs be vannak állítva."
                 : makeStatus === "legacy"
                   ? "A pilot jelenleg a LeadFlow átmeneti Make-kapcsolatát használja."
                   : makeStatus === "setup_required"
                     ? "A Make-kapcsolat, a két webhook vagy a céges kulcs hiányzik; az automatikus feldolgozás és küldés nem biztosított."
                     : makeStatusError ? "Próbáld meg később újratölteni az oldalt." : ""}
             </p>
+          </div>
+          <div className={`mt-3 rounded-xl border p-4 ${
+            makeStatusError || automationHealth?.status === "attention_required"
+              ? "border-amber-200 bg-amber-50"
+              : automationHealth?.status === "healthy"
+                ? "border-green-200 bg-green-50"
+                : "border-slate-200 bg-slate-50"
+          }`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-semibold text-slate-900">Legutóbbi működés</p>
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                makeStatusError || automationHealth?.status === "attention_required"
+                  ? "bg-amber-100 text-amber-800"
+                  : automationHealth?.status === "healthy"
+                    ? "bg-green-100 text-green-700"
+                    : "bg-slate-100 text-slate-700"
+              }`}>{automationRuntimeLabel}</span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{automationRuntimeText}</p>
+            {latestAutomationSuccess && <p className="mt-1 text-xs text-slate-500">
+              Utolsó sikeres folyamat: {new Intl.DateTimeFormat("hu-HU", {
+                dateStyle: "medium", timeStyle: "short", timeZone: "Europe/Budapest",
+              }).format(new Date(latestAutomationSuccess))}
+            </p>}
           </div>
         </div>
       </div>

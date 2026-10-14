@@ -25,6 +25,7 @@ export async function beginAutomationDispatch(
 ) {
   const existing = await client.from("automation_dispatches")
     .select("attempt_count")
+    .eq("company_id", input.companyId)
     .eq("event_type", input.eventType)
     .eq("entity_id", input.entityId)
     .maybeSingle();
@@ -42,7 +43,7 @@ export async function beginAutomationDispatch(
     last_error_code: null,
     completed_at: null,
     updated_at: now,
-  }, { onConflict: "event_type,entity_id" });
+  }, { onConflict: "company_id,event_type,entity_id" });
   return !error;
 }
 
@@ -58,7 +59,7 @@ export async function finishAutomationDispatch(
   }
 ) {
   const now = new Date().toISOString();
-  const { error } = await client.from("automation_dispatches").update({
+  const { data, error } = await client.from("automation_dispatches").update({
     status: input.status,
     last_http_status: input.httpStatus ?? null,
     last_error_code: input.errorCode ?? null,
@@ -66,8 +67,10 @@ export async function finishAutomationDispatch(
     updated_at: now,
   }).eq("company_id", input.companyId)
     .eq("event_type", input.eventType)
-    .eq("entity_id", input.entityId);
-  return !error;
+    .eq("entity_id", input.entityId)
+    .select("id")
+    .maybeSingle();
+  return !error && Boolean(data);
 }
 import type { SupabaseClient } from "@supabase/supabase-js";
 
