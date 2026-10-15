@@ -145,8 +145,12 @@ auditbejegyzések `company_id` határán belüli egyediségét, és indexeli a c
 Az átállás idejére megtartja a korábbi egyediségi kulcsot is,
 így a már telepített alkalmazás és az új kiadás egyszerre működőképes. A migráció
 újrafuttatható: ha egy korábbi változat eltávolította a régi kulcsot, visszaállítja.
-Ezt a hozzá tartozó alkalmazáskód kiadása előtt kell alkalmazni; a régi kulcs csak
-egy későbbi, külön ellenőrzött kiadásban távolítható el.
+Ezt a hozzá tartozó alkalmazáskód kiadása előtt kell alkalmazni. Miután az új
+alkalmazáskód élesben is elérhető, a
+`202610150001_drop_legacy_automation_dispatch_key.sql` migráció ellenőrzi a
+tenant-kulcs meglétét, majd eltávolítja a korábbi globális egyediségi korlátot.
+Ettől az azonos esemény- és entitásazonosító összehasonlítása is kizárólag egy
+vállalkozáson belül történik.
 
 A partner felülete a hitelesített `/api/automation-health` végponton kizárólag
 összesített működési állapotot kap. A vállalkozást a szerver a belépett, aktív
