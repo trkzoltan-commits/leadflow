@@ -115,7 +115,6 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 ## Még hátravan
 
 - A cégenkénti kulcskiadás élő tesztje és a teljes ügyfél-onboarding.
-- Gmail-piszkozat azonosító mentése.
 - Make/Gmail-alapú automatikus státuszegyeztetés a kézi rendezés kiváltására.
 
 ## Automatizálási indítások naplója
@@ -169,6 +168,13 @@ igazoltan sikertelen küldés időpontját. Az azonosító tenanthez kötötten 
 nem kerül a partner böngészőjébe, és nem tartalmaz levélszöveget vagy címzettet.
 A Make sikeres státusz-visszahívása opcionálisan `provider_message_id` mezőt küld;
 a régi scenario-k e mező nélkül is működnek, így az átállás megszakításmentes.
+
+A választervezet kizárólag a LeadFlow `messages` rekordjában él, amíg a partner
+jóvá nem hagyja. A folyamat nem hoz létre külön Gmail-piszkozatot, ezért Gmail
+draftazonosítót sem kell tárolni. Ez elkerüli a két, egymástól eltérő
+piszkozatverziót, és a LeadFlow marad a szerkesztés egyetlen forrása. A Gmail csak
+a jóváhagyott levél elküldésekor vesz részt a folyamatban; az elküldött levél
+`provider_message_id` értéke már mentésre kerül.
 
 ## Céges Make-kulcs kiadása a pilotban
 
