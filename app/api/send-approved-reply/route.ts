@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
 import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
 import { buildApprovedReplyHtml } from "@/lib/email-html";
+import { deliveryReference } from "@/lib/delivery-reconciliation";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -260,6 +261,15 @@ export async function POST(request: Request) {
     claimedMessageId = claimedMessage.id;
     claimedCompanyId = companyId;
 
+    const reference = deliveryReference(message.id);
+    if (!reference) {
+      await supabaseAdmin.from("messages").update({ status: message.status })
+        .eq("id", message.id).eq("company_id", companyId).eq("status", "sending");
+      claimedMessageId = null;
+      claimedCompanyId = null;
+      return NextResponse.json({ error: "Az üzenet küldési azonosítója érvénytelen." }, { status: 500 });
+    }
+
     const auditStarted = await beginAutomationDispatch(supabaseAdmin, {
       companyId, eventType: "approved_reply", entityId: message.id,
     });
@@ -284,6 +294,9 @@ export async function POST(request: Request) {
         company_id: lead.company_id,
         recipient_email: lead.email,
         recipient_name: lead.name,
+        delivery_header_name: reference.headerName,
+        delivery_header_value: reference.headerValue,
+        delivery_search_query: reference.gmailSearchQuery,
         content: buildApprovedReplyHtml(message.content, {
           enabled: emailSettings.email_signature_enabled,
           showLogo: emailSettings.email_signature_show_logo,

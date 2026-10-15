@@ -115,7 +115,8 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 ## Még hátravan
 
 - A cégenkénti kulcskiadás élő tesztje és a teljes ügyfél-onboarding.
-- Make/Gmail-alapú automatikus státuszegyeztetés a kézi rendezés kiváltására.
+- A Make/Gmail-alapú automatikus státuszegyeztető scenario bekötése az ügyfél-
+  sablonba, majd élő tesztje.
 
 ## Automatizálási indítások naplója
 
@@ -175,6 +176,31 @@ draftazonosítót sem kell tárolni. Ez elkerüli a két, egymástól eltérő
 piszkozatverziót, és a LeadFlow marad a szerkesztés egyetlen forrása. A Gmail csak
 a jóváhagyott levél elküldésekor vesz részt a folyamatban; az elküldött levél
 `provider_message_id` értéke már mentésre kerül.
+
+### Automatikus Gmail-státuszegyeztetés
+
+A jóváhagyott válasz webhookja a `delivery_header_name`,
+`delivery_header_value` és `delivery_search_query` mezőket is átadja. A Gmail
+`Send an email` modulban az első két értéket az `Additional email headers`
+név- és értékmezőjébe kell kötni. A technikai `X-LeadFlow-Message-ID` fejléc nem
+látható a levélben, és nem tartalmaz személyes adatot.
+
+A tenant saját Make-kulcsával hívható
+`GET /api/messages/reconciliation` legfeljebb 50, legalább öt perce `sending`
+állapotú üzenetet ad vissza, kizárólag az adott cégből. A válasz csak belső
+üzenetazonosítót, indítási időt és Gmail-keresőkifejezést tartalmaz; címzettet és
+levéltartalmat nem. A közös üzemeltetői Make-kulcs ezen a végponton tiltott.
+
+Az ügyfélsablon státuszegyeztető scenario-ja 15 percenként lekéri ezt a listát,
+majd a kapott `gmail_search_query` értékkel keres a Gmailben. Találat esetén a
+meglévő üzenet PATCH végpontját `sent` státusszal és a Gmail üzenetazonosítójával
+hívja. Nulla találat nem bizonyít sikertelen küldést: ilyenkor nem módosít
+állapotot és nem indít újraküldést. A 60 perces kézi ellenőrzés ezért megmarad a
+ritka, valóban bizonytalan esetek biztonsági megoldásaként.
+
+A közvetlen siker-visszahívás HTTP modulján Retry hibakezelő és bekapcsolt
+incomplete-execution tárolás szükséges. Így egy átmeneti LeadFlow-hiba csak a
+visszahívást ismétli meg, a Gmail-küldő modult nem futtatja újra.
 
 ## Céges Make-kulcs kiadása a pilotban
 

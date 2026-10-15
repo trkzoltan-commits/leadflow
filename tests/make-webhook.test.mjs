@@ -37,7 +37,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
           if (table === "users") return { data: { company_id: "a" }, error: null };
           if (table === "leads") return { data: { id: "lead-a", company_id: "a", email: "test@example.invalid", ...mutation }, error: null };
           if (mutation) { claims.push(mutation); messageStatus = mutation.status; }
-          return { data: { id: "message-a", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: messageContent }, error: null };
+          return { data: { id: "6ba7b810-9dad-4f96-80b1-3c995b1ca567", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: messageContent }, error: null };
         },
         async maybeSingle() { return this.single(); },
       };
@@ -63,6 +63,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
             : { status: "uncertain", httpStatus: response?.status ?? null, errorCode: response ? "http" : "network" },
         };
         if (name === "@/lib/email-html") return load("lib/email-html.ts");
+        if (name === "@/lib/delivery-reconciliation") return load("lib/delivery-reconciliation.ts");
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "next/server") return { NextResponse: Response };
         throw new Error(name);
@@ -171,6 +172,9 @@ test("approved reply is safely formatted as HTML with preserved blank lines", as
   }));
   assert.equal(response.status, 200);
   const payload = JSON.parse(state.calls[0].options.body);
+  assert.equal(payload.delivery_header_name, "X-LeadFlow-Message-ID");
+  assert.equal(payload.delivery_header_value, "6ba7b810-9dad-4f96-80b1-3c995b1ca567");
+  assert.equal(payload.delivery_search_query, "in:sent header:X-LeadFlow-Message-ID:6ba7b810-9dad-4f96-80b1-3c995b1ca567");
   assert.match(payload.content, /^Kedves Zoltán!<br><br>A válasz &lt;fontos&gt; &amp; pontos\./);
   assert.doesNotMatch(payload.content, /border-top/);
   assert.match(payload.content, /color:#149a02;font-size:16px/);
