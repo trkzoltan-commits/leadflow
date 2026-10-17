@@ -115,7 +115,8 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 ## Még hátravan
 
 - A teljes ügyfél-onboarding végigpróbálása egy új pilotcéggel.
-- Az előkészített egységes blueprintek tiszta ügyfél-Make-fiókos importpróbája.
+- Az előkészített blueprintek másik Make-fiókban végzett, teljes ügyfél-onboardinghoz
+  kapcsolódó importpróbája.
 
 ## Automatizálási indítások naplója
 
@@ -268,6 +269,14 @@ hoz létre; meglévő kimenetet nem ír felül. Eltávolítja a referencia-pilot
 és Gmail-kapcsolatait, a személyhez kötött belső értesítési címet, valamint az árva
 designer-modulokat. Hibával leáll, ha rossz típusú blueprintet kap, vagy az
 eredményben régi kulcs, fiókkapcsolat vagy e-mail-cím marad.
+
+A megtisztított esemény- és státuszegyeztető blueprint 2026. október 17-én új,
+inaktív Make-scenario-ként sikeresen importálható és menthető volt. Az import után
+az esemény-scenario azonnali, a státuszegyeztető 15 perces ütemezést tartott meg.
+A Make kizárólag a szándékosan eltávolított webhook- és Gmail-kapcsolatokat jelezte
+hiányként; referenciafiókhoz tartozó kapcsolat nem került át. Ez a próba ugyanabban
+a Make-fiókban, két új scenario-val történt. A másik ügyfélfiókban végzett teljes
+onboardingpróba továbbra is szükséges.
 
 Az import után az ügyfél Make-fiókjában új Custom webhookot és saját Gmail-
 kapcsolatot kell választani, a `BEALLITANDO_BELSO_ERTESITESI_EMAIL` helyére pedig a
