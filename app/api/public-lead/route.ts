@@ -37,6 +37,40 @@ type PublicLeadInput = {
   location: string;
 };
 
+const maxPublicLeadBodyBytes = 16 * 1024;
+
+export async function readPublicLeadBody(request: Request, maxBytes = maxPublicLeadBodyBytes): Promise<
+  | { ok: true; value: unknown }
+  | { ok: false; status: 400 | 413; error: string }
+> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    return { ok: false, status: 413, error: "Az ajánlatkérés túl nagy." };
+  }
+
+  if (!request.body) return { ok: false, status: 400, error: "Érvénytelen ajánlatkérés." };
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        await reader.cancel();
+        return { ok: false, status: 413, error: "Az ajánlatkérés túl nagy." };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return { ok: true, value: JSON.parse(text) };
+  } catch {
+    return { ok: false, status: 400, error: "Érvénytelen ajánlatkérés." };
+  }
+}
+
 export function validatePublicLeadBody(body: unknown):
   | { ok: true; spam: boolean; value: PublicLeadInput }
   | { ok: false; error: string } {
@@ -75,8 +109,9 @@ export function validatePublicLeadBody(body: unknown):
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const validated = validatePublicLeadBody(body);
+    const parsed = await readPublicLeadBody(request);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+    const validated = validatePublicLeadBody(parsed.value);
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
     if (validated.spam) return NextResponse.json({ success: true });
     const { submission_id, company_slug, name, email, phone, service, description, location } = validated.value;

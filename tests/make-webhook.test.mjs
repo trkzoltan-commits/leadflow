@@ -52,7 +52,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
       compilerOptions: { module: ts.ModuleKind.CommonJS, esModuleInterop: true },
     }).outputText);
     const context = {
-      exports: {}, URL, console: { error() {}, warn() {} },
+      exports: {}, URL, TextDecoder, console: { error() {}, warn() {} },
       process: { env: { MAKE_NEW_LEAD_WEBHOOK_URL: "https://hook.us1.make.com/legacy-new", MAKE_SEND_APPROVED_REPLY_WEBHOOK_URL: "https://hook.us1.make.com/legacy-reply" } },
       fetch: async (url, options) => { calls.push({ url, options }); if (sendFailure === "network") throw new Error("timeout"); return { ok: sendFailure !== "http" }; },
       require(name) {
@@ -129,6 +129,18 @@ test("public lead validation rejects malformed or oversized input before databas
   assert.equal(validate({ company_slug: "company-a", name: "Test", email: "hibas" }).ok, false);
   assert.equal(validate({ company_slug: "company-a", name: "x".repeat(121), email: "test@example.invalid" }).ok, false);
   assert.equal(validate({ company_slug: "company-a", name: "Test", email: 42 }).ok, false);
+});
+test("public lead body reader rejects malformed and oversized JSON before validation", async () => {
+  const read = setup().load("app/api/public-lead/route.ts").readPublicLeadBody;
+  const malformed = await read(new Request("https://example.invalid", { method: "POST", body: "{" }));
+  assert.equal(malformed.ok, false);
+  assert.equal(malformed.status, 400);
+
+  const oversized = await read(new Request("https://example.invalid", {
+    method: "POST", body: JSON.stringify({ description: "é".repeat(20) }),
+  }), 16);
+  assert.equal(oversized.ok, false);
+  assert.equal(oversized.status, 413);
 });
 test("public lead validation trims accepted fields and silently absorbs the spam trap", () => {
   const validate = setup().load("app/api/public-lead/route.ts").validatePublicLeadBody;
