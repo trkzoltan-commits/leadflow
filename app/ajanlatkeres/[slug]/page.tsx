@@ -43,6 +43,7 @@ export default function AjanlatkeresPage() {
   const [service, setService] = useState("");
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -104,6 +105,7 @@ export default function AjanlatkeresPage() {
           service,
           description,
           location,
+          company_website: companyWebsite,
         }),
       });
 
@@ -123,6 +125,7 @@ export default function AjanlatkeresPage() {
       setService("");
       setDescription("");
       setLocation("");
+      setCompanyWebsite("");
     } catch (error) {
       setError(
         error instanceof Error
@@ -271,6 +274,11 @@ export default function AjanlatkeresPage() {
           className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm md:p-8"
         >
           <div className="space-y-5">
+            <div aria-hidden="true" className="absolute -left-[10000px] h-px w-px overflow-hidden">
+              <label htmlFor="company-website">Weboldal</label>
+              <input id="company-website" type="text" tabIndex={-1} autoComplete="off"
+                value={companyWebsite} onChange={event => setCompanyWebsite(event.target.value)} />
+            </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">
                 Név *
@@ -280,6 +288,7 @@ export default function AjanlatkeresPage() {
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                maxLength={120}
                 required
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
                 onFocus={(e) => {
@@ -301,6 +310,7 @@ export default function AjanlatkeresPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  maxLength={254}
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = primaryColor;
@@ -317,9 +327,10 @@ export default function AjanlatkeresPage() {
                 </label>
 
                 <input
-                  type="text"
+                  type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  maxLength={50}
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = primaryColor;
@@ -344,6 +355,7 @@ export default function AjanlatkeresPage() {
                 type="text"
                 value={service}
                 onChange={(e) => setService(e.target.value)}
+                maxLength={160}
                 placeholder="Pl. tolókapu, kerítés, előtető"
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
                 onFocus={(e) => {
@@ -364,6 +376,7 @@ export default function AjanlatkeresPage() {
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
+                maxLength={160}
                 placeholder="Pl. Székesfehérvár"
                 className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
                 onFocus={(e) => {
@@ -383,6 +396,7 @@ export default function AjanlatkeresPage() {
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                maxLength={4000}
                 placeholder="Írd le röviden az igényt..."
                 className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none transition"
                 onFocus={(e) => {

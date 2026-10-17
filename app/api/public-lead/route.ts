@@ -15,43 +15,66 @@ const supabaseAdmin = createClient(
   }
 );
 
+const publicLeadLimits = {
+  company_slug: 63,
+  name: 120,
+  email: 254,
+  phone: 50,
+  service: 160,
+  description: 4000,
+  location: 160,
+} as const;
+
+type PublicLeadInput = {
+  company_slug: string;
+  name: string;
+  email: string;
+  phone: string;
+  service: string;
+  description: string;
+  location: string;
+};
+
+export function validatePublicLeadBody(body: unknown):
+  | { ok: true; spam: boolean; value: PublicLeadInput }
+  | { ok: false; error: string } {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, error: "Érvénytelen ajánlatkérés." };
+  }
+  const source = body as Record<string, unknown>;
+  const value = {} as PublicLeadInput;
+  for (const [field, limit] of Object.entries(publicLeadLimits) as Array<[keyof PublicLeadInput, number]>) {
+    const input = source[field];
+    if (input !== undefined && input !== null && typeof input !== "string") {
+      return { ok: false, error: "Az ajánlatkérés egyik mezője érvénytelen." };
+    }
+    value[field] = typeof input === "string" ? input.trim() : "";
+    if (value[field].length > limit) {
+      return { ok: false, error: "Az ajánlatkérés egyik mezője túl hosszú." };
+    }
+  }
+  const trap = typeof source.company_website === "string" ? source.company_website.trim() : "";
+  if (trap) return { ok: true, spam: true, value };
+  if (!value.company_slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.company_slug)) {
+    return { ok: false, error: "Hiányzó vagy érvénytelen vállalkozásazonosító." };
+  }
+  if (!value.name) return { ok: false, error: "A név megadása kötelező." };
+  if (!value.email && !value.phone) {
+    return { ok: false, error: "Legalább egy elérhetőség megadása szükséges: e-mail vagy telefonszám." };
+  }
+  if (value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) {
+    return { ok: false, error: "Az e-mail-cím formátuma érvénytelen." };
+  }
+  return { ok: true, spam: false, value };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-
-    const {
-      company_slug,
-      name,
-      email,
-      phone,
-      service,
-      description,
-      location,
-    } = body;
-
-    if (!company_slug?.trim()) {
-      return NextResponse.json(
-        { error: "Hiányzó vállalkozásazonosító." },
-        { status: 400 }
-      );
-    }
-
-    if (!name?.trim()) {
-      return NextResponse.json(
-        { error: "A név megadása kötelező." },
-        { status: 400 }
-      );
-    }
-
-    if (!email?.trim() && !phone?.trim()) {
-      return NextResponse.json(
-        {
-          error:
-            "Legalább egy elérhetőség megadása szükséges: e-mail vagy telefonszám.",
-        },
-        { status: 400 }
-      );
-    }
+    const validated = validatePublicLeadBody(body);
+    if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
+    if (validated.spam) return NextResponse.json({ success: true });
+    const { company_slug, name, email, phone, service, description, location } = validated.value;
 
     /*
      * A publikus slug alapján azonosítjuk a vállalkozást.
@@ -60,7 +83,7 @@ export async function POST(request: Request) {
       await supabaseAdmin
         .from("companies")
         .select("id, public_slug")
-        .eq("public_slug", company_slug.trim())
+        .eq("public_slug", company_slug)
         .single();
 
     if (companyError || !company) {
@@ -79,12 +102,12 @@ export async function POST(request: Request) {
       .from("leads")
       .insert({
         company_id: company.id,
-        name: name.trim(),
-        email: email?.trim() || null,
-        phone: phone?.trim() || null,
-        service: service?.trim() || null,
-        description: description?.trim() || null,
-        location: location?.trim() || null,
+        name,
+        email: email || null,
+        phone: phone || null,
+        service: service || null,
+        description: description || null,
+        location: location || null,
         priority: "medium",
         status: "new",
         source: "web",

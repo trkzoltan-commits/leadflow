@@ -121,6 +121,23 @@ test("both routes use the server-resolved company, ignoring a forged company_id"
     assert.equal(JSON.parse(state.calls[0].options.body).company_id, "a");
   }
 });
+test("public lead validation rejects malformed or oversized input before database access", () => {
+  const validate = setup().load("app/api/public-lead/route.ts").validatePublicLeadBody;
+  assert.equal(validate(null).ok, false);
+  assert.equal(validate({ company_slug: "company-a", name: "Test", email: "hibas" }).ok, false);
+  assert.equal(validate({ company_slug: "company-a", name: "x".repeat(121), email: "test@example.invalid" }).ok, false);
+  assert.equal(validate({ company_slug: "company-a", name: "Test", email: 42 }).ok, false);
+});
+test("public lead validation trims accepted fields and silently absorbs the spam trap", () => {
+  const validate = setup().load("app/api/public-lead/route.ts").validatePublicLeadBody;
+  const accepted = validate({ company_slug: "company-a", name: "  Teszt Elek  ", email: " test@example.invalid " });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.spam, false);
+  assert.equal(accepted.value.name, "Teszt Elek");
+  const trapped = validate({ company_slug: "company-a", name: "Robot", email: "robot@example.invalid", company_website: "https://spam.invalid" });
+  assert.equal(trapped.ok, true);
+  assert.equal(trapped.spam, true);
+});
 test("URL validation rejects unexpected origins and credential-bearing URL components", () => {
   const { validMakeWebhook } = setup().load("lib/make-webhook.ts");
   for (const url of ["http://hook.eu1.make.com/test", "https://localhost/test", "https://hook.eu1.make.com.evil.test/test", "https://hook.eu1.make.com:8443/test", "https://user:pass@hook.eu1.make.com/test", `${urlA}?key=test`, `${urlA}#test`, "https://hook.eu1.make.com/"]) {
