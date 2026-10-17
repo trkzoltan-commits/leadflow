@@ -101,7 +101,7 @@ function printNextStep(step, slug) {
   if (["create_company", "invite_owner", "issue_make_key", "stage_webhooks"].includes(step.code)) {
     process.stdout.write("A biztonságos következő művelethez futtasd újra ugyanazt a parancsot a --apply kapcsolóval.\n");
   } else if (step.code === "enable_make") {
-    process.stdout.write("A két Make-forgatókönyv és a Gmail-kapcsolat kézi ellenőrzése után futtasd újra a --activate kapcsolóval.\n");
+    process.stdout.write("Az egységes esemény-scenario, a státuszegyeztető scenario és a Gmail-kapcsolat kézi ellenőrzése után futtasd újra a --activate kapcsolóval.\n");
   } else if (step.milestone) {
     process.stdout.write(`A próba tényleges ellenőrzése után futtasd: npm run onboard -- <MANIFESZTUM> --confirm ${step.milestone}\n`);
   }

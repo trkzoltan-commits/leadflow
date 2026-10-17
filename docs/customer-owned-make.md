@@ -115,8 +115,7 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 ## Még hátravan
 
 - A teljes ügyfél-onboarding végigpróbálása egy új pilotcéggel.
-- Az egységes Make-sablon csomagolása úgy, hogy az új ügyfél beállításakor ne kelljen
-  kézzel összevonni vagy több exportot előkészíteni.
+- Az előkészített egységes blueprintek tiszta ügyfél-Make-fiókos importpróbája.
 
 ## Automatizálási indítások naplója
 
@@ -194,10 +193,13 @@ scenario a pilot átállás idején inaktív visszaállítási tartalék; aktív
 foglal. A közvetlen visszahívás Retry hibakezelője kizárólag a LeadFlow PATCH kérést
 ismétli, a Gmail-küldést nem.
 
-Az összevont `approved_reply.send` ág éles pilotpróbája 2026. október 17-én sikeresen
-lefutott: csak a jóváhagyott válasz ága indult, a Gmail-küldés és a LeadFlow
-visszaigazolása is befejeződött. A státuszegyeztető scenario ugyancsak működő élő
-próbával rendelkezik, és aktív, 15 perces ütemezéssel fut.
+Az összevont scenario mindkét eseményágának éles pilotpróbája 2026. október 17-én
+sikeresen lefutott. Az `approved_reply.send` próbán csak a jóváhagyott válasz ága
+indult, a Gmail-küldés és a LeadFlow visszaigazolása is befejeződött. A
+`lead.created` próbán csak az új érdeklődő ága futott; a belső értesítés, az
+AI-feldolgozás, a biztonsági döntés és az automatikus válasz is sikeresen lezárult.
+A státuszegyeztető scenario ugyancsak működő élő próbával rendelkezik, és aktív,
+15 perces ütemezéssel fut.
 
 ### Automatikus Gmail-státuszegyeztetés
 
@@ -248,25 +250,32 @@ Windows alatt a fájl jogosultságai a szülőmappából is öröklődhetnek; v�
 számodra hozzáférhető helyet. Kulcsrotációhoz és elveszett kulcs pótlásához külön
 eljárás kell, ez a script új aktív kulcsot nem ad ki meglévő mellé.
 
-A régi, külön New Lead és Send Approved Reply exportok átállításakor a több
-HTTP-modult tartalmazó blueprinteket nem kell kézzel végigírni. Exportáld a két,
-már ügyfélhez klónozott Make-forgatókönyvet, majd futtasd az előkészítőt. Az összes
+Az új ügyfélhez nem kell a két eseményágat kézzel összevonni vagy modulonként
+kulcsot cserélni. Exportáld a működő referencia-pilot egységes esemény-scenario-ját
+és Delivery Reconciliation scenario-ját, majd futtasd az előkészítőt. Az összes
 bemeneti és kimeneti fájlnak a projektmappán kívül kell lennie:
 
 ```powershell
 node scripts/prepare-company-make-blueprints.mjs pelda-kft `
   "C:\biztonsagos-hely\pelda-kft-make-key.txt" `
-  "C:\biztonsagos-hely\new-lead-export.blueprint.json" `
-  "C:\biztonsagos-hely\reply-export.blueprint.json" `
+  "C:\biztonsagos-hely\leadflow-events-export.blueprint.json" `
+  "C:\biztonsagos-hely\delivery-reconciliation-export.blueprint.json" `
   "C:\biztonsagos-hely\pelda-kft-ready"
 ```
 
 A szkript minden `x-leadflow-secret` fejlécet frissít, és kizárólag új fájlokat
-hoz létre; meglévő kimenetet nem ír felül. Ez az eszköz a különálló scenario-k
-előállítását támogatja. Az új pilotcégekhez az egységes esemény-scenario sablonját
-kell klónozni, majd minden HTTP modulban ugyanazt a céghez kiadott kulcsot beállítani.
-Az azonnali ütemezés és az incomplete execution tárolása legyen bekapcsolva. Végül
-töröld a kulcsfájlt, az exportokat és az előkészített blueprinteket.
+hoz létre; meglévő kimenetet nem ír felül. Eltávolítja a referencia-pilot webhook-
+és Gmail-kapcsolatait, a személyhez kötött belső értesítési címet, valamint az árva
+designer-modulokat. Hibával leáll, ha rossz típusú blueprintet kap, vagy az
+eredményben régi kulcs, fiókkapcsolat vagy e-mail-cím marad.
+
+Az import után az ügyfél Make-fiókjában új Custom webhookot és saját Gmail-
+kapcsolatot kell választani, a `BEALLITANDO_BELSO_ERTESITESI_EMAIL` helyére pedig a
+cég értesítési címét kell írni. Az esemény-scenario ütemezése `Immediately as data
+arrives`, az incomplete execution tárolása bekapcsolt legyen; a Delivery
+Reconciliation 15 percenként fusson. A létrehozott webhook címét mindkét LeadFlow-
+webhook mezőbe ugyanazzal az értékkel kell rögzíteni. Végül töröld a kulcsfájlt, az
+exportokat és az előkészített blueprinteket.
 
 Az üzemeltető a bekötés közben és után állapotellenőrzést futtathat. Az eredmény
 igen/nem állapotokat és mindig egyetlen következő teendőt mutat biztonságos
