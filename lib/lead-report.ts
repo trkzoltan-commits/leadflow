@@ -4,6 +4,27 @@ export type ReportCounts = { total: number; won: number; lost: number; active: n
 export type ReportSegment = keyof ReportCounts;
 export type ReportSelection = { year: number; month: number | null; segment: ReportSegment };
 
+const reportMonthNames = [
+  "Január", "Február", "Március", "Április", "Május", "Június",
+  "Július", "Augusztus", "Szeptember", "Október", "November", "December",
+];
+
+function csvRow(values: Array<string | number>) {
+  return values.map(value => {
+    const text = String(value);
+    return /[;"\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  }).join(";");
+}
+
+export function annualReportCsv(report: ReturnType<typeof annualReport>, year: number) {
+  const header = ["Hónap", "Összes", "Megvalósult", "Nem valósult meg", "Aktív", "Eredmény nélkül lezárt"];
+  const rows = report.months.map((month, index) => csvRow([
+    reportMonthNames[index], month.total, month.won, month.lost, month.active, month.unknown,
+  ]));
+  rows.push(csvRow(["Éves összesen", report.total.total, report.total.won, report.total.lost, report.total.active, report.total.unknown]));
+  return `\uFEFFsep=;\r\n${csvRow([`${year}. évi LeadFlow riport`])}\r\n${csvRow(header)}\r\n${rows.join("\r\n")}\r\n`;
+}
+
 export function parseReportSelection(params: URLSearchParams): ReportSelection | null {
   const year = params.get("year");
   const month = params.get("month");

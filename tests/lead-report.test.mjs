@@ -9,7 +9,7 @@ const source = ts.transpileModule(readFileSync(new URL("../lib/lead-report.ts", 
 }).outputText;
 const context = { exports: {}, Intl, Date, Number, Set, URLSearchParams };
 vm.runInNewContext(source, context);
-const { annualReport, reportYears, filterReportLeads, parseReportSelection } = context.exports;
+const { annualReport, annualReportCsv, reportYears, filterReportLeads, parseReportSelection } = context.exports;
 
 test("report drill-down matches monthly and annual counts at Budapest month boundaries", () => {
   const leads = [
@@ -43,4 +43,17 @@ test("annual report groups arrival month in Budapest and keeps unknown closed ou
   assert.deepEqual({ ...report.months[1] }, { total: 3, won: 0, lost: 1, active: 1, unknown: 1 });
   assert.deepEqual({ ...report.total }, { total: 4, won: 1, lost: 1, active: 1, unknown: 1 });
   assert.deepEqual([...reportYears(leads, new Date("2026-09-20T10:00:00Z"))], [2027, 2026]);
+});
+
+test("annual report CSV is Excel-compatible and contains only aggregate monthly data", () => {
+  const report = annualReport([
+    { created_at: "2026-01-10T12:00:00Z", status: "processed", outcome: "won" },
+    { created_at: "2026-01-11T12:00:00Z", status: "waiting", outcome: null },
+  ], 2026);
+  const csv = annualReportCsv(report, 2026);
+  assert.ok(csv.startsWith("\uFEFFsep=;\r\n2026. évi LeadFlow riport\r\n"));
+  assert.match(csv, /Hónap;Összes;Megvalósult;Nem valósult meg;Aktív;Eredmény nélkül lezárt/);
+  assert.match(csv, /Január;2;1;0;1;0/);
+  assert.match(csv, /Éves összesen;2;1;0;1;0/);
+  assert.doesNotMatch(csv, /@|ügyfél|customer/i);
 });

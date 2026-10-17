@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { annualReport, reportYears, type ReportCounts } from "@/lib/lead-report";
+import { annualReport, annualReportCsv, reportYears, type ReportCounts } from "@/lib/lead-report";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 
 const monthNames = ["Január", "Február", "Március", "Április", "Május", "Június", "Július", "Augusztus", "Szeptember", "Október", "November", "December"];
@@ -30,6 +30,15 @@ export default function ReportsPage() {
   const year = selectedYear !== null && years.includes(selectedYear) ? selectedYear : reportYears([])[0];
   const report = annualReport(leads, year);
 
+  function downloadCsv() {
+    const url = URL.createObjectURL(new Blob([annualReportCsv(report, year)], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `leadflow-riport-${year}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-6 md:p-10">
     <div className="mx-auto max-w-6xl">
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
@@ -52,6 +61,10 @@ export default function ReportsPage() {
             className="rounded-xl border border-slate-200 bg-white px-4 py-2">
             {years.map(item => <option key={item} value={item}>{item}</option>)}
           </select>
+          <button type="button" onClick={downloadCsv}
+            className="accent-bg rounded-xl px-4 py-2 font-semibold text-white shadow-sm">
+            CSV letöltése
+          </button>
         </div>
 
         <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
