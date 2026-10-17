@@ -7,7 +7,7 @@ import ts from "typescript";
 const compiled = new Map();
 const urlA = "https://hook.eu1.make.com/test-company-a";
 const urlB = "https://hook.eu2.make.com/test-company-b";
-function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft", messageContent = "Test" } = {}) {
+function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft", messageContent = "Test", duplicateLeadSubmission = false } = {}) {
   const calls = [];
   const claims = [];
   let messageStatus = initialMessageStatus;
@@ -16,11 +16,12 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
     from(table) {
       const filters = {};
       let mutation;
+      let operation;
       return {
         select() { return this; },
         eq(key, value) { filters[key] = value; return this; },
-        insert(value) { mutation = value; return this; },
-        update(value) { mutation = value; return this; },
+        insert(value) { mutation = value; operation = "insert"; return this; },
+        update(value) { mutation = value; operation = "update"; return this; },
         async single() {
           if (table === "company_make_connections") {
             if (broken) return { data: null, error: { message: "unavailable" } };
@@ -35,6 +36,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
             email_phone: "+36 30 123 4567", email_address: "info@example.invalid", email_website: "https://example.invalid", email_legal_text: null,
           }, error: null };
           if (table === "users") return { data: { company_id: "a" }, error: null };
+          if (table === "leads" && operation === "insert" && duplicateLeadSubmission) return { data: null, error: { code: "23505" } };
           if (table === "leads") return { data: { id: "lead-a", company_id: "a", email: "test@example.invalid", ...mutation }, error: null };
           if (mutation) { claims.push(mutation); messageStatus = mutation.status; }
           return { data: { id: "6ba7b810-9dad-4f96-80b1-3c995b1ca567", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: messageContent }, error: null };
@@ -137,6 +139,19 @@ test("public lead validation trims accepted fields and silently absorbs the spam
   const trapped = validate({ company_slug: "company-a", name: "Robot", email: "robot@example.invalid", company_website: "https://spam.invalid" });
   assert.equal(trapped.ok, true);
   assert.equal(trapped.spam, true);
+});
+test("a repeated public form submission reuses the original lead without a second Make dispatch", async () => {
+  const state = setup({ duplicateLeadSubmission: true });
+  const response = await state.load("app/api/public-lead/route.ts").POST(new Request("https://example.invalid", {
+    method: "POST",
+    body: JSON.stringify({
+      submission_id: "6ba7b810-9dad-4f96-80b1-3c995b1ca567",
+      company_slug: "company-a", name: "Test", email: "test@example.invalid",
+    }),
+  }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { success: true, leadId: "lead-a", duplicate: true });
+  assert.equal(state.calls.length, 0);
 });
 test("URL validation rejects unexpected origins and credential-bearing URL components", () => {
   const { validMakeWebhook } = setup().load("lib/make-webhook.ts");

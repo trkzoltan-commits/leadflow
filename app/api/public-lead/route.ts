@@ -16,6 +16,7 @@ const supabaseAdmin = createClient(
 );
 
 const publicLeadLimits = {
+  submission_id: 36,
   company_slug: 63,
   name: 120,
   email: 254,
@@ -26,6 +27,7 @@ const publicLeadLimits = {
 } as const;
 
 type PublicLeadInput = {
+  submission_id: string;
   company_slug: string;
   name: string;
   email: string;
@@ -65,6 +67,9 @@ export function validatePublicLeadBody(body: unknown):
   if (value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.email)) {
     return { ok: false, error: "Az e-mail-cím formátuma érvénytelen." };
   }
+  if (value.submission_id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.submission_id)) {
+    return { ok: false, error: "Az ajánlatkérés azonosítója érvénytelen." };
+  }
   return { ok: true, spam: false, value };
 }
 
@@ -74,7 +79,7 @@ export async function POST(request: Request) {
     const validated = validatePublicLeadBody(body);
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
     if (validated.spam) return NextResponse.json({ success: true });
-    const { company_slug, name, email, phone, service, description, location } = validated.value;
+    const { submission_id, company_slug, name, email, phone, service, description, location } = validated.value;
 
     /*
      * A publikus slug alapján azonosítjuk a vállalkozást.
@@ -112,11 +117,24 @@ export async function POST(request: Request) {
         status: "new",
         source: "web",
         new_lead_dispatch_status: "pending",
+        public_submission_id: submission_id || null,
       })
       .select("id")
       .single();
 
-    if (error) {
+    if (error?.code === "23505" && submission_id) {
+      const { data: existingLead, error: existingLeadError } = await supabaseAdmin
+        .from("leads")
+        .select("id")
+        .eq("company_id", company.id)
+        .eq("public_submission_id", submission_id)
+        .maybeSingle();
+      if (!existingLeadError && existingLead) {
+        return NextResponse.json({ success: true, leadId: existingLead.id, duplicate: true });
+      }
+    }
+
+    if (error || !data) {
       console.error("Publikus lead mentési hiba:", error);
 
       return NextResponse.json(

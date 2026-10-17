@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 
 type PublicCompany = {
@@ -44,6 +44,7 @@ export default function AjanlatkeresPage() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
+  const submissionIdRef = useRef("");
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -92,12 +93,15 @@ export default function AjanlatkeresPage() {
     setError("");
 
     try {
+      const submissionId = submissionIdRef.current || crypto.randomUUID();
+      submissionIdRef.current = submissionId;
       const response = await fetch("/api/public-lead", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          submission_id: submissionId,
           company_slug: companySlug,
           name,
           email,
@@ -126,6 +130,7 @@ export default function AjanlatkeresPage() {
       setDescription("");
       setLocation("");
       setCompanyWebsite("");
+      submissionIdRef.current = "";
     } catch (error) {
       setError(
         error instanceof Error
