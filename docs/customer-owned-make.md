@@ -20,7 +20,7 @@ node --env-file=.env.local scripts/prepare-company-onboarding.mjs "Példa Kft." 
 ```
 
 Az első parancs csak ellenőriz. A második végzi el a létrehozást. A meghívó küldése,
-a két Make-forgatókönyv beállítása, a webhookok rögzítése és az élő izolációs próba
+a két aktív Make-forgatókönyv beállítása, a webhookok rögzítése és az élő izolációs próba
 továbbra is külön, tudatos lépés marad. Ha a kulcskiadás a cég létrehozása után hibázik,
 a szkript ezt külön jelzi; ilyenkor a céget nem szabad újra létrehozni.
 
@@ -55,7 +55,7 @@ tranzakció hibával leáll, és nem hoz létre részleges céget. Az új cég k
 és letiltott, saját Make-kapcsolattal indul; nem kerül a közös pilot webhookra.
 
 Ez csak az első előkészítő egység. A tulajdonos Supabase Auth-fiókját és `users`
-kapcsolatát, a céges Make-kulcsot, a két ügyfél-webhookot és a Gmail-kapcsolatot
+kapcsolatát, a cég egységes esemény-webhookját, a céges Make-kulcsot és a Gmail-kapcsolatot
 külön kell beállítani és kétcéges izolációs próbával ellenőrizni. A Make-kapcsolatot
 csak ezután szabad engedélyezni. Valódi ügyféladatot, webhookcímet vagy kulcsot ne
 mentsünk a generált SQL-lekérdezéssel együtt a repositoryba.
@@ -114,9 +114,9 @@ A céges kulcsok adatbázishibánál sem kaphatnak közös jogosultságot.
 
 ## Még hátravan
 
-- A cégenkénti kulcskiadás élő tesztje és a teljes ügyfél-onboarding.
-- A Make/Gmail-alapú automatikus státuszegyeztető scenario bekötése az ügyfél-
-  sablonba, majd élő tesztje.
+- A teljes ügyfél-onboarding végigpróbálása egy új pilotcéggel.
+- Az egységes Make-sablon csomagolása úgy, hogy az új ügyfél beállításakor ne kelljen
+  kézzel összevonni vagy több exportot előkészíteni.
 
 ## Automatizálási indítások naplója
 
@@ -177,6 +177,28 @@ piszkozatverziót, és a LeadFlow marad a szerkesztés egyetlen forrása. A Gmai
 a jóváhagyott levél elküldésekor vesz részt a folyamatban; az elküldött levél
 `provider_message_id` értéke már mentésre kerül.
 
+### Aktív Make-architektúra a pilotban
+
+A Make ingyenes csomagjának két aktív scenario-korlátjához a pilot két folyamata az
+alábbi:
+
+1. Az azonnal futó, egységes esemény-scenario ugyanazon webhookon fogadja a
+   `lead.created` és az `approved_reply.send` eseményt. A külső Router eseménytípus
+   szerint választ ágat; egy futásban csak a megfelelő ág dolgozik.
+2. A Delivery Reconciliation scenario 15 percenként ellenőrzi a legalább öt perce
+   `sending` állapotú üzeneteket a Gmailben.
+
+Az egységes esemény-scenario-nál az ütemezés `Immediately as data arrives`, az
+incomplete execution tárolása pedig bekapcsolt. A korábbi külön Send Approved Reply
+scenario a pilot átállás idején inaktív visszaállítási tartalék; aktív helyet nem
+foglal. A közvetlen visszahívás Retry hibakezelője kizárólag a LeadFlow PATCH kérést
+ismétli, a Gmail-küldést nem.
+
+Az összevont `approved_reply.send` ág éles pilotpróbája 2026. október 17-én sikeresen
+lefutott: csak a jóváhagyott válasz ága indult, a Gmail-küldés és a LeadFlow
+visszaigazolása is befejeződött. A státuszegyeztető scenario ugyancsak működő élő
+próbával rendelkezik, és aktív, 15 perces ütemezéssel fut.
+
 ### Automatikus Gmail-státuszegyeztetés
 
 A jóváhagyott válasz webhookja a `delivery_header_name`,
@@ -226,9 +248,10 @@ Windows alatt a fájl jogosultságai a szülőmappából is öröklődhetnek; v�
 számodra hozzáférhető helyet. Kulcsrotációhoz és elveszett kulcs pótlásához külön
 eljárás kell, ez a script új aktív kulcsot nem ad ki meglévő mellé.
 
-A több HTTP-modult tartalmazó blueprinteket nem kell kézzel végigírni. Exportáld a
-két, már ügyfélhez klónozott Make-forgatókönyvet, majd futtasd az előkészítőt. Az
-összes bemeneti és kimeneti fájlnak a projektmappán kívül kell lennie:
+A régi, külön New Lead és Send Approved Reply exportok átállításakor a több
+HTTP-modult tartalmazó blueprinteket nem kell kézzel végigírni. Exportáld a két,
+már ügyfélhez klónozott Make-forgatókönyvet, majd futtasd az előkészítőt. Az összes
+bemeneti és kimeneti fájlnak a projektmappán kívül kell lennie:
 
 ```powershell
 node scripts/prepare-company-make-blueprints.mjs pelda-kft `
@@ -239,9 +262,11 @@ node scripts/prepare-company-make-blueprints.mjs pelda-kft `
 ```
 
 A szkript minden `x-leadflow-secret` fejlécet frissít, és kizárólag új fájlokat
-hoz létre; meglévő kimenetet nem ír felül. Importáld a két elkészült fájlt a
-megfelelő Make-forgatókönyvbe, állítsd vissza az azonnali ütemezést, majd töröld a
-kulcsfájlt, az exportokat és az előkészített blueprinteket.
+hoz létre; meglévő kimenetet nem ír felül. Ez az eszköz a különálló scenario-k
+előállítását támogatja. Az új pilotcégekhez az egységes esemény-scenario sablonját
+kell klónozni, majd minden HTTP modulban ugyanazt a céghez kiadott kulcsot beállítani.
+Az azonnali ütemezés és az incomplete execution tárolása legyen bekapcsolva. Végül
+töröld a kulcsfájlt, az exportokat és az előkészített blueprinteket.
 
 Az üzemeltető a bekötés közben és után állapotellenőrzést futtathat. Az eredmény
 igen/nem állapotokat és mindig egyetlen következő teendőt mutat biztonságos
@@ -292,7 +317,8 @@ npm run onboard -- "C:\biztonsagos-hely\pelda-kft-onboarding.json"
 ```
 
 A `--apply` kizárólag a kijelzett következő konfigurációs lépést hajtja végre. A
-Make-kapcsolat engedélyezéséhez külön `--activate` szükséges, miután a két scenario,
+Make-kapcsolat engedélyezéséhez külön `--activate` szükséges, miután az egységes
+esemény-scenario, a státuszegyeztető scenario,
 a Gmail-kapcsolat és a kulcs kézzel ellenőrzött. Élő tesztpontot a rendszer nem
 igazol automatikusan; azt a sikeres próba után kell rögzíteni:
 
@@ -308,18 +334,21 @@ webhookfájlt a Make beállítása után törölni kell.
 
 ### Webhookok beállítása és engedélyezés
 
-A két Make-webhook cím titoknak számít, ezért ne kerüljön parancssorba vagy Gitbe.
-Hozz létre a projektmappán kívül egy helyi JSON-fájlt az alábbi mezőkkel:
+A Make-webhook címe titoknak számít, ezért ne kerüljön parancssorba vagy Gitbe.
+Az adatmodell kompatibilitás miatt továbbra is két mezőt vár. Az ingyenes csomaghoz
+mindkét mezőben ugyanazt az egységes esemény-webhookot add meg. Hozz létre a
+projektmappán kívül egy helyi JSON-fájlt az alábbi mezőkkel:
 
 ```json
 {
-  "newLeadWebhookUrl": "https://hook.eu1.make.com/…",
-  "approvedReplyWebhookUrl": "https://hook.eu1.make.com/…"
+  "newLeadWebhookUrl": "https://hook.eu1.make.com/…azonos…",
+  "approvedReplyWebhookUrl": "https://hook.eu1.make.com/…azonos…"
 }
 ```
 
 Az első futás csak ellenőriz. Megköveteli a saját Make-módot, a még letiltott
-kapcsolatot, az aktív céges kulcsot és a két szabályos Make-webhookot:
+kapcsolatot, az aktív céges kulcsot és a két mezőben megadott szabályos
+Make-webhookot:
 
 ```powershell
 node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json
@@ -332,8 +361,9 @@ letiltva hagyja. Így a Make-scenario-k beállíthatók és ellenőrizhetők él
 node --env-file=.env.local scripts/configure-company-make.mjs pelda-kft C:\Users\User\Documents\pelda-webhooks.json --stage
 ```
 
-Csak a két kikapcsolt scenario ellenőrzése és az élő próba előkészítése után használd
-a `--enable` kapcsolót. Ez atomikusan menti a címeket és engedélyezi a LeadFlow
+Csak a kikapcsolt egységes esemény-scenario és a státuszegyeztető scenario
+ellenőrzése, valamint az élő próba előkészítése után használd a `--enable` kapcsolót.
+Ez atomikusan menti a címeket és engedélyezi a LeadFlow
 útválasztását. Már engedélyezett kapcsolatot egyik művelet sem módosít:
 
 ```powershell
@@ -345,8 +375,11 @@ olvasó onboarding-ellenőrzőt, majd végezd el a bejövő és kimenő izoláci
 
 ## Második egység: kimenő webhookok
 
-A `company_make_connections` táblát csak a szerver olvashatja. A két esemény külön
-webhookcímet kap: `new_lead_webhook_url` és `approved_reply_webhook_url`.
+A `company_make_connections` táblát csak a szerver olvashatja. A két eseményhez
+külön mező tartozik: `new_lead_webhook_url` és `approved_reply_webhook_url`.
+Az ingyenes Make-csomag pilotarchitektúrájában a két mező ugyanazt az egységes
+esemény-webhookot tartalmazza; a két mező megőrzése később ismét lehetővé teszi a
+folyamatok szétválasztását adatbázis-migráció nélkül.
 `mode=company` esetén kizárólag a cég saját címe használható; hiányzó, letiltott,
 hibás rekord vagy adatbázishiba nem válthat vissza közös webhookra.
 Az új érdeklődő ilyenkor továbbra is elmentődik, a webhook nem fut le; tartós retry
@@ -360,9 +393,10 @@ alkalmazni. A jelenlegi webhookoknak `https://hook.eu1.make.com/…`, eu2, us1 v
 us2 címeknek kell lenniük; az ellenőrzést titkok kiírása nélkül kell elvégezni.
 Átirányítást nem követünk, a webhookcímet nem szabad naplózni.
 
-Ügyfél bekötése előtt a saját Make-kulcsot és mindkét scenario-t elő kell készíteni,
-majd az adott cég rekordját `company` módra és engedélyezettre állítani.
-Ügyfél saját Make-fiókjának éles bekötése és a küldési retry még nincs kész.
+Ügyfél bekötése előtt a saját Make-kulcsot, az egységes esemény-scenario-t és a
+státuszegyeztető scenario-t elő kell készíteni, majd az adott cég rekordját `company`
+módra és engedélyezettre állítani. A pilotban a saját Make-fiókos bekötés, a
+visszahívási Retry és a Gmail-alapú státuszegyeztetés működő élő próbán átesett.
 Gmail-keresés nulla találata önmagában nem bizonyít sikertelen küldést;
 azonos Message-ID önmagában nem garantál duplikációmentességet.
 
@@ -373,8 +407,9 @@ a szerver nem állítja vissza piszkozatra. A felület zárolja az újraküldés
 és visszaigazolásra várást jelez. Későbbi állapothoz az adatlap frissíthető.
 A Make PATCH csak outgoing draft/sending → sending/sent átmenetet és
 sent → sent ismétlést enged; a frissítés a korábbi státuszra is szűr.
-A meglévő automatikus draft → sent visszajelzés továbbra is működik.
-Ez nem teljes Gmail-deduplikáció és nem automatikus hibaegyeztetés.
+A meglévő automatikus draft → sent visszajelzés továbbra is működik. A 15 perces
+státuszegyeztetés a Gmailben igazolt küldést automatikusan lezárja, de nem teljes
+Gmail-deduplikáció: nulla találatnál nem minősít hibásnak és nem küld újra.
 
 ## Késő visszaigazolás jelzése
 
