@@ -36,3 +36,12 @@ test("privacy migration stores tenant settings and acknowledgement evidence", as
   assert.match(sql, /privacy_notice_acknowledged_at timestamptz/i);
   assert.match(sql, /privacy_notice_version text/i);
 });
+
+test("lead details expose the stored privacy acknowledgement without cluttering non-web leads", async () => {
+  const details = await readFile(new URL("../app/leads/[id]/page.tsx", import.meta.url), "utf8");
+  assert.match(details, /privacy_notice_acknowledged_at/);
+  assert.match(details, /privacy_notice_version/);
+  assert.match(details, /lead\.source === "web"/);
+  assert.match(details, /Elolvasás visszaigazolva/);
+  assert.match(details, /Naplózási részletek/);
+});

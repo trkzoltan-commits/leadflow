@@ -26,6 +26,8 @@ type Lead = {
   outcome: string | null;
   source: string | null;
   new_lead_dispatch_status: string | null;
+  privacy_notice_acknowledged_at: string | null;
+  privacy_notice_version: string | null;
   created_at: string;
   ai_summary: string | null;
   ai_safe_to_send: boolean | null;
@@ -139,6 +141,8 @@ export default function LeadDetailsPage() {
           outcome,
           source,
           new_lead_dispatch_status,
+          privacy_notice_acknowledged_at,
+          privacy_notice_version,
           created_at,
           ai_summary,
           ai_safe_to_send,
@@ -1049,6 +1053,25 @@ export default function LeadDetailsPage() {
                       {getSourceLabel(lead.source)}
                     </div>
                   </div>
+
+                  {lead.source === "web" && <div>
+                    <div className="text-sm font-medium text-slate-700">
+                      Adatkezelési tájékoztató
+                    </div>
+
+                    {lead.privacy_notice_acknowledged_at ? <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                      <p className="font-semibold">Elolvasás visszaigazolva</p>
+                      <p className="mt-1">
+                        Rögzítve: <time dateTime={lead.privacy_notice_acknowledged_at}>{displayReceivedAt(lead.privacy_notice_acknowledged_at)}</time>
+                      </p>
+                      {lead.privacy_notice_version && <details className="mt-2 text-xs text-emerald-800">
+                        <summary className="cursor-pointer font-medium">Naplózási részletek</summary>
+                        <p className="mt-1 break-all">Tájékoztató verziója: {lead.privacy_notice_version}</p>
+                      </details>}
+                    </div> : <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+                      Ehhez az ajánlatkéréshez nincs rögzített visszaigazolás. Régebbi, az adatkezelési tájékoztató aktiválása előtt érkezett érdeklődés lehet.
+                    </div>}
+                  </div>}
                 </div>
               </div>
 
