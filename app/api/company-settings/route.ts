@@ -41,7 +41,6 @@ export async function PATCH(request: Request) {
     if (!privacyRetentionMonths) {
       return NextResponse.json({ error: "A megőrzési idő 1–120 hónap lehet." }, { status: 400 });
     }
-    const now = new Date().toISOString();
     const update = {
       auto_reply_mode: body.autoReplyMode,
       email_signature_enabled: body.signatureEnabled,
@@ -57,8 +56,7 @@ export async function PATCH(request: Request) {
       privacy_contact_email: privacyContactEmail,
       privacy_company_address: privacyCompanyAddress,
       privacy_retention_months: privacyRetentionMonths,
-      privacy_notice_updated_at: now,
-      updated_at: now,
+      updated_at: new Date().toISOString(),
     };
     if (update.email_address && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(update.email_address)) {
       return NextResponse.json({ error: "Az aláírás e-mail-címe nem érvényes." }, { status: 400 });

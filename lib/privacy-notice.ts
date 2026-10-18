@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export const privacyNoticeTemplateVersion = "2026-10-17";
 
 export type PrivacyNoticeSettings = {
@@ -29,6 +31,19 @@ export function privacyNoticeReady(settings: PrivacyNoticeSettings) {
     validPrivacyAddress(settings.companyAddress) !== null && validRetentionMonths(settings.retentionMonths) !== null;
 }
 
-export function privacyNoticeVersion(updatedAt: string | null) {
-  return `${privacyNoticeTemplateVersion}:${updatedAt || "unconfigured"}`;
+export function privacyNoticeVersion(input: {
+  companyName: string;
+  contactEmail: string;
+  companyAddress: string;
+  retentionMonths: number;
+}) {
+  const canonicalContent = JSON.stringify({
+    templateVersion: privacyNoticeTemplateVersion,
+    companyName: input.companyName.trim(),
+    contactEmail: input.contactEmail.trim().toLowerCase(),
+    companyAddress: input.companyAddress.trim(),
+    retentionMonths: input.retentionMonths,
+  });
+  const contentHash = createHash("sha256").update(canonicalContent, "utf8").digest("hex").slice(0, 24);
+  return `${privacyNoticeTemplateVersion}:${contentHash}`;
 }

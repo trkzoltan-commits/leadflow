@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
@@ -69,6 +70,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
         if (name === "@/lib/delivery-reconciliation") return load("lib/delivery-reconciliation.ts");
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "next/server") return { NextResponse: Response };
+        if (name === "node:crypto") return { createHash };
         throw new Error(name);
       },
     };

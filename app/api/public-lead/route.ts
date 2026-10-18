@@ -128,7 +128,7 @@ export async function POST(request: Request) {
     const { data: company, error: companyError } =
       await supabaseAdmin
         .from("companies")
-        .select("id, public_slug")
+        .select("id, public_slug, name")
         .eq("public_slug", company_slug)
         .single();
 
@@ -177,7 +177,12 @@ export async function POST(request: Request) {
         new_lead_dispatch_status: "pending",
         public_submission_id: submission_id || null,
         privacy_notice_acknowledged_at: privacyEnabled ? new Date().toISOString() : null,
-        privacy_notice_version: privacyEnabled ? privacyNoticeVersion(settings.privacy_notice_updated_at) : null,
+        privacy_notice_version: privacyEnabled ? privacyNoticeVersion({
+          companyName: company.name,
+          contactEmail: settings.privacy_contact_email,
+          companyAddress: settings.privacy_company_address,
+          retentionMonths: settings.privacy_retention_months,
+        }) : null,
       })
       .select("id")
       .single();
