@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { applyPreferences, readLocalPreferences } from "@/components/theme-preferences";
 import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
@@ -478,7 +479,7 @@ export default function SettingsPage() {
                     <p>Nincs anonimizálásra váró lezárt ügy.</p>
                   )}
                   {retentionStatus.activeReviewCount > 0 && (
-                    <p><strong>{retentionStatus.activeReviewCount} aktív ügy</strong> régebbi a megőrzési időnél. Ezeket a rendszer nem anonimizálja automatikusan; kézi felülvizsgálat szükséges.</p>
+                    <p><strong>{retentionStatus.activeReviewCount} aktív ügy</strong> régebbi a megőrzési időnél. Ezeket a rendszer nem anonimizálja automatikusan; kézi felülvizsgálat szükséges. <Link href="/leads?filter=retention" className="font-semibold underline">Ügyek megnyitása</Link></p>
                   )}
                   <p className="text-xs text-slate-500">
                     Határnap: {displayRetentionDate(retentionStatus.cutoffAt)}

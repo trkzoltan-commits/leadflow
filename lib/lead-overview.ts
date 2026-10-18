@@ -35,7 +35,7 @@ export type DashboardActivity = {
   date: string;
 };
 
-export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "failed" | "delayed" | "make";
+export type LeadListFilter = "active" | "closed" | "all" | "draft" | "sending" | "failed" | "delayed" | "make" | "retention";
 export type ClosedOutcomeFilter = "all" | "won" | "lost" | "unknown";
 export type DashboardLeadRange = "today" | "7days" | "30days";
 
@@ -79,6 +79,8 @@ export function preferredReplyMessage<T extends { id: string; direction: string;
 }
 
 export function filterLeads(leads: OverviewLead[], replies: Map<string, OverviewMessage>, filter: LeadListFilter, closedOutcome: ClosedOutcomeFilter = "all") {
+  // The retention view requires the tenant cutoff loaded separately by the page.
+  if (filter === "retention") return [];
   if (filter === "active") return leads.filter(lead => lead.status !== "processed");
   if (filter === "closed") return leads.filter(lead => lead.status === "processed" &&
     (closedOutcome === "all" || (closedOutcome === "unknown" ? !lead.outcome : lead.outcome === closedOutcome)));
@@ -90,6 +92,16 @@ export function filterLeads(leads: OverviewLead[], replies: Map<string, Overview
     return leads.filter(lead => lead.status !== "processed" && replies.get(lead.id)?.status === filter);
   }
   return leads;
+}
+
+export function retentionReviewLeads(leads: OverviewLead[], cutoffAt: string | null) {
+  if (!cutoffAt) return [];
+  const cutoff = new Date(cutoffAt).getTime();
+  if (!Number.isFinite(cutoff)) return [];
+  return leads.filter(lead => {
+    const createdAt = new Date(lead.created_at).getTime();
+    return lead.status !== "processed" && !lead.anonymized_at && Number.isFinite(createdAt) && createdAt < cutoff;
+  });
 }
 
 export function outcomeLabel(outcome: string | null) {

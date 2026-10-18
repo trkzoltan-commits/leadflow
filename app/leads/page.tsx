@@ -1,16 +1,17 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
-import { displayReceivedAt, filterLeads, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
+import { displayReceivedAt, filterLeads, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, retentionReviewLeads, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
 import { filterReportLeads, parseReportSelection, type ReportSegment } from "@/lib/lead-report";
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { supabase } from "@/lib/supabase";
 
 const reportMonthNames = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
 const reportSegmentLabels: Record<ReportSegment, string> = { total: "Összes", won: "Megvalósult", lost: "Nem valósult meg", active: "Aktív", unknown: "Eredmény nélkül lezárt" };
-const leadListFilters: LeadListFilter[] = ["active", "closed", "draft", "failed", "make", "delayed", "sending", "all"];
+const leadListFilters: LeadListFilter[] = ["active", "closed", "draft", "failed", "make", "retention", "delayed", "sending", "all"];
 
 export default function LeadsPage() {
   return <Suspense fallback={<main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés...</main>}><LeadsContent /></Suspense>;
@@ -26,12 +27,40 @@ function LeadsContent() {
   const [listFilter, setListFilter] = useState<LeadListFilter | null>(null);
   const [closedOutcome, setClosedOutcome] = useState<ClosedOutcomeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [retentionCutoff, setRetentionCutoff] = useState<string | null>(null);
   const requestedFilter = searchParams.get("filter");
   const selectedFilter = listFilter ?? (requestedFilter && leadListFilters.includes(requestedFilter as LeadListFilter)
     ? requestedFilter as LeadListFilter
     : reportSelection ? "all" : "active");
   const scopedLeads = reportSelection ? filterReportLeads(leads, reportSelection) : leads;
-  const visibleLeads = searchLeads(filterLeads(scopedLeads, replies, selectedFilter, closedOutcome), searchQuery);
+  const retentionLeads = retentionReviewLeads(scopedLeads, retentionCutoff);
+  const visibleLeads = searchLeads(
+    selectedFilter === "retention" ? retentionLeads : filterLeads(scopedLeads, replies, selectedFilter, closedOutcome),
+    searchQuery
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRetentionCutoff() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || cancelled) return;
+        const response = await fetch("/api/privacy-retention", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        if (!response.ok || cancelled) return;
+        const result = await response.json() as { cutoffAt?: unknown };
+        if (typeof result.cutoffAt === "string" && Number.isFinite(new Date(result.cutoffAt).getTime())) {
+          setRetentionCutoff(result.cutoffAt);
+        }
+      } catch {
+        // The lead list remains usable when the manager-only retention summary is unavailable.
+      }
+    }
+    void loadRetentionCutoff();
+    return () => { cancelled = true; };
+  }, []);
 
   function openLead(leadId: string) {
     router.push(`/leads/${leadId}`);
@@ -123,6 +152,7 @@ function LeadsContent() {
                   ["draft", "Ellenőrizendő", filterLeads(scopedLeads, replies, "draft").length],
                   ["failed", "Sikertelen küldés", filterLeads(scopedLeads, replies, "failed").length],
                   ["make", "Automatizálás ellenőrizendő", filterLeads(scopedLeads, replies, "make").length],
+                  ...(retentionCutoff ? [["retention", "Adatmegőrzés", retentionLeads.length] as const] : []),
                   ["delayed", "Késő visszaigazolás", filterLeads(scopedLeads, replies, "delayed").length],
                   ["sending", "Visszaigazolásra vár", filterLeads(scopedLeads, replies, "sending").length],
                   ["all", "Mind", scopedLeads.length],
@@ -147,6 +177,11 @@ function LeadsContent() {
                     <option value="unknown">Eredmény nélkül ({filterLeads(scopedLeads, replies, "closed", "unknown").length})</option>
                   </select>
                 </div>
+              )}
+              {selectedFilter === "retention" && (
+                <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+                  Ezek az aktív ügyek régebbiek a céges megőrzési határnapnál. Ellenőrizd, hogy lezárhatók-e; a rendszer aktív ügyet nem anonimizál automatikusan.
+                </p>
               )}
               <p className="mt-3 text-xs text-slate-500">A lezárt érdeklődők megmaradnak a riportokhoz, és a „Lezártak” vagy „Mind” nézetben elérhetők.</p>
               <div className="mt-5 flex flex-wrap items-end gap-3">

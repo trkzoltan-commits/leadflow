@@ -73,8 +73,10 @@ test("partner UI exposes aggregate retention state and keeps anonymized cases re
   assert.match(settings, /fetch\("\/api\/privacy-retention"/);
   assert.match(settings, /Adatmegőrzési állapot/);
   assert.match(settings, /aktív ügy[\s\S]*kézi felülvizsgálat szükséges/i);
+  assert.match(settings, /\/leads\?filter=retention/);
   assert.match(overviewHook, /new_lead_dispatch_status, anonymized_at, created_at/);
   assert.match(list, /lead\.anonymized_at[\s\S]*Anonimizált/);
+  assert.match(list, /Adatmegőrzés/);
   assert.match(details, /if \(lead\.anonymized_at\)/);
   assert.match(details, /Az anonimizálás nem vonható vissza/);
 });

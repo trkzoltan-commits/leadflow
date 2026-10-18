@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../lib/lead-overview.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
 const context={exports:{}, Intl, Date, Map}; vm.runInNewContext(source,context);
-const {latestReplies,dailyCounts,dashboardRecentLeads,replyLabel,filterLeads,isDelayedSending,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage,recentActivities}=context.exports;
+const {latestReplies,dailyCounts,dashboardRecentLeads,replyLabel,filterLeads,isDelayedSending,retentionReviewLeads,searchLeads,outcomeLabel,newLeadDispatchWarning,missingAiDraftWarning,preferredReplyMessage,recentActivities}=context.exports;
 test("missing AI draft warning starts after 15 minutes only for accepted, open leads without an outgoing reply",()=>{
  const now=new Date("2026-09-20T12:00:00Z");
  const lead={new_lead_dispatch_status:"accepted",status:"new",created_at:"2026-09-20T11:45:01Z"};
@@ -86,6 +86,18 @@ test("closed leads remain available without appearing in active or attention vie
  assert.deepEqual(filterLeads(leads,replies,"sending").map(lead=>lead.id),[]);
  assert.deepEqual(filterLeads(leads,replies,"failed").map(lead=>lead.id),["c"]);
  assert.deepEqual(filterLeads(leads,replies,"all").map(lead=>lead.id),["a","b","c"]);
+});
+test("retention review lists only old active non-anonymized leads",()=>{
+ const leads=[
+  {id:"old-active",status:"waiting",anonymized_at:null,created_at:"2024-10-17T09:00:00Z"},
+  {id:"boundary",status:"new",anonymized_at:null,created_at:"2024-10-18T10:00:00Z"},
+  {id:"closed",status:"processed",anonymized_at:null,created_at:"2023-01-01T00:00:00Z"},
+  {id:"anonymized",status:"processed",anonymized_at:"2026-10-18T10:00:00Z",created_at:"2023-01-01T00:00:00Z"},
+ ];
+ assert.deepEqual(retentionReviewLeads(leads,"2024-10-18T10:00:00Z").map(lead=>lead.id),["old-active"]);
+ assert.equal(retentionReviewLeads(leads,"invalid").length,0);
+ assert.equal(retentionReviewLeads(leads,null).length,0);
+ assert.equal(filterLeads(leads,new Map(),"retention").length,0);
 });
 test("delayed filter hides closed leads and recently started sends",()=>{
  const old=new Date(Date.now()-61*60_000).toISOString();
