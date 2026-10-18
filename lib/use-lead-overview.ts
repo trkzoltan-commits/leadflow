@@ -36,7 +36,7 @@ export function useLeadOverview({ includeNoteCounts = false }: { includeNoteCoun
           const rows: OverviewLead[] = [];
           for (let offset = 0; !cancelled; offset += 500) {
             const { data, error } = await supabase.from("leads")
-              .select("id, assigned_user_id, next_action, next_action_due_date, name, email, phone, service, location, priority, status, outcome, source, new_lead_dispatch_status, created_at")
+              .select("id, assigned_user_id, next_action, next_action_due_date, name, email, phone, service, location, priority, status, outcome, source, new_lead_dispatch_status, anonymized_at, created_at")
               .order("created_at", { ascending: false }).order("id", { ascending: false })
               .range(offset, offset + 499);
             if (error) throw error;

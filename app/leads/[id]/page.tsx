@@ -28,6 +28,7 @@ type Lead = {
   new_lead_dispatch_status: string | null;
   privacy_notice_acknowledged_at: string | null;
   privacy_notice_version: string | null;
+  anonymized_at: string | null;
   created_at: string;
   ai_summary: string | null;
   ai_safe_to_send: boolean | null;
@@ -143,6 +144,7 @@ export default function LeadDetailsPage() {
           new_lead_dispatch_status,
           privacy_notice_acknowledged_at,
           privacy_notice_version,
+          anonymized_at,
           created_at,
           ai_summary,
           ai_safe_to_send,
@@ -224,7 +226,7 @@ export default function LeadDetailsPage() {
       running = true;
       try {
         const [leadResult, messagesResult] = await Promise.all([
-          supabase.from("leads").select("status, assigned_user_id, next_action, next_action_due_date, new_lead_dispatch_status, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
+          supabase.from("leads").select("status, assigned_user_id, next_action, next_action_due_date, new_lead_dispatch_status, anonymized_at, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
           supabase.from("messages").select(messageSelect).eq("lead_id", leadId).order("created_at", { ascending: true }),
         ]);
         if (cancelled) return;
@@ -858,6 +860,41 @@ export default function LeadDetailsPage() {
           >
             Vissza az érdeklődőkhöz
           </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (lead.anonymized_at) {
+    const outcomeText = lead.outcome === "won"
+      ? "Megvalósult"
+      : lead.outcome === "lost" ? "Nem valósult meg" : "Eredmény nélkül lezárt";
+    const sourceText = lead.source === "web"
+      ? "Weboldal"
+      : lead.source === "email" ? "E-mail"
+        : lead.source === "messenger" ? "Messenger"
+          : lead.source === "manual" ? "Kézi felvétel" : lead.source || "—";
+    return (
+      <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
+        <div className="mx-auto max-w-3xl">
+          <DashboardBrandLink />
+          <button onClick={() => router.push("/leads")} className="mb-5 mt-3 block text-sm font-medium text-violet-600 hover:text-violet-700">
+            ← Vissza az érdeklődőkhöz
+          </button>
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+            <span className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">Anonimizált ügy</span>
+            <h1 className="mt-4 text-3xl font-bold text-slate-900">Anonimizált érdeklődő</h1>
+            <p className="mt-3 leading-7 text-slate-600">
+              A megőrzési idő lejárta után a személyes adatok, üzenetek, belső megjegyzések és AI-tartalmak véglegesen törlődtek. A riportokhoz szükséges nem személyes adatok megmaradtak.
+            </p>
+            <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Érkezett</dt><dd className="mt-1 font-semibold text-slate-900">{displayReceivedAt(lead.created_at)}</dd></div>
+              <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Lezárás eredménye</dt><dd className="mt-1 font-semibold text-slate-900">{outcomeText}</dd></div>
+              <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Forrás</dt><dd className="mt-1 font-semibold text-slate-900">{sourceText}</dd></div>
+              <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Anonimizálva</dt><dd className="mt-1 font-semibold text-slate-900">{displayReceivedAt(lead.anonymized_at)}</dd></div>
+            </dl>
+            <p className="mt-6 text-sm text-slate-500">Az anonimizálás nem vonható vissza, és ehhez az ügyhöz új tartalom már nem rögzíthető.</p>
+          </section>
         </div>
       </main>
     );

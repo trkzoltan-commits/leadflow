@@ -14,6 +14,7 @@ export type OverviewLead = {
   outcome: string | null;
   source: string | null;
   new_lead_dispatch_status: string | null;
+  anonymized_at: string | null;
   created_at: string;
 };
 export type OverviewMessage = {

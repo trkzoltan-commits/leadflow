@@ -210,6 +210,11 @@ function LeadsContent() {
                         <div className="text-xs text-slate-400">
                           {lead.phone || lead.email || "—"}
                         </div>
+                        {lead.anonymized_at && (
+                          <span className="mt-2 inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                            Anonimizált
+                          </span>
+                        )}
                         {lead.note_count > 0 && (
                           <Link
                             href={`/leads/${lead.id}#internal-notes`}

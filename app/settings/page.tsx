@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { applyPreferences, readLocalPreferences } from "@/components/theme-preferences";
@@ -8,9 +8,23 @@ import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } fro
 import { DashboardBrandLink } from "@/components/dashboard-brand-link";
 import { TeamManagement } from "@/components/team-management";
 import { useAutomationHealth } from "@/lib/use-automation-health";
+import type { DataRetentionStatus } from "@/lib/data-retention";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
+
+function displayRetentionDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("hu-HU", {
+    timeZone: "Europe/Budapest",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -47,6 +61,9 @@ export default function SettingsPage() {
   const [privacyContactEmail, setPrivacyContactEmail] = useState("");
   const [privacyCompanyAddress, setPrivacyCompanyAddress] = useState("");
   const [privacyRetentionMonths, setPrivacyRetentionMonths] = useState(24);
+  const [retentionStatus, setRetentionStatus] = useState<DataRetentionStatus | null>(null);
+  const [retentionStatusLoading, setRetentionStatusLoading] = useState(false);
+  const [retentionStatusError, setRetentionStatusError] = useState(false);
   const canManageCompany = userRole === "owner" || userRole === "admin";
   const makeStatus: MakeConnectionStatus | null = automationHealth?.connectionStatus === "legacy_fallback"
     ? "legacy" : automationHealth?.connectionStatus ?? null;
@@ -73,6 +90,24 @@ export default function SettingsPage() {
             : automationHealth?.status === "healthy"
               ? `Nincs észlelt elakadás. Az elmúlt 24 órában ${automationHealth.totals.completed24h} sikeres folyamat fejeződött be.`
               : "Még nincs naplózott automatizálási futás.";
+
+  const refreshRetentionStatus = useCallback(async (accessToken: string) => {
+    setRetentionStatusLoading(true);
+    setRetentionStatusError(false);
+    try {
+      const response = await fetch("/api/privacy-retention", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("retention status unavailable");
+      setRetentionStatus(await response.json() as DataRetentionStatus);
+    } catch {
+      setRetentionStatus(null);
+      setRetentionStatusError(true);
+    } finally {
+      setRetentionStatusLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     async function loadSettings() {
@@ -120,6 +155,9 @@ export default function SettingsPage() {
       setPrivacyContactEmail(profile.privacyContactEmail || "");
       setPrivacyCompanyAddress(profile.privacyCompanyAddress || "");
       setPrivacyRetentionMonths(profile.privacyRetentionMonths || 24);
+      if (profile.role === "owner" || profile.role === "admin") {
+        void refreshRetentionStatus(session.access_token);
+      }
 
       const [{ data: signatureSettings }, { data: companyRow }] = await Promise.all([
         supabase.from("company_settings").select(
@@ -155,7 +193,7 @@ export default function SettingsPage() {
     }
 
     loadSettings();
-  }, [router]);
+  }, [refreshRetentionStatus, router]);
 
   async function handleSave() {
     if (!companyId || !userId) return;
@@ -210,6 +248,7 @@ export default function SettingsPage() {
         setSaving(false);
         return;
       }
+      void refreshRetentionStatus(session.access_token);
     }
 
     const { error: preferenceError } = await supabase
@@ -419,6 +458,36 @@ export default function SettingsPage() {
             {privacyNoticeEnabled && companySlug && <a href={`/adatkezeles/${companySlug}`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-blue-700 underline">Adatkezelési tájékoztató megnyitása</a>}
             <p className="text-xs leading-5 text-slate-500">A 24 hónapos alapérték az éves riportok használatát támogatja. A vállalkozás felel azért, hogy a választott időtartam és a tájékoztató tartalma megfeleljen a saját működésének.</p>
           </fieldset>
+          {canManageCompany && (
+            <div className={`mt-5 rounded-xl border p-4 ${
+              retentionStatusError ? "border-amber-200 bg-amber-50"
+                : retentionStatus?.activeReviewCount ? "border-amber-300 bg-amber-50"
+                  : retentionStatus?.eligibleClosedCount ? "border-blue-200 bg-blue-50"
+                    : "border-emerald-200 bg-emerald-50"
+            }`}>
+              <h3 className="font-semibold text-slate-900">Adatmegőrzési állapot</h3>
+              {retentionStatusLoading ? (
+                <p className="mt-2 text-sm text-slate-600">Ellenőrzés folyamatban…</p>
+              ) : retentionStatusError || !retentionStatus ? (
+                <p className="mt-2 text-sm leading-6 text-amber-900">Az állapot most nem ellenőrizhető. A beállítás ettől még elmenthető.</p>
+              ) : (
+                <div className="mt-2 space-y-2 text-sm leading-6 text-slate-700">
+                  {retentionStatus.eligibleClosedCount > 0 ? (
+                    <p><strong>{retentionStatus.eligibleClosedCount} lezárt ügy</strong> személyes adatai elérték a {retentionStatus.retentionMonths} hónapos megőrzési időt, és anonimizálásra várnak.</p>
+                  ) : (
+                    <p>Nincs anonimizálásra váró lezárt ügy.</p>
+                  )}
+                  {retentionStatus.activeReviewCount > 0 && (
+                    <p><strong>{retentionStatus.activeReviewCount} aktív ügy</strong> régebbi a megőrzési időnél. Ezeket a rendszer nem anonimizálja automatikusan; kézi felülvizsgálat szükséges.</p>
+                  )}
+                  <p className="text-xs text-slate-500">
+                    Határnap: {displayRetentionDate(retentionStatus.cutoffAt)}
+                    {retentionStatus.lastRunAt ? ` · Utolsó anonimizálási futás: ${displayRetentionDate(retentionStatus.lastRunAt)}` : " · Még nem történt anonimizálási futás"}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
