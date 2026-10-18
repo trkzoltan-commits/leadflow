@@ -76,6 +76,9 @@ export default function LeadDetailsPage() {
   const [replyError, setReplyError] = useState("");
   const [replyDirty, setReplyDirty] = useState(false);
   const [syncError, setSyncError] = useState(false);
+  const [dispatchRetrying, setDispatchRetrying] = useState(false);
+  const [dispatchRetryError, setDispatchRetryError] = useState("");
+  const [dispatchRetrySuccess, setDispatchRetrySuccess] = useState("");
 
   const [draftMessageId, setDraftMessageId] = useState<string | null>(null);
   const [messageStatus, setMessageStatus] = useState<string | null>(null);
@@ -110,6 +113,38 @@ export default function LeadDetailsPage() {
   const [nextActionSuccess, setNextActionSuccess] = useState("");
   const [nextActionCurrentUserId, setNextActionCurrentUserId] = useState<string | null>(null);
   const [nextActionManagerAccess, setNextActionManagerAccess] = useState(false);
+
+  async function handleRetryLeadAutomation() {
+    if (!lead || lead.new_lead_dispatch_status !== "unconfigured" || dispatchRetrying) return;
+    setDispatchRetrying(true);
+    setDispatchRetryError("");
+    setDispatchRetrySuccess("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace("/login");
+        return;
+      }
+      const response = await fetch(`/api/leads/${lead.id}/retry-automation`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const result = await response.json() as { error?: unknown; status?: unknown };
+      if (!response.ok) {
+        if (result.status === "uncertain") {
+          setLead(current => current ? { ...current, new_lead_dispatch_status: "uncertain" } : current);
+        }
+        setDispatchRetryError(typeof result.error === "string" ? result.error : "Az automatizálás nem indítható újra.");
+        return;
+      }
+      setLead(current => current ? { ...current, new_lead_dispatch_status: "accepted" } : current);
+      setDispatchRetrySuccess("Az automatizálás elindult. A választervezet automatikusan megjelenik, amikor elkészült.");
+    } catch {
+      setDispatchRetryError("Az automatizálás nem indítható újra. Ellenőrizd a hálózati kapcsolatot.");
+    } finally {
+      setDispatchRetrying(false);
+    }
+  }
 
   useEffect(() => {
     async function initializePage() {
@@ -954,7 +989,14 @@ export default function LeadDetailsPage() {
         {dispatchWarning && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
           <h2 className="font-bold">Az automatizálás indítása figyelmet igényel</h2>
           <p className="mt-2 text-sm leading-6">{dispatchWarning}</p>
+          {lead.new_lead_dispatch_status === "unconfigured" && <button type="button" disabled={dispatchRetrying}
+            onClick={() => void handleRetryLeadAutomation()}
+            className="mt-4 rounded-xl bg-amber-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">
+            {dispatchRetrying ? "Újraindítás…" : "Automatizálás újraindítása"}
+          </button>}
+          {dispatchRetryError && <p className="mt-3 text-sm font-semibold text-red-700">{dispatchRetryError}</p>}
         </section>}
+        {dispatchRetrySuccess && <p role="status" className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-5 text-sm font-semibold text-green-800">{dispatchRetrySuccess}</p>}
         {draftWarning && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
           <h2 className="font-bold">Az AI-választervezet késik</h2>
           <p className="mt-2 text-sm leading-6">{draftWarning}</p>

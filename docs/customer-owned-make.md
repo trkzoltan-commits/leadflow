@@ -400,9 +400,12 @@ esemény-webhookot tartalmazza; a két mező megőrzése később ismét lehető
 folyamatok szétválasztását adatbázis-migráció nélkül.
 `mode=company` esetén kizárólag a cég saját címe használható; hiányzó, letiltott,
 hibás rekord vagy adatbázishiba nem válthat vissza közös webhookra.
-Az új érdeklődő ilyenkor továbbra is elmentődik, a webhook nem fut le; tartós retry
-és üzemeltetői hibajelzés még nincs. Jóváhagyott küldésnél 503 válasz érkezik,
-még a draft lefoglalása előtt.
+Az új érdeklődő ilyenkor továbbra is elmentődik, a webhook nem fut le. Miután a
+kapcsolatot helyreállították, az adatlapról biztonságosan újraindítható a feldolgozás:
+a szerver csak az igazoltan `unconfigured` állapotot foglalja le, ezért párhuzamos
+kattintás sem indít két webhookot. `uncertain` vagy régi `pending` állapotnál nincs
+újraindítás; előbb a Make futását kell ellenőrizni. Jóváhagyott küldésnél 503 válasz
+érkezik, még a draft lefoglalása előtt.
 
 A `202609190001_company_make_connections.sql` migráció a már meglévő cégekhez
 explicit `legacy` rekordot készít a pilot folytonossága érdekében. Új céget nem
