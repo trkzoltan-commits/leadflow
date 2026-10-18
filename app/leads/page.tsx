@@ -41,6 +41,9 @@ function LeadsContent() {
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retryCount = 0;
+
     async function loadRetentionCutoff() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -49,17 +52,29 @@ function LeadsContent() {
           headers: { Authorization: `Bearer ${session.access_token}` },
           cache: "no-store",
         });
-        if (!response.ok || cancelled) return;
+        if (!response.ok || cancelled) {
+          if (response.status >= 500 && retryCount < 3) {
+            retryCount += 1;
+            retryTimer = setTimeout(() => void loadRetentionCutoff(), retryCount * 5000);
+          }
+          return;
+        }
         const result = await response.json() as { cutoffAt?: unknown };
         if (typeof result.cutoffAt === "string" && Number.isFinite(new Date(result.cutoffAt).getTime())) {
           setRetentionCutoff(result.cutoffAt);
         }
       } catch {
-        // The lead list remains usable when the manager-only retention summary is unavailable.
+        if (!cancelled && retryCount < 3) {
+          retryCount += 1;
+          retryTimer = setTimeout(() => void loadRetentionCutoff(), retryCount * 5000);
+        }
       }
     }
     void loadRetentionCutoff();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   function openLead(leadId: string) {
