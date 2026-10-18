@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
 import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
+import { privacyNoticeReady, privacyNoticeVersion } from "@/lib/privacy-notice";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,6 +36,7 @@ type PublicLeadInput = {
   service: string;
   description: string;
   location: string;
+  privacy_acknowledged: boolean;
 };
 
 const maxPublicLeadBodyBytes = 16 * 1024;
@@ -78,8 +80,8 @@ export function validatePublicLeadBody(body: unknown):
     return { ok: false, error: "Érvénytelen ajánlatkérés." };
   }
   const source = body as Record<string, unknown>;
-  const value = {} as PublicLeadInput;
-  for (const [field, limit] of Object.entries(publicLeadLimits) as Array<[keyof PublicLeadInput, number]>) {
+  const value = { privacy_acknowledged: false } as PublicLeadInput;
+  for (const [field, limit] of Object.entries(publicLeadLimits) as Array<[Exclude<keyof PublicLeadInput, "privacy_acknowledged">, number]>) {
     const input = source[field];
     if (input !== undefined && input !== null && typeof input !== "string") {
       return { ok: false, error: "Az ajánlatkérés egyik mezője érvénytelen." };
@@ -89,6 +91,10 @@ export function validatePublicLeadBody(body: unknown):
       return { ok: false, error: "Az ajánlatkérés egyik mezője túl hosszú." };
     }
   }
+  if (source.privacy_acknowledged !== undefined && typeof source.privacy_acknowledged !== "boolean") {
+    return { ok: false, error: "Az adatkezelési nyilatkozat érvénytelen." };
+  }
+  value.privacy_acknowledged = source.privacy_acknowledged === true;
   const trap = typeof source.company_website === "string" ? source.company_website.trim() : "";
   if (trap) return { ok: true, spam: true, value };
   if (!value.company_slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.company_slug)) {
@@ -114,7 +120,7 @@ export async function POST(request: Request) {
     const validated = validatePublicLeadBody(parsed.value);
     if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 });
     if (validated.spam) return NextResponse.json({ success: true });
-    const { submission_id, company_slug, name, email, phone, service, description, location } = validated.value;
+    const { submission_id, company_slug, name, email, phone, service, description, location, privacy_acknowledged } = validated.value;
 
     /*
      * A publikus slug alapján azonosítjuk a vállalkozást.
@@ -138,6 +144,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: settings, error: settingsError } = await supabaseAdmin.from("company_settings")
+      .select("privacy_notice_enabled,privacy_contact_email,privacy_company_address,privacy_retention_months,privacy_notice_updated_at")
+      .eq("company_id", company.id).single();
+    if (settingsError || !settings) {
+      return NextResponse.json({ error: "A vállalkozás adatkezelési beállítása nem érhető el." }, { status: 503 });
+    }
+    const privacyEnabled = privacyNoticeReady({
+      enabled: settings.privacy_notice_enabled,
+      contactEmail: settings.privacy_contact_email,
+      companyAddress: settings.privacy_company_address,
+      retentionMonths: settings.privacy_retention_months,
+      updatedAt: settings.privacy_notice_updated_at,
+    });
+    if (privacyEnabled && !privacy_acknowledged) {
+      return NextResponse.json({ error: "Az adatkezelési tájékoztató megismerését kötelező megerősíteni." }, { status: 400 });
+    }
+
     const { data, error } = await supabaseAdmin
       .from("leads")
       .insert({
@@ -153,6 +176,8 @@ export async function POST(request: Request) {
         source: "web",
         new_lead_dispatch_status: "pending",
         public_submission_id: submission_id || null,
+        privacy_notice_acknowledged_at: privacyEnabled ? new Date().toISOString() : null,
+        privacy_notice_version: privacyEnabled ? privacyNoticeVersion(settings.privacy_notice_updated_at) : null,
       })
       .select("id")
       .single();

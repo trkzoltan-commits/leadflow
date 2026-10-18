@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     const [{ data: company, error: companyError }, { data: settings, error: settingsError }] = await Promise.all([
       supabaseAdmin.from("companies").select("name,public_slug").eq("id", profile.company_id).single(),
-      supabaseAdmin.from("company_settings").select("auto_reply_mode").eq("company_id", profile.company_id).single(),
+      supabaseAdmin.from("company_settings").select("auto_reply_mode,privacy_notice_enabled,privacy_contact_email,privacy_company_address,privacy_retention_months").eq("company_id", profile.company_id).single(),
     ]);
     if (companyError || settingsError || !company?.public_slug) {
       return NextResponse.json({ error: "A vállalkozás beállításai nem érhetők el." }, { status: 503 });
@@ -38,6 +38,10 @@ export async function GET(request: Request) {
       companySlug: company.public_slug,
       role: profile.role || "user",
       autoReplyMode: settings?.auto_reply_mode || "manual",
+      privacyNoticeEnabled: settings?.privacy_notice_enabled ?? false,
+      privacyContactEmail: settings?.privacy_contact_email || "",
+      privacyCompanyAddress: settings?.privacy_company_address || "",
+      privacyRetentionMonths: settings?.privacy_retention_months ?? 24,
     }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ error: "A profiladatok nem érhetők el." }, { status: 503 });

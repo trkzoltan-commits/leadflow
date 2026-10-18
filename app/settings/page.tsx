@@ -43,6 +43,10 @@ export default function SettingsPage() {
   const [signatureEmail, setSignatureEmail] = useState("");
   const [signatureWebsite, setSignatureWebsite] = useState("");
   const [signatureLegalText, setSignatureLegalText] = useState("");
+  const [privacyNoticeEnabled, setPrivacyNoticeEnabled] = useState(false);
+  const [privacyContactEmail, setPrivacyContactEmail] = useState("");
+  const [privacyCompanyAddress, setPrivacyCompanyAddress] = useState("");
+  const [privacyRetentionMonths, setPrivacyRetentionMonths] = useState(24);
   const canManageCompany = userRole === "owner" || userRole === "admin";
   const makeStatus: MakeConnectionStatus | null = automationHealth?.connectionStatus === "legacy_fallback"
     ? "legacy" : automationHealth?.connectionStatus ?? null;
@@ -101,6 +105,10 @@ export default function SettingsPage() {
         companySlug: string;
         role: string;
         autoReplyMode: AutoReplyMode;
+        privacyNoticeEnabled: boolean;
+        privacyContactEmail: string;
+        privacyCompanyAddress: string;
+        privacyRetentionMonths: number;
       } = await profileResponse.json();
       setCompanyId(profile.companyId);
       setCompanyName(profile.companyName);
@@ -108,6 +116,10 @@ export default function SettingsPage() {
       setCompanySlug(profile.companySlug);
       setUserRole(profile.role);
       setAutoReplyMode(profile.autoReplyMode || "manual");
+      setPrivacyNoticeEnabled(profile.privacyNoticeEnabled ?? false);
+      setPrivacyContactEmail(profile.privacyContactEmail || "");
+      setPrivacyCompanyAddress(profile.privacyCompanyAddress || "");
+      setPrivacyRetentionMonths(profile.privacyRetentionMonths || 24);
 
       const [{ data: signatureSettings }, { data: companyRow }] = await Promise.all([
         supabase.from("company_settings").select(
@@ -186,7 +198,11 @@ export default function SettingsPage() {
       const settingsResponse = await fetch("/api/company-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ autoReplyMode, signatureEnabled, signatureShowLogo, emailSignoff, signerName, signerRole, signaturePhone, signatureEmail, signatureWebsite, signatureLegalText }),
+        body: JSON.stringify({
+          autoReplyMode, signatureEnabled, signatureShowLogo, emailSignoff, signerName, signerRole,
+          signaturePhone, signatureEmail, signatureWebsite, signatureLegalText,
+          privacyNoticeEnabled, privacyContactEmail, privacyCompanyAddress, privacyRetentionMonths,
+        }),
       });
       const settingsResult = await settingsResponse.json();
       if (!settingsResponse.ok) {
@@ -385,6 +401,25 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-xl font-bold text-slate-900">Ajánlatkérő adatkezelése</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">A LeadFlow céges tájékoztató oldalt készít. Aktiválás után az érdeklődő csak a tájékoztató elolvasását megerősítő kötelező jelölőnégyzettel küldheti el az űrlapot.</p>
+          {!canManageCompany && <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-600">Ezt a céges beállítást tulajdonos vagy adminisztrátor módosíthatja.</p>}
+          <fieldset disabled={!canManageCompany} className={`mt-5 space-y-4 ${!canManageCompany ? "opacity-60" : ""}`}>
+            <label className="flex items-start gap-3 rounded-xl bg-slate-50 p-4">
+              <input type="checkbox" checked={privacyNoticeEnabled} onChange={event => setPrivacyNoticeEnabled(event.target.checked)} className="mt-1" />
+              <span><span className="block font-semibold text-slate-900">Adatkezelési tájékoztató aktiválása</span><span className="mt-1 block text-sm text-slate-500">Csak a szükséges céges adatok kitöltése után kapcsolható be.</span></span>
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-medium text-slate-700">Adatkezelési kapcsolattartó e-mail-címe<input type="email" value={privacyContactEmail} maxLength={254} onChange={event => setPrivacyContactEmail(event.target.value)} placeholder="info@pelda.hu" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700">Megőrzési idő (hónap)<input type="number" min={1} max={120} value={privacyRetentionMonths} onChange={event => setPrivacyRetentionMonths(Number(event.target.value))} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-slate-700 sm:col-span-2">A vállalkozás címe<input value={privacyCompanyAddress} maxLength={300} onChange={event => setPrivacyCompanyAddress(event.target.value)} placeholder="Például: 1111 Budapest, Példa utca 1." className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
+            </div>
+            {privacyNoticeEnabled && companySlug && <a href={`/adatkezeles/${companySlug}`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold text-blue-700 underline">Adatkezelési tájékoztató megnyitása</a>}
+            <p className="text-xs leading-5 text-slate-500">A 24 hónapos alapérték az éves riportok használatát támogatja. A vállalkozás felel azért, hogy a választott időtartam és a tájékoztató tartalma megfeleljen a saját működésének.</p>
+          </fieldset>
+        </section>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900">Üzenetek beállításai</h2>

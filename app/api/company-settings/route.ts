@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { validPrivacyAddress, validPrivacyEmail, validRetentionMonths } from "@/lib/privacy-notice";
 
 const supabaseAdmin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SECRET_KEY!, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -27,9 +28,20 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "A céges beállításokat csak tulajdonos vagy adminisztrátor módosíthatja." }, { status: 403 });
     }
     const body = await request.json();
-    if (!allowedModes.has(body?.autoReplyMode) || typeof body?.signatureEnabled !== "boolean" || typeof body?.signatureShowLogo !== "boolean") {
+    if (!allowedModes.has(body?.autoReplyMode) || typeof body?.signatureEnabled !== "boolean" ||
+        typeof body?.signatureShowLogo !== "boolean" || typeof body?.privacyNoticeEnabled !== "boolean") {
       return NextResponse.json({ error: "Érvénytelen céges beállítás." }, { status: 400 });
     }
+    const privacyContactEmail = validPrivacyEmail(body.privacyContactEmail);
+    const privacyCompanyAddress = validPrivacyAddress(body.privacyCompanyAddress);
+    const privacyRetentionMonths = validRetentionMonths(body.privacyRetentionMonths);
+    if (body.privacyNoticeEnabled && (!privacyContactEmail || !privacyCompanyAddress || !privacyRetentionMonths)) {
+      return NextResponse.json({ error: "Az adatkezelési tájékoztató aktiválásához érvényes e-mail-cím, céges cím és megőrzési idő szükséges." }, { status: 400 });
+    }
+    if (!privacyRetentionMonths) {
+      return NextResponse.json({ error: "A megőrzési idő 1–120 hónap lehet." }, { status: 400 });
+    }
+    const now = new Date().toISOString();
     const update = {
       auto_reply_mode: body.autoReplyMode,
       email_signature_enabled: body.signatureEnabled,
@@ -41,7 +53,12 @@ export async function PATCH(request: Request) {
       email_address: optionalText(body.signatureEmail, 254),
       email_website: optionalText(body.signatureWebsite, 300),
       email_legal_text: optionalText(body.signatureLegalText, 1000),
-      updated_at: new Date().toISOString(),
+      privacy_notice_enabled: body.privacyNoticeEnabled,
+      privacy_contact_email: privacyContactEmail,
+      privacy_company_address: privacyCompanyAddress,
+      privacy_retention_months: privacyRetentionMonths,
+      privacy_notice_updated_at: now,
+      updated_at: now,
     };
     if (update.email_address && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(update.email_address)) {
       return NextResponse.json({ error: "Az aláírás e-mail-címe nem érvényes." }, { status: 400 });

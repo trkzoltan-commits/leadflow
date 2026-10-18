@@ -16,6 +16,8 @@ type PublicCompany = {
   show_company_name: boolean | null;
   company_name_size: number | null;
   company_name_weight: number | null;
+  privacy_notice_enabled: boolean;
+  privacy_notice_url: string | null;
 };
 
 const DEFAULT_PRIMARY = "#5FA8D3";
@@ -44,6 +46,7 @@ export default function AjanlatkeresPage() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
   const submissionIdRef = useRef("");
 
   const [loading, setLoading] = useState(false);
@@ -110,6 +113,7 @@ export default function AjanlatkeresPage() {
           description,
           location,
           company_website: companyWebsite,
+          privacy_acknowledged: privacyAcknowledged,
         }),
       });
 
@@ -130,6 +134,7 @@ export default function AjanlatkeresPage() {
       setDescription("");
       setLocation("");
       setCompanyWebsite("");
+      setPrivacyAcknowledged(false);
       submissionIdRef.current = "";
     } catch (error) {
       setError(
@@ -412,6 +417,17 @@ export default function AjanlatkeresPage() {
                 }}
               />
             </div>
+
+            {company.privacy_notice_enabled && company.privacy_notice_url && (
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
+                <input type="checkbox" required checked={privacyAcknowledged}
+                  onChange={event => setPrivacyAcknowledged(event.target.checked)} className="mt-1" />
+                <span>
+                  Elolvastam az <a href={company.privacy_notice_url} target="_blank" rel="noreferrer"
+                    className="font-semibold underline" style={{ color: primaryColor }}>adatkezelési tájékoztatót</a>.
+                </span>
+              </label>
+            )}
 
             <button
               type="submit"
