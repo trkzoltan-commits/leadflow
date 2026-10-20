@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { displayReceivedAt, filterLeads, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, retentionReviewLeads, searchLeads, type ClosedOutcomeFilter, type LeadListFilter } from "@/lib/lead-overview";
 import { filterReportLeads, parseReportSelection, type ReportSegment } from "@/lib/lead-report";
-import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { AppShell } from "@/components/app-shell";
 import { supabase } from "@/lib/supabase";
 
 const reportMonthNames = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
@@ -14,7 +14,7 @@ const reportSegmentLabels: Record<ReportSegment, string> = { total: "Összes", w
 const leadListFilters: LeadListFilter[] = ["active", "closed", "draft", "failed", "make", "retention", "delayed", "sending", "all"];
 
 export default function LeadsPage() {
-  return <Suspense fallback={<main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés...</main>}><LeadsContent /></Suspense>;
+  return <Suspense fallback={<AppShell><div className="flex min-h-[50vh] items-center justify-center">Betöltés...</div></AppShell>}><LeadsContent /></Suspense>;
 }
 
 function LeadsContent() {
@@ -111,20 +111,18 @@ function LeadsContent() {
 
   if (loading) {
     return (
-      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-lg font-semibold text-slate-600">
+      <AppShell>
+        <div className="flex min-h-[50vh] items-center justify-center text-lg font-semibold text-slate-600">
           Betöltés...
         </div>
-      </main>
+      </AppShell>
     );
   }
 
   return (
-    <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
-      <div className="mx-auto max-w-7xl">
+    <AppShell>
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <DashboardBrandLink />
             <h1 className="text-3xl font-bold text-slate-900">
               Érdeklődők
             </h1>
@@ -134,10 +132,6 @@ function LeadsContent() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link href="/pipeline" className="rounded-xl bg-violet-600 px-4 py-2 font-medium text-white shadow-sm">Pipeline</Link>
-            <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-2 font-medium shadow-sm hover:bg-slate-50">Riportok</Link>
-          </div>
         </div>
 
         <p role="status" className={loadError ? "mb-5 text-amber-700" : "mb-5 text-sm text-slate-500"}>
@@ -316,7 +310,6 @@ function LeadsContent() {
             </div>
           </div>
         </div>
-      </div>
-    </main>
+    </AppShell>
   );
 }

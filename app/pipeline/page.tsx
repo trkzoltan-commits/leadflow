@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { AppShell } from "@/components/app-shell";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type OverviewLead } from "@/lib/lead-overview";
 import {
   budapestDateOffset,
@@ -313,12 +313,11 @@ export default function PipelinePage() {
     }
   }
 
-  if (loading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
+  if (loading) return <AppShell width="wide"><div className="flex min-h-[50vh] items-center justify-center">Betöltés…</div></AppShell>;
 
-  return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-6 md:p-8">
-    <div className="mx-auto max-w-[1800px]">
+  return <AppShell width="wide">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div><DashboardBrandLink /><h1 className="mt-1 text-3xl font-bold">Pipeline</h1><p className="mt-2 text-slate-600">Az érdeklődők aktuális üzleti szakaszai.</p></div>
+        <div><h1 className="text-3xl font-bold">Pipeline</h1><p className="mt-2 text-slate-600">Az érdeklődők aktuális üzleti szakaszai.</p></div>
         <Link href="/leads" className="rounded-xl border border-slate-200 bg-white px-4 py-3 font-semibold shadow-sm">Lista nézet</Link>
       </header>
       <div role="status" className={error || saveError || assigneeError ? "mb-5 rounded-xl bg-amber-50 p-4 text-amber-900" : "mb-5 text-sm text-slate-500"}>
@@ -539,7 +538,6 @@ export default function PipelinePage() {
           </section>;
         })}
       </div>}
-    </div>
 
     {pendingClose && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="close-title">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
@@ -600,6 +598,6 @@ export default function PipelinePage() {
         </button>}
       </form>
     </div>}
-  </main>;
+  </AppShell>;
 }
 

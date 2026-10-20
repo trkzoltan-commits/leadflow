@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("every authenticated partner page exposes the shared Dashboard brand link", () => {
+test("every authenticated partner page uses the shared application shell", () => {
   for (const path of [
     "app/page.tsx",
     "app/leads/page.tsx",
@@ -13,15 +13,30 @@ test("every authenticated partner page exposes the shared Dashboard brand link",
     "app/reports/page.tsx",
     "app/settings/page.tsx",
   ]) {
-    assert.match(read(path), /<DashboardBrandLink\s*\/>/, path);
+    assert.match(read(path), /<AppShell(?:\s+[^>]*)?>/, path);
   }
 
-  const component = read("components/dashboard-brand-link.tsx");
-  assert.match(component, /href="\/"/);
-  assert.match(component, /LeadFlow Dashboard – Áttekintés/);
+  const component = read("components/app-shell.tsx");
+  assert.match(component, /aria-label="LeadFlow Dashboard – Áttekintés"/);
+  assert.match(component, /href: "\/", label: "Áttekintés"/);
+  assert.match(component, /href: "\/leads", label: "Érdeklődők"/);
+  assert.match(component, /href: "\/pipeline", label: "Pipeline"/);
+  assert.match(component, /href: "\/reports", label: "Riportok"/);
+  assert.match(component, /href="\/settings"/);
+  assert.match(component, /companyLogoUrl/);
+  assert.match(component, /companyName/);
+  assert.match(component, /window\.confirm\("Biztosan kijelentkezel a LeadFlow-ból\?"\)/);
+  assert.match(component, /supabase\.auth\.signOut\(\)/);
+  assert.match(component, /text-red-700/);
+  assert.match(component, /lg:hidden/);
+  assert.match(component, /hidden w-64[^\n]+lg:block/);
+
+  const dashboard = read("app/page.tsx");
+  assert.doesNotMatch(dashboard, /aria-label="Fő navigáció"/);
+  assert.doesNotMatch(dashboard, /Kijelentkezés/);
 });
 
-test("dashboard and lead list expose the pipeline", () => {
+test("dashboard keeps the daily workflow actions", () => {
   const dashboard = read("app/page.tsx");
   assert.match(dashboard, /href="\/pipeline"/);
   assert.match(dashboard, /Saját mai és lejárt teendők/);
@@ -41,5 +56,10 @@ test("dashboard and lead list expose the pipeline", () => {
   assert.match(dashboard, /az érdeklődő és a riportadatai megmaradnak/i);
   assert.match(dashboard, /recentActivities\(leads, messages\)/);
   assert.doesNotMatch(dashboard, /title: "Kimenő üzenet létrehozva"/);
-  assert.match(read("app/leads/page.tsx"), /href="\/pipeline"/);
+});
+
+test("company profile exposes the logo needed by the shared shell", () => {
+  const route = read("app/api/account-profile/route.ts");
+  assert.match(route, /select\("name,public_slug,logo_url"\)/);
+  assert.match(route, /companyLogoUrl: company\.logo_url \|\| ""/);
 });

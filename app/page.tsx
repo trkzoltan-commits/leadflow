@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { DashboardBrandLink } from "@/components/dashboard-brand-link";
-import { useRouter } from "next/navigation";
+import { AppShell } from "@/components/app-shell";
 import { supabase } from "@/lib/supabase";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { dailyCounts, dashboardRecentLeads, displayDate, filterLeads, isDelayedSending, leadLabel, missingAiDraftWarning, newLeadDispatchWarning, recentActivities, replyLabel, type DashboardLeadRange, type OverviewLead } from "@/lib/lead-overview";
@@ -22,7 +21,6 @@ type DashboardFocusCard = {
 };
 
 export default function Home() {
-  const router = useRouter();
   const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
   const { assignees, currentUserId, canAssign, loading: assigneesLoading, error: assigneeError } = useLeadAssignees();
   const { health: automationHealth, loading: automationHealthLoading, error: automationHealthError } = useAutomationHealth();
@@ -33,7 +31,7 @@ export default function Home() {
   const [taskActionError, setTaskActionError] = useState("");
   const [taskActionSuccess, setTaskActionSuccess] = useState("");
   const [recentLeadRange, setRecentLeadRange] = useState<DashboardLeadRange>("today");
-  if (loading || assigneesLoading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
+  if (loading || assigneesLoading) return <AppShell><div className="flex min-h-[50vh] items-center justify-center">Betöltés…</div></AppShell>;
   const attention = leads.filter(lead => lead.status !== "processed" && ["draft", "sending", "failed"].includes(replies.get(lead.id)?.status ?? ""))
     .sort((a, b) => Number(replies.get(b.id)?.status === "failed") - Number(replies.get(a.id)?.status === "failed") || Number(isDelayedSending(replies.get(b.id))) - Number(isDelayedSending(replies.get(a.id))));
   const delayedCount = attention.filter(lead => isDelayedSending(replies.get(lead.id))).length;
@@ -182,26 +180,17 @@ export default function Home() {
     if (confirmed) void persistDashboardTask(lead, null);
   }
 
-  return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-5 md:p-8">
-    <div className="mx-auto max-w-7xl">
+  return <AppShell>
       <header className="dashboard-hero mb-6 overflow-hidden rounded-3xl border p-5 shadow-sm sm:p-7">
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div>
-            <DashboardBrandLink />
-            <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">Áttekintés</h1>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Áttekintés</h1>
             <p className="mt-2 max-w-xl text-slate-600">A mai feladatok, a figyelmet igénylő válaszok és az érdeklődők egy helyen.</p>
             <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold">
               <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{leads.length} érdeklődő összesen</span>
               <span className="rounded-full bg-white px-3 py-1.5 shadow-sm">{activeLeadCount} aktív folyamat</span>
             </div>
           </div>
-          <nav aria-label="Fő navigáció" className="grid w-full grid-cols-2 gap-2 text-sm font-semibold sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
-            <Link href="/leads" className="accent-bg rounded-xl px-4 py-3 text-center text-white shadow-sm">Érdeklődők</Link>
-            <Link href="/pipeline" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">Pipeline</Link>
-            <Link href="/reports" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">Riportok</Link>
-            <Link href="/settings" aria-label="Saját adatok és beállítások" className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center shadow-sm">⚙ Beállítások</Link>
-            <button onClick={async () => { await supabase.auth.signOut(); router.replace("/login"); }} className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">Kijelentkezés</button>
-          </nav>
         </div>
         <div role="status" className={error ? "mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-800" : "mt-5 border-t border-slate-200 pt-4 text-sm text-slate-500"}>
           {error ? (updatedAt ? "A frissítés nem sikerült. Az utolsó sikeresen betöltött adatokat látod." : "Az adatokat nem sikerült betölteni.") : "Automatikus frissítés 10 másodpercenként."}
@@ -359,6 +348,5 @@ export default function Home() {
           </section>
         </div>
       </>}
-    </div>
-  </main>;
+  </AppShell>;
 }

@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     const [{ data: company, error: companyError }, { data: settings, error: settingsError }] = await Promise.all([
-      supabaseAdmin.from("companies").select("name,public_slug").eq("id", profile.company_id).single(),
+      supabaseAdmin.from("companies").select("name,public_slug,logo_url").eq("id", profile.company_id).single(),
       supabaseAdmin.from("company_settings").select("auto_reply_mode,privacy_notice_enabled,privacy_contact_email,privacy_company_address,privacy_retention_months").eq("company_id", profile.company_id).single(),
     ]);
     if (companyError || settingsError || !company?.public_slug) {
@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       companyId: profile.company_id,
       companyName: company.name || "",
+      companyLogoUrl: company.logo_url || "",
       companySlug: company.public_slug,
       role: profile.role || "user",
       autoReplyMode: settings?.auto_reply_mode || "manual",

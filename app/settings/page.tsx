@@ -6,7 +6,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { applyPreferences, readLocalPreferences } from "@/components/theme-preferences";
 import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
-import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { AppShell } from "@/components/app-shell";
 import { TeamManagement } from "@/components/team-management";
 import { useAutomationHealth } from "@/lib/use-automation-health";
 import type { DataRetentionStatus } from "@/lib/data-retention";
@@ -291,21 +291,18 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-lg font-semibold text-slate-600">
+      <AppShell>
+        <div className="flex min-h-[50vh] items-center justify-center text-lg font-semibold text-slate-600">
           Betöltés...
         </div>
-      </main>
+      </AppShell>
     );
   }
 
   return (
-    <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
-      <div className="mx-auto max-w-3xl">
+    <AppShell>
         <div className="mb-8">
-          <DashboardBrandLink />
-
-          <h1 className="mt-1 text-3xl font-bold text-slate-900">
+          <h1 className="text-3xl font-bold text-slate-900">
             Beállítások
           </h1>
 
@@ -653,7 +650,6 @@ export default function SettingsPage() {
             </p>}
           </div>
         </div>
-      </div>
-    </main>
+    </AppShell>
   );
 }

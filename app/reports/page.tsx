@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLeadOverview } from "@/lib/use-lead-overview";
 import { annualReport, annualReportCsv, reportYears, type ReportCounts } from "@/lib/lead-report";
-import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { AppShell } from "@/components/app-shell";
 
 const monthNames = ["Január", "Február", "Március", "Április", "Május", "Június", "Július", "Augusztus", "Szeptember", "Október", "November", "December"];
 const columns: { key: keyof ReportCounts; label: string }[] = [
@@ -24,7 +24,7 @@ export default function ReportsPage() {
   const { leads, loading, error, updatedAt, refresh } = useLeadOverview();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
-  if (loading) return <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">Betöltés…</main>;
+  if (loading) return <AppShell><div className="flex min-h-[50vh] items-center justify-center">Betöltés…</div></AppShell>;
 
   const years = reportYears(leads);
   const year = selectedYear !== null && years.includes(selectedYear) ? selectedYear : reportYears([])[0];
@@ -39,12 +39,10 @@ export default function ReportsPage() {
     URL.revokeObjectURL(url);
   }
 
-  return <main className="partner-surface min-h-screen bg-slate-50 p-4 text-slate-900 sm:p-6 md:p-10">
-    <div className="mx-auto max-w-6xl">
+  return <AppShell>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <DashboardBrandLink />
-          <h1 className="mt-1 text-3xl font-bold">Riportok</h1>
+          <h1 className="text-3xl font-bold">Riportok</h1>
           <p className="mt-2 text-slate-600">Éves összesítés havi bontásban, az érdeklődők érkezési dátuma szerint.</p>
         </div>
       </div>
@@ -90,6 +88,5 @@ export default function ReportsPage() {
           </div>
         </section>
       </>}
-    </div>
-  </main>;
+  </AppShell>;
 }

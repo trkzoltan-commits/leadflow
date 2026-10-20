@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, preferredReplyMessage } from "@/lib/lead-overview";
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, NEXT_ACTION_MAX_LENGTH, nextActionDueState } from "@/lib/lead-next-action";
-import { DashboardBrandLink } from "@/components/dashboard-brand-link";
+import { AppShell } from "@/components/app-shell";
 import { LeadNotes } from "@/components/lead-notes";
 
 type Lead = {
@@ -873,18 +873,19 @@ export default function LeadDetailsPage() {
 
   if (loading) {
     return (
-      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-lg font-semibold text-slate-600">
+      <AppShell>
+        <div className="flex min-h-[50vh] items-center justify-center text-lg font-semibold text-slate-600">
           Betöltés...
         </div>
-      </main>
+      </AppShell>
     );
   }
 
   if (!lead) {
     return (
-      <main className="partner-surface flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
+      <AppShell>
+        <div className="flex min-h-[50vh] items-center justify-center text-center">
+          <div>
           <h1 className="text-2xl font-bold text-slate-900">
             Az érdeklődő nem található
           </h1>
@@ -895,8 +896,9 @@ export default function LeadDetailsPage() {
           >
             Vissza az érdeklődőkhöz
           </button>
+          </div>
         </div>
-      </main>
+      </AppShell>
     );
   }
 
@@ -910,10 +912,8 @@ export default function LeadDetailsPage() {
         : lead.source === "messenger" ? "Messenger"
           : lead.source === "manual" ? "Kézi felvétel" : lead.source || "—";
     return (
-      <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
-        <div className="mx-auto max-w-3xl">
-          <DashboardBrandLink />
-          <button onClick={() => router.push("/leads")} className="mb-5 mt-3 block text-sm font-medium text-violet-600 hover:text-violet-700">
+      <AppShell>
+          <button onClick={() => router.push("/leads")} className="mb-5 block text-sm font-medium text-violet-600 hover:text-violet-700">
             ← Vissza az érdeklődőkhöz
           </button>
           <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
@@ -930,8 +930,7 @@ export default function LeadDetailsPage() {
             </dl>
             <p className="mt-6 text-sm text-slate-500">Az anonimizálás nem vonható vissza, és ehhez az ügyhöz új tartalom már nem rögzíthető.</p>
           </section>
-        </div>
-      </main>
+      </AppShell>
     );
   }
 
@@ -963,13 +962,11 @@ export default function LeadDetailsPage() {
         : "bg-slate-100 text-slate-700";
 
   return (
-    <main className="partner-surface min-h-screen bg-slate-50 p-4 sm:p-6 md:p-10">
-      <div className="mx-auto max-w-5xl">
+    <AppShell>
         <div className="mb-8">
-          <DashboardBrandLink />
           <button
             onClick={() => router.push("/leads")}
-            className="mb-4 mt-3 block text-sm font-medium text-violet-600 hover:text-violet-700"
+            className="mb-4 block text-sm font-medium text-violet-600 hover:text-violet-700"
           >
             ← Vissza az érdeklődőkhöz
           </button>
@@ -1701,7 +1698,6 @@ export default function LeadDetailsPage() {
             </div>
           </div>
         </form>
-      </div>
-    </main>
+    </AppShell>
   );
 }
