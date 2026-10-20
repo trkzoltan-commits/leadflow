@@ -16,6 +16,14 @@ export type CompanyBranding = {
   showCompanyName: boolean;
 };
 
+export const COMPANY_LOGO_BUCKET = "company-branding";
+export const COMPANY_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const companyLogoExtensions = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+]);
+
 export class CompanyBrandingValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -25,6 +33,33 @@ export class CompanyBrandingValidationError extends Error {
 
 export function validBrandColor(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+export function companyLogoExtension(value: { type?: unknown; size?: unknown }) {
+  if (typeof value.size !== "number" || !Number.isFinite(value.size) || value.size <= 0) {
+    throw new CompanyBrandingValidationError("Válassz egy nem üres logóképet.");
+  }
+  if (value.size > COMPANY_LOGO_MAX_BYTES) {
+    throw new CompanyBrandingValidationError("A logókép legfeljebb 2 MB méretű lehet.");
+  }
+  if (typeof value.type !== "string" || !companyLogoExtensions.has(value.type)) {
+    throw new CompanyBrandingValidationError("A logó PNG, JPG vagy WebP formátumú lehet.");
+  }
+  return companyLogoExtensions.get(value.type)!;
+}
+
+export function companyLogoStoragePath(value: unknown, companyId: string) {
+  if (typeof value !== "string" || !value || !companyId) return null;
+  try {
+    const marker = `/storage/v1/object/public/${COMPANY_LOGO_BUCKET}/`;
+    const pathname = new URL(value).pathname;
+    const markerIndex = pathname.indexOf(marker);
+    if (markerIndex < 0) return null;
+    const objectPath = decodeURIComponent(pathname.slice(markerIndex + marker.length));
+    return objectPath.startsWith(`${companyId}/`) ? objectPath : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeLogoUrl(value: unknown) {

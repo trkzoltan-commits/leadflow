@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -69,6 +69,8 @@ export default function SettingsPage() {
   const [brandSecondary, setBrandSecondary] = useState(DEFAULT_COMPANY_BRANDING.brandSecondary);
   const [brandingMode, setBrandingMode] = useState<CompanyBrandingMode>(DEFAULT_COMPANY_BRANDING.brandingMode);
   const [showCompanyName, setShowCompanyName] = useState(DEFAULT_COMPANY_BRANDING.showCompanyName);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoUploadSuccess, setLogoUploadSuccess] = useState(false);
   const [signatureEnabled, setSignatureEnabled] = useState(true);
   const [signatureShowLogo, setSignatureShowLogo] = useState(true);
   const [emailSignoff, setEmailSignoff] = useState("Üdvözlettel,");
@@ -368,6 +370,46 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleLogoUpload(event: ChangeEvent<HTMLInputElement>) {
+    const logo = event.target.files?.[0];
+    event.target.value = "";
+    if (!logo || userRole !== "owner") return;
+    setError("");
+    setLogoUploadSuccess(false);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(logo.type)) {
+      setError("A logó PNG, JPG vagy WebP formátumú lehet.");
+      return;
+    }
+    if (logo.size <= 0 || logo.size > 2 * 1024 * 1024) {
+      setError("A logókép legfeljebb 2 MB méretű lehet.");
+      return;
+    }
+
+    setUploadingLogo(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("A munkamenet lejárt. Jelentkezz be újra.");
+      const body = new FormData();
+      body.append("logo", logo);
+      const response = await fetch("/api/company-branding", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body,
+      });
+      const result = await response.json();
+      if (!response.ok || typeof result.logoUrl !== "string") {
+        throw new Error(result.error || "A logó feltöltése nem sikerült.");
+      }
+      setCompanyLogoUrl(result.logoUrl);
+      setLogoUploadSuccess(true);
+      window.dispatchEvent(new CustomEvent("leadflow:company-profile-updated", { detail: { companyLogoUrl: result.logoUrl } }));
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "A logó feltöltése nem sikerült.");
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
+
   const previewPrimary = validBrandColor(brandPrimary) ? brandPrimary : DEFAULT_COMPANY_BRANDING.brandPrimary;
   const previewSecondary = validBrandColor(brandSecondary) ? brandSecondary : DEFAULT_COMPANY_BRANDING.brandSecondary;
 
@@ -477,10 +519,23 @@ export default function SettingsPage() {
             {userRole !== "owner" && <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-600">A céges arculatot csak a tulajdonos módosíthatja.</p>}
 
             <fieldset disabled={userRole !== "owner"} className={`mt-5 space-y-5 ${userRole !== "owner" ? "opacity-60" : ""}`}>
-              <label className="block text-sm font-medium text-slate-700">Logó nyilvános hivatkozása
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="font-semibold text-slate-900">Logókép feltöltése</p>
+                <p className="mt-1 text-sm leading-6 text-slate-500">PNG, JPG vagy WebP, legfeljebb 2 MB. A feltöltés automatikusan menti és lecseréli a korábbi logót.</p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <label className={`accent-bg inline-flex cursor-pointer items-center rounded-lg px-4 py-2 text-sm font-semibold text-white ${uploadingLogo ? "pointer-events-none opacity-60" : ""}`}>
+                    <input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void handleLogoUpload(event)} disabled={uploadingLogo || userRole !== "owner"} className="sr-only" />
+                    {uploadingLogo ? "Feltöltés…" : companyLogoUrl ? "Másik logó feltöltése" : "Logó kiválasztása"}
+                  </label>
+                  {companyLogoUrl && <button type="button" onClick={() => { setCompanyLogoUrl(""); setLogoUploadSuccess(false); }} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Logó eltávolítása</button>}
+                  {logoUploadSuccess && <span role="status" className="text-sm font-semibold text-green-700">✓ A logó feltöltve.</span>}
+                </div>
+              </div>
+
+              <label className="block text-sm font-medium text-slate-700">Vagy add meg a logó nyilvános hivatkozását
                 <input type="url" value={companyLogoUrl} maxLength={1000} onChange={event => setCompanyLogoUrl(event.target.value)} placeholder="https://pelda.hu/logo.png"
                   className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" />
-                <span className="mt-1 block text-xs leading-5 text-slate-500">Nyilvánosan elérhető HTTP vagy HTTPS képfájl. Üresen hagyva a LeadFlow a cégnév kezdőbetűjét mutatja.</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">Tartalék lehetőség már máshol tárolt képhez. Az URL és az eltávolítás a „Módosítások mentése” gombbal lép életbe.</span>
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
