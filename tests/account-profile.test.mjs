@@ -34,6 +34,9 @@ function loadRoute({ role = "owner" } = {}) {
     require(name) {
       if (name === "@supabase/supabase-js") return { createClient: () => client };
       if (name === "next/server") return { NextResponse: Response };
+      if (name === "@/lib/company-branding") return { normalizeCompanyBranding: () => ({
+        logoUrl: "", brandPrimary: "#5fa8d3", brandSecondary: "#dceff8", brandingMode: "logo_and_name", showCompanyName: true,
+      }) };
       throw new Error(name);
     },
   };

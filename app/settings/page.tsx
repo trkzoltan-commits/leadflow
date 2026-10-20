@@ -10,6 +10,11 @@ import { AppShell } from "@/components/app-shell";
 import { TeamManagement } from "@/components/team-management";
 import { useAutomationHealth } from "@/lib/use-automation-health";
 import type { DataRetentionStatus } from "@/lib/data-retention";
+import {
+  DEFAULT_COMPANY_BRANDING,
+  validBrandColor,
+  type CompanyBrandingMode,
+} from "@/lib/company-branding";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
@@ -60,6 +65,10 @@ export default function SettingsPage() {
   const [autoReplyMode, setAutoReplyMode] =
     useState<AutoReplyMode>("manual");
   const [companyLogoUrl, setCompanyLogoUrl] = useState("");
+  const [brandPrimary, setBrandPrimary] = useState(DEFAULT_COMPANY_BRANDING.brandPrimary);
+  const [brandSecondary, setBrandSecondary] = useState(DEFAULT_COMPANY_BRANDING.brandSecondary);
+  const [brandingMode, setBrandingMode] = useState<CompanyBrandingMode>(DEFAULT_COMPANY_BRANDING.brandingMode);
+  const [showCompanyName, setShowCompanyName] = useState(DEFAULT_COMPANY_BRANDING.showCompanyName);
   const [signatureEnabled, setSignatureEnabled] = useState(true);
   const [signatureShowLogo, setSignatureShowLogo] = useState(true);
   const [emailSignoff, setEmailSignoff] = useState("Üdvözlettel,");
@@ -167,7 +176,12 @@ export default function SettingsPage() {
       const profile: {
         companyId: string;
         companyName: string;
+        companyLogoUrl: string;
         companySlug: string;
+        brandPrimary: string;
+        brandSecondary: string;
+        brandingMode: CompanyBrandingMode;
+        showCompanyName: boolean;
         role: string;
         autoReplyMode: AutoReplyMode;
         privacyNoticeEnabled: boolean;
@@ -179,6 +193,11 @@ export default function SettingsPage() {
       setCompanyName(profile.companyName);
       setSavedCompanyName(profile.companyName);
       setCompanySlug(profile.companySlug);
+      setCompanyLogoUrl(profile.companyLogoUrl || "");
+      setBrandPrimary(profile.brandPrimary || DEFAULT_COMPANY_BRANDING.brandPrimary);
+      setBrandSecondary(profile.brandSecondary || DEFAULT_COMPANY_BRANDING.brandSecondary);
+      setBrandingMode(profile.brandingMode || DEFAULT_COMPANY_BRANDING.brandingMode);
+      setShowCompanyName(profile.showCompanyName ?? DEFAULT_COMPANY_BRANDING.showCompanyName);
       setUserRole(profile.role);
       setAutoReplyMode(profile.autoReplyMode || "manual");
       setPrivacyNoticeEnabled(profile.privacyNoticeEnabled ?? false);
@@ -189,12 +208,9 @@ export default function SettingsPage() {
         void refreshRetentionStatus(session.access_token);
       }
 
-      const [{ data: signatureSettings }, { data: companyRow }] = await Promise.all([
-        supabase.from("company_settings").select(
-          "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_address,email_website,email_legal_text"
-        ).eq("company_id", profile.companyId).single(),
-        supabase.from("companies").select("logo_url").eq("id", profile.companyId).single(),
-      ]);
+      const { data: signatureSettings } = await supabase.from("company_settings").select(
+        "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_address,email_website,email_legal_text"
+      ).eq("company_id", profile.companyId).single();
       if (signatureSettings) {
         setSignatureEnabled(signatureSettings.email_signature_enabled ?? true);
         setSignatureShowLogo(signatureSettings.email_signature_show_logo ?? true);
@@ -206,8 +222,6 @@ export default function SettingsPage() {
         setSignatureWebsite(signatureSettings.email_website || "");
         setSignatureLegalText(signatureSettings.email_legal_text || "");
       }
-      setCompanyLogoUrl(companyRow?.logo_url || "");
-
       const localPreferences = readLocalPreferences();
       const { data: preferenceRow } = await supabase
         .from("user_preferences")
@@ -232,7 +246,7 @@ export default function SettingsPage() {
     setSaveSuccess(false);
     setError("");
 
-    if (userRole === "owner" && companyName.trim() !== savedCompanyName) {
+    if (activeSection === "company" && userRole === "owner" && companyName.trim() !== savedCompanyName) {
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -257,7 +271,42 @@ export default function SettingsPage() {
       window.dispatchEvent(new CustomEvent("leadflow:company-profile-updated", { detail: { companyName: companyResult.companyName } }));
     }
 
-    if (canManageCompany) {
+    if (activeSection === "company" && userRole === "owner") {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setError("A munkamenet lejárt. Jelentkezz be újra.");
+        setSaving(false);
+        return;
+      }
+      const brandingResponse = await fetch("/api/company-branding", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ logoUrl: companyLogoUrl, brandPrimary, brandSecondary, brandingMode, showCompanyName }),
+      });
+      const brandingResult = await brandingResponse.json();
+      if (!brandingResponse.ok) {
+        setError(brandingResult.error || "A céges arculat mentése nem sikerült.");
+        setSaving(false);
+        return;
+      }
+      setCompanyLogoUrl(brandingResult.branding.logoUrl);
+      setBrandPrimary(brandingResult.branding.brandPrimary);
+      setBrandSecondary(brandingResult.branding.brandSecondary);
+      setBrandingMode(brandingResult.branding.brandingMode);
+      setShowCompanyName(brandingResult.branding.showCompanyName);
+      window.dispatchEvent(new CustomEvent("leadflow:company-profile-updated", {
+        detail: {
+          companyName: companyName.trim(),
+          companyLogoUrl: brandingResult.branding.logoUrl,
+          brandPrimary: brandingResult.branding.brandPrimary,
+          brandSecondary: brandingResult.branding.brandSecondary,
+        },
+      }));
+    }
+
+    if (canManageCompany && (activeSection === "messages" || activeSection === "privacy")) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setError("A munkamenet lejárt. Jelentkezz be újra.");
@@ -318,6 +367,9 @@ export default function SettingsPage() {
       setError("A linket nem sikerült a vágólapra másolni.");
     }
   }
+
+  const previewPrimary = validBrandColor(brandPrimary) ? brandPrimary : DEFAULT_COMPANY_BRANDING.brandPrimary;
+  const previewSecondary = validBrandColor(brandSecondary) ? brandSecondary : DEFAULT_COMPANY_BRANDING.brandSecondary;
 
   if (loading) {
     return (
@@ -411,6 +463,73 @@ export default function SettingsPage() {
                 className={`mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 ${userRole !== "owner" ? "bg-slate-50" : "bg-white"}`} />
               <span className="mt-1 block text-xs text-slate-500">{userRole === "owner" ? "A név a partnerfelületen és a céges aláírásban is megjelenik." : "A cégnevet csak a tulajdonos módosíthatja."}</span>
             </label>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-slate-200 p-4 sm:p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="font-semibold text-slate-900">Céges arculat</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-500">A logó és a színek a publikus ajánlatkérőn, valamint a LeadFlow céges menüjében jelennek meg.</p>
+              </div>
+              <span className="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Azonnali előnézet</span>
+            </div>
+
+            {userRole !== "owner" && <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-600">A céges arculatot csak a tulajdonos módosíthatja.</p>}
+
+            <fieldset disabled={userRole !== "owner"} className={`mt-5 space-y-5 ${userRole !== "owner" ? "opacity-60" : ""}`}>
+              <label className="block text-sm font-medium text-slate-700">Logó nyilvános hivatkozása
+                <input type="url" value={companyLogoUrl} maxLength={1000} onChange={event => setCompanyLogoUrl(event.target.value)} placeholder="https://pelda.hu/logo.png"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" />
+                <span className="mt-1 block text-xs leading-5 text-slate-500">Nyilvánosan elérhető HTTP vagy HTTPS képfájl. Üresen hagyva a LeadFlow a cégnév kezdőbetűjét mutatja.</span>
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="text-sm font-medium text-slate-700">Elsődleges szín
+                  <span className="mt-2 flex items-center gap-2">
+                    <input type="color" aria-label="Elsődleges szín kiválasztása" value={previewPrimary} onChange={event => setBrandPrimary(event.target.value)} className="h-11 w-14 cursor-pointer rounded-lg border border-slate-200 bg-white p-1" />
+                    <input value={brandPrimary} maxLength={7} onChange={event => setBrandPrimary(event.target.value)} placeholder="#002bff" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono" />
+                  </span>
+                </label>
+                <label className="text-sm font-medium text-slate-700">Másodlagos szín
+                  <span className="mt-2 flex items-center gap-2">
+                    <input type="color" aria-label="Másodlagos szín kiválasztása" value={previewSecondary} onChange={event => setBrandSecondary(event.target.value)} className="h-11 w-14 cursor-pointer rounded-lg border border-slate-200 bg-white p-1" />
+                    <input value={brandSecondary} maxLength={7} onChange={event => setBrandSecondary(event.target.value)} placeholder="#dceff8" className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono" />
+                  </span>
+                </label>
+              </div>
+
+              <fieldset>
+                <legend className="text-sm font-medium text-slate-700">Fejléc megjelenése</legend>
+                <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                  <label className={`cursor-pointer rounded-xl border p-4 ${brandingMode === "logo_and_name" ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}>
+                    <input className="mr-2" type="radio" name="brandingMode" value="logo_and_name" checked={brandingMode === "logo_and_name"} onChange={() => setBrandingMode("logo_and_name")} />
+                    <span className="font-semibold text-slate-900">Logó és cégnév</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">A logó mellett külön szövegként jelenhet meg a cégnév.</span>
+                  </label>
+                  <label className={`cursor-pointer rounded-xl border p-4 ${brandingMode === "combined_image" ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}>
+                    <input className="mr-2" type="radio" name="brandingMode" value="combined_image" checked={brandingMode === "combined_image"} onChange={() => setBrandingMode("combined_image")} />
+                    <span className="font-semibold text-slate-900">Kombinált logókép</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">A feltöltött kép már tartalmazza a cégnevet, ezért nem kerül mellé külön felirat.</span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <label className={`flex items-start gap-3 rounded-xl bg-slate-50 p-4 ${brandingMode === "combined_image" ? "opacity-60" : ""}`}>
+                <input className="mt-1" type="checkbox" checked={showCompanyName} disabled={brandingMode === "combined_image" || userRole !== "owner"} onChange={event => setShowCompanyName(event.target.checked)} />
+                <span><span className="block font-semibold text-slate-900">Cégnév megjelenítése az ajánlatkérőn</span><span className="mt-1 block text-sm text-slate-500">Kombinált logóképnél a rendszer automatikusan elrejti a külön cégnévfeliratot.</span></span>
+              </label>
+            </fieldset>
+
+            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200" style={{ backgroundColor: `${previewSecondary}55` }}>
+              <p className="border-b border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Ajánlatkérő előnézete</p>
+              <div className="flex min-h-36 flex-col items-center justify-center gap-3 p-6 text-center">
+                {companyLogoUrl.trim()
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={companyLogoUrl.trim()} alt="Céges logó előnézete" className="max-h-20 max-w-48 object-contain" />
+                  : <span className="flex h-16 w-16 items-center justify-center rounded-xl text-xl font-bold text-white" style={{ backgroundColor: previewPrimary }}>{(companyName || "V").trim().charAt(0).toUpperCase()}</span>}
+                {brandingMode === "logo_and_name" && showCompanyName && <span className="rounded-xl px-4 py-2 text-xl font-bold" style={{ color: previewPrimary, backgroundColor: previewSecondary }}>{companyName || "Vállalkozás"}</span>}
+              </div>
+            </div>
           </div>
 
           <div className="mt-5 space-y-3">

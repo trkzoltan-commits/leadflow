@@ -14,6 +14,8 @@ type AppShellProps = {
 type ShellProfile = {
   companyName: string;
   companyLogoUrl: string;
+  brandPrimary: string;
+  brandSecondary: string;
   role: string;
   email: string;
 };
@@ -46,11 +48,7 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [profile, setProfile] = useState<ShellProfile>({ companyName: "Vállalkozás", companyLogoUrl: "", role: "user", email: "" });
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
+  const [profile, setProfile] = useState<ShellProfile>({ companyName: "Vállalkozás", companyLogoUrl: "", brandPrimary: "#5fa8d3", brandSecondary: "#dceff8", role: "user", email: "" });
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -75,6 +73,8 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
         setProfile({
           companyName: data.companyName || "Vállalkozás",
           companyLogoUrl: data.companyLogoUrl || "",
+          brandPrimary: data.brandPrimary || "#5fa8d3",
+          brandSecondary: data.brandSecondary || "#dceff8",
           role: data.role || "user",
           email: session.user.email || "",
         });
@@ -88,10 +88,20 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
 
   useEffect(() => {
     function updateCompanyProfile(event: Event) {
-      const companyName = (event as CustomEvent<{ companyName?: unknown }>).detail?.companyName;
-      if (typeof companyName === "string" && companyName.trim()) {
-        setProfile(current => ({ ...current, companyName: companyName.trim() }));
-      }
+      const detail = (event as CustomEvent<{
+        companyName?: unknown;
+        companyLogoUrl?: unknown;
+        brandPrimary?: unknown;
+        brandSecondary?: unknown;
+      }>).detail;
+      if (!detail) return;
+      setProfile(current => ({
+        ...current,
+        companyName: typeof detail.companyName === "string" && detail.companyName.trim() ? detail.companyName.trim() : current.companyName,
+        companyLogoUrl: typeof detail.companyLogoUrl === "string" ? detail.companyLogoUrl : current.companyLogoUrl,
+        brandPrimary: typeof detail.brandPrimary === "string" ? detail.brandPrimary : current.brandPrimary,
+        brandSecondary: typeof detail.brandSecondary === "string" ? detail.brandSecondary : current.brandSecondary,
+      }));
     }
     window.addEventListener("leadflow:company-profile-updated", updateCompanyProfile);
     return () => window.removeEventListener("leadflow:company-profile-updated", updateCompanyProfile);
@@ -111,12 +121,12 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
 
   const sidebar = <div className="flex h-full flex-col">
     <div className="border-b border-slate-200 px-5 py-5">
-      <Link href="/" aria-label="LeadFlow Dashboard – Áttekintés" className="accent-text text-xl font-bold tracking-tight">LeadFlow</Link>
-      <div className="mt-4 flex min-w-0 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <Link href="/" onClick={() => setMenuOpen(false)} aria-label="LeadFlow Dashboard – Áttekintés" className="accent-text text-xl font-bold tracking-tight">LeadFlow</Link>
+      <div className="mt-4 flex min-w-0 items-center gap-3 rounded-xl border bg-slate-50 p-3" style={{ borderColor: profile.brandPrimary, backgroundColor: `${profile.brandSecondary}55` }}>
         {profile.companyLogoUrl
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={profile.companyLogoUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain p-1" />
-          : <span aria-hidden="true" className="accent-bg flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-bold text-white">{initial}</span>}
+          : <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg font-bold text-white" style={{ backgroundColor: profile.brandPrimary }}>{initial}</span>}
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-slate-900">{profile.companyName}</p>
           <p className="text-xs text-slate-500">Partnerfelület</p>
@@ -125,13 +135,13 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
     </div>
 
     <nav aria-label="Fő navigáció" className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-      {navigation.map(item => <Link key={item.href} href={item.href} aria-current={isActive(pathname, item.href) ? "page" : undefined} className={navClass(isActive(pathname, item.href))}>
+      {navigation.map(item => <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} aria-current={isActive(pathname, item.href) ? "page" : undefined} className={navClass(isActive(pathname, item.href))}>
         <NavIcon name={item.icon} /><span>{item.label}</span>
       </Link>)}
     </nav>
 
     <div className="border-t border-slate-200 p-3">
-      <Link href="/settings" aria-current={isActive(pathname, "/settings") ? "page" : undefined} className={navClass(isActive(pathname, "/settings"))}>
+      <Link href="/settings" onClick={() => setMenuOpen(false)} aria-current={isActive(pathname, "/settings") ? "page" : undefined} className={navClass(isActive(pathname, "/settings"))}>
         <NavIcon name="settings" /><span>Beállítások</span>
       </Link>
       <div className="mt-3 border-t border-slate-200 px-3 pt-3">

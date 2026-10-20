@@ -60,8 +60,9 @@ test("dashboard keeps the daily workflow actions", () => {
 
 test("company profile exposes the logo needed by the shared shell", () => {
   const route = read("app/api/account-profile/route.ts");
-  assert.match(route, /select\("name,public_slug,logo_url"\)/);
-  assert.match(route, /companyLogoUrl: company\.logo_url \|\| ""/);
+  assert.match(route, /select\("name,public_slug,logo_url,brand_primary,brand_secondary,branding_mode,show_company_name"\)/);
+  assert.match(route, /companyLogoUrl: branding\.logoUrl/);
+  assert.match(route, /brandPrimary: branding\.brandPrimary/);
 });
 
 test("settings are separated into focused categories", () => {
