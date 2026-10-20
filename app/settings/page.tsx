@@ -13,6 +13,16 @@ import type { DataRetentionStatus } from "@/lib/data-retention";
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
+type SettingsSection = "account" | "company" | "team" | "messages" | "privacy" | "automation";
+
+const settingsSections: { id: SettingsSection; label: string; description: string }[] = [
+  { id: "account", label: "Saját fiók", description: "Profil és megjelenés" },
+  { id: "company", label: "Vállalkozás", description: "Cégnév és ajánlatkérő" },
+  { id: "team", label: "Csapat", description: "Felhasználók és jogosultságok" },
+  { id: "messages", label: "Üzenetek", description: "AI-válaszok és aláírás" },
+  { id: "privacy", label: "Adatvédelem", description: "Tájékoztató és megőrzés" },
+  { id: "automation", label: "Automatizálás", description: "Make-kapcsolat állapota" },
+];
 
 function displayRetentionDate(value: string) {
   const date = new Date(value);
@@ -35,6 +45,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
 
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState("");
@@ -109,6 +120,24 @@ export default function SettingsPage() {
       setRetentionStatusLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    function selectSectionFromHash() {
+      const requested = window.location.hash.slice(1) as SettingsSection;
+      if (settingsSections.some(section => section.id === requested)) setActiveSection(requested);
+    }
+    selectSectionFromHash();
+    window.addEventListener("hashchange", selectSectionFromHash);
+    return () => window.removeEventListener("hashchange", selectSectionFromHash);
+  }, []);
+
+  function selectSection(section: SettingsSection) {
+    setActiveSection(section);
+    setSaveSuccess(false);
+    setError("");
+    window.history.replaceState(null, "", `${window.location.pathname}#${section}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   useEffect(() => {
     async function loadSettings() {
@@ -225,6 +254,7 @@ export default function SettingsPage() {
       }
       setCompanyName(companyResult.companyName);
       setSavedCompanyName(companyResult.companyName);
+      window.dispatchEvent(new CustomEvent("leadflow:company-profile-updated", { detail: { companyName: companyResult.companyName } }));
     }
 
     if (canManageCompany) {
@@ -307,22 +337,34 @@ export default function SettingsPage() {
           </h1>
 
           <p className="mt-2 text-slate-500">
-            Saját adatok, megjelenés és üzenetek működése.
+            Válassz egy kategóriát; egyszerre csak az ahhoz tartozó beállítások jelennek meg.
           </p>
         </div>
 
-        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <h2 className="text-xl font-bold text-slate-900">Saját adatok</h2>
+        <nav aria-label="Beállítások kategóriái" className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:grid-cols-3 xl:grid-cols-6">
+          {settingsSections.map(section => <button key={section.id} type="button"
+            aria-current={activeSection === section.id ? "page" : undefined}
+            onClick={() => selectSection(section.id)}
+            className={activeSection === section.id
+              ? "accent-soft accent-text rounded-xl px-3 py-3 text-left"
+              : "rounded-xl px-3 py-3 text-left text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"}>
+            <span className="block text-sm font-bold">{section.label}</span>
+            <span className="mt-1 hidden text-xs opacity-75 sm:block">{section.description}</span>
+          </button>)}
+        </nav>
+
+        {activeSection === "account" && <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <h2 className="text-xl font-bold text-slate-900">Saját fiók</h2>
+          <p className="mt-2 text-sm text-slate-500">A bejelentkezett felhasználó adatai és személyes megjelenési beállításai.</p>
           <dl className="mt-5 grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">E-mail-cím</dt><dd className="mt-1 break-all font-semibold text-slate-900">{userEmail || "—"}</dd></div>
             <div className="rounded-xl bg-slate-50 p-4"><dt className="text-sm text-slate-500">Szerepkör</dt><dd className="mt-1 font-semibold text-slate-900">{roleLabel(userRole)}</dd></div>
-            <div className="rounded-xl bg-slate-50 p-4 sm:col-span-2"><dt className="text-sm text-slate-500">Vállalkozás</dt><dd className="mt-1 font-semibold text-slate-900">{companyName || "—"}</dd></div>
           </dl>
-        </section>
+        </section>}
 
-        <TeamManagement isOwner={userRole === "owner"} />
+        {activeSection === "team" && <TeamManagement isOwner={userRole === "owner"} />}
 
-        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        {activeSection === "account" && <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-900">Megjelenés</h2>
           <p className="mt-2 text-sm text-slate-500">A választás ehhez a felhasználói fiókhoz tartozik, és mobilon is automatikusan alkalmazkodik.</p>
           <fieldset className="mt-5"><legend className="font-semibold text-slate-900">Színtéma</legend>
@@ -344,33 +386,31 @@ export default function SettingsPage() {
               </label>)}
             </div>
           </fieldset>
-        </section>
+        </section>}
 
-        <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        {activeSection === "company" && <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-violet-600">
-                Első lépések
+                Vállalkozás
               </p>
               <h2 className="mt-1 text-xl font-bold text-slate-900">
                 {companyName || "Vállalkozás beállítása"}
               </h2>
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                Itt látod, hogy a LeadFlow készen áll-e az érdeklődők fogadására és feldolgozására.
+                A LeadFlow-ban megjelenő cégadatok és a publikus ajánlatkérő elérése.
               </p>
             </div>
-            <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${
-              makeStatusError
-                ? "bg-amber-100 text-amber-700"
-                : automationHealthLoading
-                  ? "bg-slate-100 text-slate-600"
-                  : makeStatus === "company_active" || makeStatus === "legacy"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-amber-100 text-amber-700"
-            }`}>
-              {makeStatusError ? "Nem ellenőrizhető" : automationHealthLoading ? "Ellenőrzés…" :
-                makeStatus === "company_active" || makeStatus === "legacy" ? "Használatra kész" : "Beállítás alatt"}
-            </span>
+            <span className="w-fit rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">Partnerfiók aktív</span>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-slate-200 p-4">
+            <h3 className="font-semibold text-slate-900">Vállalkozás adatai</h3>
+            <label className="mt-4 block text-sm font-medium text-slate-700">Cégnév
+              <input value={companyName} maxLength={200} disabled={userRole !== "owner"} onChange={(event) => setCompanyName(event.target.value)}
+                className={`mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 ${userRole !== "owner" ? "bg-slate-50" : "bg-white"}`} />
+              <span className="mt-1 block text-xs text-slate-500">{userRole === "owner" ? "A név a partnerfelületen és a céges aláírásban is megjelenik." : "A cégnevet csak a tulajdonos módosíthatja."}</span>
+            </label>
           </div>
 
           <div className="mt-5 space-y-3">
@@ -410,36 +450,10 @@ export default function SettingsPage() {
                 </a>
               </div>
             </div>
-
-            <div className={`flex items-start gap-3 rounded-xl p-4 ${
-              automationHealthLoading ? "bg-slate-50" : makeStatusError ? "bg-amber-50" :
-                makeStatus === "company_active" || makeStatus === "legacy" ? "bg-green-50" : "bg-amber-50"
-            }`}>
-              <span className={`font-bold ${
-                automationHealthLoading ? "text-slate-500" : makeStatusError ? "text-amber-700" :
-                  makeStatus === "company_active" || makeStatus === "legacy" ? "text-green-700" : "text-amber-700"
-              }`}>
-                {automationHealthLoading ? "…" : makeStatusError ? "!" : makeStatus === "company_active" || makeStatus === "legacy" ? "✓" : "!"}
-              </span>
-              <div>
-                <p className="font-semibold text-slate-900">Automatikus feldolgozás</p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {automationHealthLoading
-                    ? "A Make-kapcsolat állapotának ellenőrzése folyamatban van."
-                    : makeStatusError
-                    ? "Az állapot most nem ellenőrizhető."
-                    : makeStatus === "company_active"
-                    ? "A saját Make-kapcsolat aktív."
-                    : makeStatus === "legacy"
-                      ? "Az átmeneti LeadFlow-kapcsolat aktív."
-                      : "A Make-kapcsolat beállítása még folyamatban van."}
-                </p>
-              </div>
-            </div>
           </div>
-        </div>
+        </div>}
 
-        <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        {activeSection === "privacy" && <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-900">Ajánlatkérő adatkezelése</h2>
           <p className="mt-2 text-sm leading-6 text-slate-500">A LeadFlow céges tájékoztató oldalt készít. Aktiválás után az érdeklődő csak a tájékoztató elolvasását megerősítő kötelező jelölőnégyzettel küldheti el az űrlapot.</p>
           {!canManageCompany && <p className="mt-4 rounded-xl bg-slate-100 p-4 text-sm text-slate-600">Ezt a céges beállítást tulajdonos vagy adminisztrátor módosíthatja.</p>}
@@ -486,9 +500,9 @@ export default function SettingsPage() {
               )}
             </div>
           )}
-        </section>
+        </section>}
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        {activeSection === "messages" && <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900">Üzenetek beállításai</h2>
 
           <p className="mt-2 text-sm leading-6 text-slate-500">
@@ -507,7 +521,7 @@ export default function SettingsPage() {
             </div>
             {signatureEnabled && <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-medium text-slate-700">Elköszönés<input value={emailSignoff} maxLength={100} onChange={(e) => setEmailSignoff(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
-              <label className="text-sm font-medium text-slate-700">Cégnév<input value={companyName} maxLength={200} disabled={userRole !== "owner"} onChange={(e) => setCompanyName(e.target.value)} className={`mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 ${userRole !== "owner" ? "bg-slate-50" : "bg-white"}`} /><span className="mt-1 block text-xs text-slate-500">{userRole === "owner" ? "Tulajdonosként módosíthatod; minden céges felületen ez a név jelenik meg." : "A cégnevet csak a tulajdonos módosíthatja."}</span></label>
+              <div className="rounded-xl bg-slate-50 p-3 text-sm"><span className="block text-slate-500">Cégnév az aláírásban</span><span className="mt-1 block font-semibold text-slate-900">{companyName || "—"}</span><span className="mt-1 block text-xs text-slate-500">A Vállalkozás kategóriában módosítható.</span></div>
               <label className="text-sm font-medium text-slate-700">Aláíró neve<input value={signerName} maxLength={120} onChange={(e) => setSignerName(e.target.value)} placeholder="Például: Kovács Péter" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Beosztás<input value={signerRole} maxLength={120} onChange={(e) => setSignerRole(e.target.value)} placeholder="Például: ügyvezető" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="text-sm font-medium text-slate-700">Telefonszám<input value={signaturePhone} maxLength={80} onChange={(e) => setSignaturePhone(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
@@ -584,28 +598,8 @@ export default function SettingsPage() {
           </div>
           </fieldset>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="accent-bg mt-6 w-full rounded-xl px-4 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Mentés..." : canManageCompany ? "Beállítások mentése" : "Saját megjelenés mentése"}
-          </button>
-
-          {saveSuccess && (
-            <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-              ✓ A beállítás elmentve.
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-              {error}
-            </div>
-          )}
-        </div>
-        <div id="automation" className="mt-6 scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        </div>}
+        {activeSection === "automation" && <div id="automation" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold text-slate-900">Make-kapcsolat</h2>
           <p className="mt-2 text-sm text-slate-500">A vállalkozás automatizálási kapcsolatának állapota.</p>
           <div className="mt-4 rounded-xl bg-slate-50 p-4">
@@ -649,7 +643,19 @@ export default function SettingsPage() {
               }).format(new Date(latestAutomationSuccess))}
             </p>}
           </div>
-        </div>
+        </div>}
+
+        {(activeSection === "account" || activeSection === "company" && userRole === "owner" || (activeSection === "messages" || activeSection === "privacy") && canManageCompany) && <div className="sticky bottom-3 z-10 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            {saveSuccess && <p className="text-sm font-semibold text-green-700">✓ A beállítások elmentve.</p>}
+            {error && <p role="alert" className="text-sm font-medium text-red-700">{error}</p>}
+            {!saveSuccess && !error && <p className="text-sm text-slate-500">A módosítások a mentés után lépnek életbe.</p>}
+          </div>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="accent-bg mt-3 w-full rounded-xl px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:mt-0 sm:w-auto">
+            {saving ? "Mentés..." : canManageCompany ? "Módosítások mentése" : "Saját megjelenés mentése"}
+          </button>
+        </div>}
     </AppShell>
   );
 }

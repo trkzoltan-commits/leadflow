@@ -63,3 +63,21 @@ test("company profile exposes the logo needed by the shared shell", () => {
   assert.match(route, /select\("name,public_slug,logo_url"\)/);
   assert.match(route, /companyLogoUrl: company\.logo_url \|\| ""/);
 });
+
+test("settings are separated into focused categories", () => {
+  const settings = read("app/settings/page.tsx");
+  for (const [id, label] of [
+    ["account", "Saját fiók"],
+    ["company", "Vállalkozás"],
+    ["team", "Csapat"],
+    ["messages", "Üzenetek"],
+    ["privacy", "Adatvédelem"],
+    ["automation", "Automatizálás"],
+  ]) {
+    assert.match(settings, new RegExp(`id: "${id}", label: "${label}"`));
+    assert.match(settings, new RegExp(`activeSection === "${id}"`));
+  }
+  assert.match(settings, /window\.location\.hash\.slice\(1\)/);
+  assert.match(settings, /window\.history\.replaceState/);
+  assert.match(settings, /activeSection === "automation" && <div id="automation"/);
+});

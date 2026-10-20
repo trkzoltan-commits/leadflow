@@ -86,6 +86,17 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    function updateCompanyProfile(event: Event) {
+      const companyName = (event as CustomEvent<{ companyName?: unknown }>).detail?.companyName;
+      if (typeof companyName === "string" && companyName.trim()) {
+        setProfile(current => ({ ...current, companyName: companyName.trim() }));
+      }
+    }
+    window.addEventListener("leadflow:company-profile-updated", updateCompanyProfile);
+    return () => window.removeEventListener("leadflow:company-profile-updated", updateCompanyProfile);
+  }, []);
+
   async function signOut() {
     if (!window.confirm("Biztosan kijelentkezel a LeadFlow-ból?")) return;
     setSigningOut(true);
