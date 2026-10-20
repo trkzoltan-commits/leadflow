@@ -456,7 +456,7 @@ export default function SettingsPage() {
           </dl>
         </section>}
 
-        {activeSection === "team" && <TeamManagement isOwner={userRole === "owner"} />}
+        {activeSection === "team" && <TeamManagement currentRole={userRole} />}
 
         {activeSection === "account" && <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-900">Megjelenés</h2>

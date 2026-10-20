@@ -8,22 +8,58 @@ type Member = { id: string; email: string; role: string; active: boolean; curren
 
 const roleSummaries = [
   {
+    id: "owner",
     role: "Tulajdonos",
     tone: "border-blue-200 bg-blue-50",
     description: "A vállalkozás teljes LeadFlow-fiókját kezeli.",
-    permissions: ["Munkatársak és hozzáférések", "Cégnév, logó és arculat", "Üzenet- és adatvédelmi beállítások", "Érdeklődők, felelősök és teendők"],
+    permissions: [
+      "Dashboard, érdeklődők és Pipeline teljes kezelése",
+      "AI-elemzés és választervezetek készítése",
+      "Jóváhagyott válaszok elküldése",
+      "Belső megjegyzések használata",
+      "Riportok megtekintése és exportálása",
+      "Minden munkatárs teendőinek kezelése",
+      "Felelősök kijelölése és módosítása",
+      "AI-válaszmód és céges e-mail-aláírás beállítása",
+      "Adatvédelmi és adatmegőrzési beállítások",
+      "Cégnév módosítása",
+      "Logó és céges arculat módosítása",
+      "Munkatársak meghívása, jogosultsága és hozzáférése",
+      "Saját színtéma és világos vagy sötét mód",
+    ],
   },
   {
+    id: "admin",
     role: "Adminisztrátor",
     tone: "border-emerald-200 bg-emerald-50",
     description: "A napi működést és a céges folyamatokat irányítja.",
-    permissions: ["Érdeklődők és Pipeline kezelése", "Felelősök kijelölése", "Üzenet- és adatvédelmi beállítások", "Nem kezelhet munkatársakat vagy arculatot"],
+    permissions: [
+      "Dashboard, érdeklődők és Pipeline teljes kezelése",
+      "AI-elemzés és választervezetek készítése",
+      "Jóváhagyott válaszok elküldése",
+      "Belső megjegyzések használata",
+      "Riportok megtekintése és exportálása",
+      "Minden munkatárs teendőinek kezelése",
+      "Felelősök kijelölése és módosítása",
+      "AI-válaszmód és céges e-mail-aláírás beállítása",
+      "Adatvédelmi és adatmegőrzési beállítások",
+      "Saját színtéma és világos vagy sötét mód",
+    ],
   },
   {
+    id: "user",
     role: "Felhasználó",
     tone: "border-slate-200 bg-slate-50",
     description: "A rábízott érdeklődőkkel végzi a napi munkát.",
-    permissions: ["Érdeklődők megtekintése és feldolgozása", "Belső megjegyzések", "Saját teendők kezelése", "Nem módosíthat céges beállításokat"],
+    permissions: [
+      "Dashboard, érdeklődők és Pipeline használata",
+      "AI-elemzés és választervezetek készítése",
+      "Jóváhagyott válaszok elküldése",
+      "Belső megjegyzések használata",
+      "Riportok megtekintése és exportálása",
+      "Saját, hozzá rendelt teendők kezelése",
+      "Saját színtéma és világos vagy sötét mód",
+    ],
   },
 ] as const;
 
@@ -32,7 +68,10 @@ const inviteRoleHelp: Record<string, string> = {
   user: "A felhasználó az érdeklődőket dolgozza fel, és a saját teendőit kezeli.",
 };
 
-export function TeamManagement({ isOwner }: { isOwner: boolean }) {
+export function TeamManagement({ currentRole }: { currentRole: string }) {
+  const isOwner = currentRole === "owner";
+  const ownRole = roleSummaries.find((summary) => summary.id === currentRole) || roleSummaries[2];
+  const visibleRoleSummaries = isOwner ? roleSummaries : [ownRole];
   const [members, setMembers] = useState<Member[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("user");
@@ -112,15 +151,16 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
     } finally { setBusy(""); }
   }
 
-  if (!isOwner) return null;
   return <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-    <h2 className="text-xl font-bold text-slate-900">Munkatársak és jogosultságok</h2>
-    <p className="mt-2 text-sm leading-6 text-slate-500">Tulajdonosként meghívhatod a munkatársakat, és beállíthatod, ki kezelheti a céges beállításokat.</p>
+    <h2 className="text-xl font-bold text-slate-900">{isOwner ? "Munkatársak és jogosultságok" : "Saját jogosultságod"}</h2>
+    <p className="mt-2 text-sm leading-6 text-slate-500">{isOwner
+      ? "Tulajdonosként meghívhatod a munkatársakat, és beállíthatod, ki milyen feladatokat végezhet."
+      : "Itt láthatod, milyen műveleteket végezhetsz a jelenlegi szerepköröddel."}</p>
 
     <div className="mt-5">
-      <h3 className="font-semibold text-slate-900">Mit engednek a szerepkörök?</h3>
-      <div className="mt-3 grid gap-3 lg:grid-cols-3">
-        {roleSummaries.map((summary) => <article key={summary.role} className={`rounded-xl border p-4 ${summary.tone}`}>
+      {isOwner && <h3 className="font-semibold text-slate-900">Mit engednek a szerepkörök?</h3>}
+      <div className={`grid gap-3 ${isOwner ? "mt-3 lg:grid-cols-3" : "max-w-2xl"}`}>
+        {visibleRoleSummaries.map((summary) => <article key={summary.role} className={`rounded-xl border p-4 ${summary.tone}`}>
           <h4 className="font-bold text-slate-900">{summary.role}</h4>
           <p className="mt-1 text-sm leading-5 text-slate-600">{summary.description}</p>
           <ul className="mt-3 space-y-2 text-sm text-slate-700">
@@ -131,9 +171,12 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
           </ul>
         </article>)}
       </div>
-      <p className="mt-3 text-xs leading-5 text-slate-500">A cégnév és a céges arculat módosítása, valamint a munkatársak kezelése mindig a tulajdonosnál marad.</p>
+      <p className="mt-3 text-xs leading-5 text-slate-500">{isOwner
+        ? "Az alacsonyabb szerepkör csak a saját listájában felsorolt lehetőségeket kapja meg."
+        : "A szerepköröd módosítását a vállalkozás tulajdonosától kérheted."}</p>
     </div>
 
+    {isOwner && <>
     <form onSubmit={invite} className="mt-6 rounded-xl border border-slate-200 p-4">
       <h3 className="font-semibold text-slate-900">Új munkatárs meghívása</h3>
       <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_170px_auto]">
@@ -166,5 +209,6 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
     </div>
     {message && <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm font-medium text-green-700">✓ {message}</p>}
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-700">{error}</p>}
+    </>}
   </section>;
 }

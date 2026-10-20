@@ -23,9 +23,12 @@ test("owners can only assign non-owner operational roles", () => {
 
 test("settings exposes invitation and role controls only to owners", () => {
   const settings = readFileSync(new URL("../app/settings/page.tsx", import.meta.url), "utf8");
-  assert.match(settings, /<TeamManagement isOwner=\{userRole === "owner"\}/);
-  assert.match(component, /if \(!isOwner\) return null/);
+  assert.match(settings, /<TeamManagement currentRole=\{userRole\}/);
+  assert.match(component, /const isOwner = currentRole === "owner"/);
+  assert.match(component, /visibleRoleSummaries = isOwner \? roleSummaries : \[ownRole\]/);
+  assert.match(component, /\{isOwner && <>/);
   assert.match(component, /Munkatársak és jogosultságok/);
+  assert.match(component, /Saját jogosultságod/);
   assert.match(component, /Inaktiválás/);
   assert.match(component, /Újraaktiválás/);
 });
