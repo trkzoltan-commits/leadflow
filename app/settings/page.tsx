@@ -19,6 +19,7 @@ import {
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
 type SettingsSection = "account" | "company" | "team" | "messages" | "privacy" | "automation";
+type PersistedSettingsSection = Exclude<SettingsSection, "team" | "automation">;
 
 const settingsSections: { id: SettingsSection; label: string; description: string }[] = [
   { id: "account", label: "Saját fiók", description: "Profil és megjelenés" },
@@ -28,6 +29,15 @@ const settingsSections: { id: SettingsSection; label: string; description: strin
   { id: "privacy", label: "Adatvédelem", description: "Tájékoztató és megőrzés" },
   { id: "automation", label: "Automatizálás", description: "Make-kapcsolat állapota" },
 ];
+const persistedSettingsSections: PersistedSettingsSection[] = ["account", "company", "messages", "privacy"];
+
+function isPersistedSettingsSection(section: SettingsSection): section is PersistedSettingsSection {
+  return persistedSettingsSections.includes(section as PersistedSettingsSection);
+}
+
+function normalizedSettingsText(value: string) {
+  return value.trim();
+}
 
 function displayRetentionDate(value: string) {
   const date = new Date(value);
@@ -87,7 +97,42 @@ export default function SettingsPage() {
   const [retentionStatus, setRetentionStatus] = useState<DataRetentionStatus | null>(null);
   const [retentionStatusLoading, setRetentionStatusLoading] = useState(false);
   const [retentionStatusError, setRetentionStatusError] = useState(false);
+  const [savedSectionSnapshots, setSavedSectionSnapshots] = useState<Record<PersistedSettingsSection, string> | null>(null);
   const canManageCompany = userRole === "owner" || userRole === "admin";
+  const currentSectionSnapshots: Record<PersistedSettingsSection, string> = {
+    account: JSON.stringify({ accentTheme, colorMode }),
+    company: JSON.stringify({
+      companyName: normalizedSettingsText(companyName),
+      companyLogoUrl: normalizedSettingsText(companyLogoUrl),
+      brandPrimary: brandPrimary.toLowerCase(),
+      brandSecondary: brandSecondary.toLowerCase(),
+      brandingMode,
+      showCompanyName,
+    }),
+    messages: JSON.stringify({
+      autoReplyMode,
+      signatureEnabled,
+      signatureShowLogo,
+      emailSignoff: normalizedSettingsText(emailSignoff),
+      signerName: normalizedSettingsText(signerName),
+      signerRole: normalizedSettingsText(signerRole),
+      signaturePhone: normalizedSettingsText(signaturePhone),
+      signatureEmail: normalizedSettingsText(signatureEmail),
+      signatureWebsite: normalizedSettingsText(signatureWebsite),
+      signatureLegalText: normalizedSettingsText(signatureLegalText),
+    }),
+    privacy: JSON.stringify({
+      privacyNoticeEnabled,
+      privacyContactEmail: normalizedSettingsText(privacyContactEmail),
+      privacyCompanyAddress: normalizedSettingsText(privacyCompanyAddress),
+      privacyRetentionMonths,
+    }),
+  };
+  const dirtySections = savedSectionSnapshots
+    ? persistedSettingsSections.filter(section => savedSectionSnapshots[section] !== currentSectionSnapshots[section])
+    : [];
+  const activeSectionDirty = isPersistedSettingsSection(activeSection) && dirtySections.includes(activeSection);
+  const hasUnsavedChanges = dirtySections.length > 0;
   const makeStatus: MakeConnectionStatus | null = automationHealth?.connectionStatus === "legacy_fallback"
     ? "legacy" : automationHealth?.connectionStatus ?? null;
   const makeStatusError = Boolean(automationHealthError);
@@ -213,17 +258,24 @@ export default function SettingsPage() {
       const { data: signatureSettings } = await supabase.from("company_settings").select(
         "email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_address,email_website,email_legal_text"
       ).eq("company_id", profile.companyId).single();
-      if (signatureSettings) {
-        setSignatureEnabled(signatureSettings.email_signature_enabled ?? true);
-        setSignatureShowLogo(signatureSettings.email_signature_show_logo ?? true);
-        setEmailSignoff(signatureSettings.email_signoff || "Üdvözlettel,");
-        setSignerName(signatureSettings.email_signer_name || "");
-        setSignerRole(signatureSettings.email_signer_role || "");
-        setSignaturePhone(signatureSettings.email_phone || "");
-        setSignatureEmail(signatureSettings.email_address || "");
-        setSignatureWebsite(signatureSettings.email_website || "");
-        setSignatureLegalText(signatureSettings.email_legal_text || "");
-      }
+      const loadedSignatureEnabled = signatureSettings?.email_signature_enabled ?? true;
+      const loadedSignatureShowLogo = signatureSettings?.email_signature_show_logo ?? true;
+      const loadedEmailSignoff = signatureSettings?.email_signoff || "Üdvözlettel,";
+      const loadedSignerName = signatureSettings?.email_signer_name || "";
+      const loadedSignerRole = signatureSettings?.email_signer_role || "";
+      const loadedSignaturePhone = signatureSettings?.email_phone || "";
+      const loadedSignatureEmail = signatureSettings?.email_address || "";
+      const loadedSignatureWebsite = signatureSettings?.email_website || "";
+      const loadedSignatureLegalText = signatureSettings?.email_legal_text || "";
+      setSignatureEnabled(loadedSignatureEnabled);
+      setSignatureShowLogo(loadedSignatureShowLogo);
+      setEmailSignoff(loadedEmailSignoff);
+      setSignerName(loadedSignerName);
+      setSignerRole(loadedSignerRole);
+      setSignaturePhone(loadedSignaturePhone);
+      setSignatureEmail(loadedSignatureEmail);
+      setSignatureWebsite(loadedSignatureWebsite);
+      setSignatureLegalText(loadedSignatureLegalText);
       const localPreferences = readLocalPreferences();
       const { data: preferenceRow } = await supabase
         .from("user_preferences")
@@ -235,11 +287,51 @@ export default function SettingsPage() {
       setColorMode(preferences.colorMode);
       applyPreferences(preferences.accentTheme, preferences.colorMode);
 
+      setSavedSectionSnapshots({
+        account: JSON.stringify({ accentTheme: preferences.accentTheme, colorMode: preferences.colorMode }),
+        company: JSON.stringify({
+          companyName: normalizedSettingsText(profile.companyName),
+          companyLogoUrl: normalizedSettingsText(profile.companyLogoUrl || ""),
+          brandPrimary: (profile.brandPrimary || DEFAULT_COMPANY_BRANDING.brandPrimary).toLowerCase(),
+          brandSecondary: (profile.brandSecondary || DEFAULT_COMPANY_BRANDING.brandSecondary).toLowerCase(),
+          brandingMode: profile.brandingMode || DEFAULT_COMPANY_BRANDING.brandingMode,
+          showCompanyName: profile.showCompanyName ?? DEFAULT_COMPANY_BRANDING.showCompanyName,
+        }),
+        messages: JSON.stringify({
+          autoReplyMode: profile.autoReplyMode || "manual",
+          signatureEnabled: loadedSignatureEnabled,
+          signatureShowLogo: loadedSignatureShowLogo,
+          emailSignoff: normalizedSettingsText(loadedEmailSignoff),
+          signerName: normalizedSettingsText(loadedSignerName),
+          signerRole: normalizedSettingsText(loadedSignerRole),
+          signaturePhone: normalizedSettingsText(loadedSignaturePhone),
+          signatureEmail: normalizedSettingsText(loadedSignatureEmail),
+          signatureWebsite: normalizedSettingsText(loadedSignatureWebsite),
+          signatureLegalText: normalizedSettingsText(loadedSignatureLegalText),
+        }),
+        privacy: JSON.stringify({
+          privacyNoticeEnabled: profile.privacyNoticeEnabled ?? false,
+          privacyContactEmail: normalizedSettingsText(profile.privacyContactEmail || ""),
+          privacyCompanyAddress: normalizedSettingsText(profile.privacyCompanyAddress || ""),
+          privacyRetentionMonths: profile.privacyRetentionMonths || 24,
+        }),
+      });
+
       setLoading(false);
     }
 
     loadSettings();
   }, [refreshRetentionStatus, router]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    function warnBeforeLeaving(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [hasUnsavedChanges]);
 
   async function handleSave() {
     if (!companyId || !userId) return;
@@ -333,22 +425,39 @@ export default function SettingsPage() {
       void refreshRetentionStatus(session.access_token);
     }
 
-    const { error: preferenceError } = await supabase
-      .from("user_preferences")
-      .upsert({
-        user_id: userId,
-        accent_theme: accentTheme,
-        color_mode: colorMode,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "user_id" });
+    if (activeSection === "account") {
+      const { error: preferenceError } = await supabase
+        .from("user_preferences")
+        .upsert({
+          user_id: userId,
+          accent_theme: accentTheme,
+          color_mode: colorMode,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
 
-    if (preferenceError) {
-      console.error("Megjelenési beállítás mentési hiba:", preferenceError);
-      setError("Az üzenetbeállítás elmentve, de a megjelenést nem sikerült a fiókhoz menteni.");
-      setSaving(false);
-      return;
+      if (preferenceError) {
+        console.error("Megjelenési beállítás mentési hiba:", preferenceError);
+        setError("A saját megjelenési beállításokat nem sikerült elmenteni.");
+        setSaving(false);
+        return;
+      }
+      applyPreferences(accentTheme, colorMode);
     }
-    applyPreferences(accentTheme, colorMode);
+
+    setSavedSectionSnapshots(current => {
+      if (!current) return currentSectionSnapshots;
+      if (activeSection === "messages" || activeSection === "privacy") {
+        return {
+          ...current,
+          messages: currentSectionSnapshots.messages,
+          privacy: currentSectionSnapshots.privacy,
+        };
+      }
+      if (isPersistedSettingsSection(activeSection)) {
+        return { ...current, [activeSection]: currentSectionSnapshots[activeSection] };
+      }
+      return current;
+    });
 
     setSaving(false);
     setSaveSuccess(true);
@@ -401,6 +510,14 @@ export default function SettingsPage() {
         throw new Error(result.error || "A logó feltöltése nem sikerült.");
       }
       setCompanyLogoUrl(result.logoUrl);
+      setSavedSectionSnapshots(current => {
+        if (!current) return current;
+        const previousCompany = JSON.parse(current.company) as Record<string, unknown>;
+        return {
+          ...current,
+          company: JSON.stringify({ ...previousCompany, companyLogoUrl: result.logoUrl.trim() }),
+        };
+      });
       setLogoUploadSuccess(true);
       window.dispatchEvent(new CustomEvent("leadflow:company-profile-updated", { detail: { companyLogoUrl: result.logoUrl } }));
     } catch (uploadError) {
@@ -442,7 +559,10 @@ export default function SettingsPage() {
             className={activeSection === section.id
               ? "accent-soft accent-text rounded-xl px-3 py-3 text-left"
               : "rounded-xl px-3 py-3 text-left text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"}>
-            <span className="block text-sm font-bold">{section.label}</span>
+            <span className="flex items-center justify-between gap-2 text-sm font-bold">
+              <span>{section.label}</span>
+              {isPersistedSettingsSection(section.id) && dirtySections.includes(section.id) && <span className="h-2 w-2 flex-none rounded-full bg-amber-500" title="Mentetlen módosítás" />}
+            </span>
             <span className="mt-1 hidden text-xs opacity-75 sm:block">{section.description}</span>
           </button>)}
         </nav>
@@ -823,9 +943,11 @@ export default function SettingsPage() {
           <div>
             {saveSuccess && <p className="text-sm font-semibold text-green-700">✓ A beállítások elmentve.</p>}
             {error && <p role="alert" className="text-sm font-medium text-red-700">{error}</p>}
-            {!saveSuccess && !error && <p className="text-sm text-slate-500">A módosítások a mentés után lépnek életbe.</p>}
+            {!saveSuccess && !error && <p className={`text-sm ${activeSectionDirty ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+              {activeSectionDirty ? "Mentetlen módosítások vannak ebben a kategóriában." : "Nincs mentetlen módosítás ebben a kategóriában."}
+            </p>}
           </div>
-          <button type="button" onClick={handleSave} disabled={saving}
+          <button type="button" onClick={handleSave} disabled={saving || !activeSectionDirty}
             className="accent-bg mt-3 w-full rounded-xl px-5 py-3 font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:mt-0 sm:w-auto">
             {saving ? "Mentés..." : canManageCompany ? "Módosítások mentése" : "Saját megjelenés mentése"}
           </button>
