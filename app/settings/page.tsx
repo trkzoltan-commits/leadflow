@@ -823,6 +823,30 @@ export default function SettingsPage() {
               <label className="text-sm font-medium text-slate-700">Weboldal<input value={signatureWebsite} maxLength={300} onChange={(e) => setSignatureWebsite(e.target.value)} placeholder="https://pelda.hu" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="sm:col-span-2 text-sm font-medium text-slate-700">Opcionális jogi vagy adatvédelmi szöveg<textarea value={signatureLegalText} maxLength={1000} onChange={(e) => setSignatureLegalText(e.target.value)} className="mt-2 min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2" /></label>
               <label className="sm:col-span-2 flex items-start gap-3 rounded-xl bg-slate-50 p-4"><input className="mt-1" type="checkbox" checked={signatureShowLogo} onChange={(e) => setSignatureShowLogo(e.target.checked)} disabled={!companyLogoUrl} /><span><span className="block font-semibold text-slate-900">Céges logó megjelenítése</span><span className="mt-1 block text-sm text-slate-500">{companyLogoUrl ? "A publikus ajánlatkérőhöz feltöltött logót használjuk." : "Ehhez a vállalkozáshoz még nincs logó beállítva."}</span></span></label>
+              <div className="sm:col-span-2">
+                <p className="text-sm font-semibold text-slate-900">Aláírás előnézete</p>
+                <div className="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white p-5 text-[#1e293b]" style={{ fontFamily: "Arial, sans-serif" }}>
+                  <p className="mb-4 text-sm">{emailSignoff.trim() || "Üdvözlettel,"}</p>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    {signatureShowLogo && companyLogoUrl.trim() && <div className="sm:pr-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={companyLogoUrl.trim()} alt={`${companyName || "Céges"} logó`} className="max-h-16 max-w-36 object-contain" />
+                    </div>}
+                    <div className="text-sm leading-5">
+                      <p className="text-base font-bold" style={{ color: previewPrimary }}>{companyName || "Vállalkozás"}</p>
+                      {signerName.trim() && <p className="mt-1 font-bold">{signerName.trim()}</p>}
+                      {signerRole.trim() && <p className="text-xs text-slate-500">{signerRole.trim()}</p>}
+                      {(signaturePhone.trim() || signatureEmail.trim() || signatureWebsite.trim()) && <div className="mt-2">
+                        {signaturePhone.trim() && <p>{signaturePhone.trim()}</p>}
+                        {signatureEmail.trim() && <p style={{ color: previewPrimary }}>{signatureEmail.trim()}</p>}
+                        {signatureWebsite.trim() && <p style={{ color: previewPrimary }}>{signatureWebsite.trim()}</p>}
+                      </div>}
+                    </div>
+                  </div>
+                  {signatureLegalText.trim() && <p className="mt-4 max-w-xl whitespace-pre-line text-[11px] leading-4 text-slate-500">{signatureLegalText.trim()}</p>}
+                </div>
+                <p className="mt-2 text-xs text-slate-500">Az előnézet a kiküldött e-mail elrendezését követi; a levelezőprogramok kisebb eltéréseket okozhatnak.</p>
+              </div>
             </div>}
           </div>
 
