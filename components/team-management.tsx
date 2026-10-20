@@ -6,6 +6,32 @@ import { roleLabel } from "@/lib/user-preferences";
 
 type Member = { id: string; email: string; role: string; active: boolean; current: boolean };
 
+const roleSummaries = [
+  {
+    role: "Tulajdonos",
+    tone: "border-blue-200 bg-blue-50",
+    description: "A vállalkozás teljes LeadFlow-fiókját kezeli.",
+    permissions: ["Munkatársak és hozzáférések", "Cégnév, logó és arculat", "Üzenet- és adatvédelmi beállítások", "Érdeklődők, felelősök és teendők"],
+  },
+  {
+    role: "Adminisztrátor",
+    tone: "border-emerald-200 bg-emerald-50",
+    description: "A napi működést és a céges folyamatokat irányítja.",
+    permissions: ["Érdeklődők és Pipeline kezelése", "Felelősök kijelölése", "Üzenet- és adatvédelmi beállítások", "Nem kezelhet munkatársakat vagy arculatot"],
+  },
+  {
+    role: "Felhasználó",
+    tone: "border-slate-200 bg-slate-50",
+    description: "A rábízott érdeklődőkkel végzi a napi munkát.",
+    permissions: ["Érdeklődők megtekintése és feldolgozása", "Belső megjegyzések", "Saját teendők kezelése", "Nem módosíthat céges beállításokat"],
+  },
+] as const;
+
+const inviteRoleHelp: Record<string, string> = {
+  admin: "Az adminisztrátor felelőst jelölhet ki, és módosíthatja az üzenet- és adatvédelmi beállításokat.",
+  user: "A felhasználó az érdeklődőket dolgozza fel, és a saját teendőit kezeli.",
+};
+
 export function TeamManagement({ isOwner }: { isOwner: boolean }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [email, setEmail] = useState("");
@@ -91,7 +117,26 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
     <h2 className="text-xl font-bold text-slate-900">Munkatársak és jogosultságok</h2>
     <p className="mt-2 text-sm leading-6 text-slate-500">Tulajdonosként meghívhatod a munkatársakat, és beállíthatod, ki kezelheti a céges beállításokat.</p>
 
-    <form onSubmit={invite} className="mt-5 grid gap-3 sm:grid-cols-[1fr_170px_auto]">
+    <div className="mt-5">
+      <h3 className="font-semibold text-slate-900">Mit engednek a szerepkörök?</h3>
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        {roleSummaries.map((summary) => <article key={summary.role} className={`rounded-xl border p-4 ${summary.tone}`}>
+          <h4 className="font-bold text-slate-900">{summary.role}</h4>
+          <p className="mt-1 text-sm leading-5 text-slate-600">{summary.description}</p>
+          <ul className="mt-3 space-y-2 text-sm text-slate-700">
+            {summary.permissions.map((permission) => <li key={permission} className="flex items-start gap-2">
+              <span aria-hidden="true" className="mt-0.5 font-bold text-slate-500">•</span>
+              <span>{permission}</span>
+            </li>)}
+          </ul>
+        </article>)}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">A cégnév és a céges arculat módosítása, valamint a munkatársak kezelése mindig a tulajdonosnál marad.</p>
+    </div>
+
+    <form onSubmit={invite} className="mt-6 rounded-xl border border-slate-200 p-4">
+      <h3 className="font-semibold text-slate-900">Új munkatárs meghívása</h3>
+      <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_170px_auto]">
       <label className="text-sm font-medium text-slate-700">E-mail-cím
         <input type="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} placeholder="munkatars@pelda.hu" className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2" />
       </label>
@@ -101,6 +146,8 @@ export function TeamManagement({ isOwner }: { isOwner: boolean }) {
         </select>
       </label>
       <button type="submit" disabled={busy === "invite"} className="accent-bg self-end rounded-xl px-4 py-2 font-semibold text-white disabled:opacity-50">{busy === "invite" ? "Küldés..." : "Meghívás"}</button>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">{inviteRoleHelp[role]}</p>
     </form>
 
     <div className="mt-6 space-y-3">
