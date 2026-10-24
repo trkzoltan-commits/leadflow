@@ -205,7 +205,83 @@ function LeadsContent() {
               {searchQuery.trim() && <p role="status" className="mt-3 text-sm text-slate-600">{visibleLeads.length} találat az aktuális nézetben.</p>}
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="divide-y divide-slate-100 xl:hidden">
+              {updatedAt && visibleLeads.length === 0 && (
+                <p className="p-6 text-slate-500">
+                  {searchQuery.trim() ? "Nincs találat ebben a nézetben. Próbálj másik keresést vagy válts a Mind nézetre." : "Ebben a nézetben nincs érdeklődő."}
+                </p>
+              )}
+              {visibleLeads.map((lead) => {
+                const reply = replies.get(lead.id);
+                const delayedReply = isDelayedSending(reply);
+                return (
+                  <article key={lead.id}>
+                    <Link
+                      href={`/leads/${lead.id}`}
+                      className="block p-4 transition hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold accent-text">{lead.name || "Névtelen érdeklődő"}</h3>
+                          <p className="mt-1 truncate text-xs text-slate-500">{lead.phone || lead.email || "Nincs elérhetőség"}</p>
+                        </div>
+                        <time dateTime={lead.created_at} className="shrink-0 text-right text-xs font-medium text-slate-500">{displayReceivedAt(lead.created_at)}</time>
+                      </div>
+
+                      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Szolgáltatás</dt>
+                          <dd className="mt-1 font-medium text-slate-800">{lead.service || "—"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Helyszín</dt>
+                          <dd className="mt-1 font-medium text-slate-800">{lead.location || "—"}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{getStatusLabel(lead.status)}</span>
+                        <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{getPriorityLabel(lead.priority)} prioritás</span>
+                        {lead.anonymized_at && <span className="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700">Anonimizált</span>}
+                      </div>
+                      {lead.status === "processed" && <p className="mt-2 text-xs font-semibold text-slate-600">Eredmény: {outcomeLabel(lead.outcome)}</p>}
+
+                      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="text-slate-500">Válasz</span>
+                          <span className={delayedReply ? "text-right font-semibold text-red-700" : "text-right font-semibold text-slate-800"}>
+                            {replyLabel(reply?.status, reply?.sending_started_at)}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-start justify-between gap-3">
+                          <span className="text-slate-500">Forrás</span>
+                          <span className="text-right font-medium text-slate-800">{getSourceLabel(lead.source)}</span>
+                        </div>
+                      </div>
+
+                      {newLeadDispatchWarning(lead.new_lead_dispatch_status, lead.created_at) && <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900">Make-indítás ellenőrizendő</p>}
+                      {missingAiDraftWarning(lead, replies.has(lead.id)) && <p className="mt-3 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-900">AI-választervezet késik</p>}
+
+                      <span className="mt-4 inline-flex text-sm font-semibold accent-text">Adatlap megnyitása →</span>
+                    </Link>
+                    {lead.note_count > 0 && (
+                      <div className="px-4 pb-4">
+                        <Link
+                          href={`/leads/${lead.id}#internal-notes`}
+                          aria-label={`${lead.note_count} belső megjegyzés megnyitása`}
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+                        >
+                          <span aria-hidden="true">📝</span>
+                          {lead.note_count} belső megjegyzés
+                        </Link>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto xl:block">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
