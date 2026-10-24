@@ -133,6 +133,7 @@ export default function SettingsPage() {
     : [];
   const activeSectionDirty = isPersistedSettingsSection(activeSection) && dirtySections.includes(activeSection);
   const hasUnsavedChanges = dirtySections.length > 0;
+  const showSaveSuccess = saveSuccess && !hasUnsavedChanges;
   const makeStatus: MakeConnectionStatus | null = automationHealth?.connectionStatus === "legacy_fallback"
     ? "legacy" : automationHealth?.connectionStatus ?? null;
   const makeStatusError = Boolean(automationHealthError);
@@ -541,7 +542,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <AppShell>
+    <AppShell hasUnsavedChanges={hasUnsavedChanges}>
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900">
             Beállítások
@@ -561,7 +562,10 @@ export default function SettingsPage() {
               : "rounded-xl px-3 py-3 text-left text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"}>
             <span className="flex items-center justify-between gap-2 text-sm font-bold">
               <span>{section.label}</span>
-              {isPersistedSettingsSection(section.id) && dirtySections.includes(section.id) && <span className="h-2 w-2 flex-none rounded-full bg-amber-500" title="Mentetlen módosítás" />}
+              {isPersistedSettingsSection(section.id) && dirtySections.includes(section.id) && <>
+                <span aria-hidden="true" className="h-2 w-2 flex-none rounded-full bg-amber-500" title="Mentetlen módosítás" />
+                <span className="sr-only">Mentetlen módosítás</span>
+              </>}
             </span>
             <span className="mt-1 hidden text-xs opacity-75 sm:block">{section.description}</span>
           </button>)}
@@ -964,10 +968,11 @@ export default function SettingsPage() {
         </div>}
 
         {(activeSection === "account" || activeSection === "company" && userRole === "owner" || (activeSection === "messages" || activeSection === "privacy") && canManageCompany) && <div className="sticky bottom-3 z-10 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur sm:flex sm:items-center sm:justify-between sm:gap-4">
-          <div>
-            {saveSuccess && <p className="text-sm font-semibold text-green-700">✓ A beállítások elmentve.</p>}
+          <div aria-live="polite" aria-atomic="true" aria-busy={saving}>
+            {saving && <p className="text-sm font-semibold text-slate-600">Mentés folyamatban…</p>}
+            {!saving && showSaveSuccess && <p className="text-sm font-semibold text-green-700">✓ A beállítások elmentve.</p>}
             {error && <p role="alert" className="text-sm font-medium text-red-700">{error}</p>}
-            {!saveSuccess && !error && <p className={`text-sm ${activeSectionDirty ? "font-semibold text-amber-700" : "text-slate-500"}`}>
+            {!saving && !showSaveSuccess && !error && <p className={`text-sm ${activeSectionDirty ? "font-semibold text-amber-700" : "text-slate-500"}`}>
               {activeSectionDirty ? "Mentetlen módosítások vannak ebben a kategóriában." : "Nincs mentetlen módosítás ebben a kategóriában."}
             </p>}
           </div>

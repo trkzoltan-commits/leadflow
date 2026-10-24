@@ -25,7 +25,13 @@ test("every authenticated partner page uses the shared application shell", () =>
   assert.match(component, /href="\/settings"/);
   assert.match(component, /companyLogoUrl/);
   assert.match(component, /companyName/);
-  assert.match(component, /window\.confirm\("Biztosan kijelentkezel a LeadFlow-ból\?"\)/);
+  assert.match(component, /hasUnsavedChanges\?: boolean/);
+  assert.match(component, /Mentetlen módosításaid vannak\. Biztosan elhagyod ezt az oldalt\?/);
+  assert.match(component, /event\.preventDefault\(\)/);
+  assert.match(component, /const confirmation = hasUnsavedChanges/);
+  assert.match(component, /: "Biztosan kijelentkezel a LeadFlow-ból\?"/);
+  assert.match(component, /window\.confirm\(confirmation\)/);
+  assert.equal((component.match(/onNavigate=/g) || []).length, 4);
   assert.match(component, /supabase\.auth\.signOut\(\)/);
   assert.match(component, /text-red-700/);
   assert.match(component, /lg:hidden/);
@@ -80,5 +86,9 @@ test("settings are separated into focused categories", () => {
   }
   assert.match(settings, /window\.location\.hash\.slice\(1\)/);
   assert.match(settings, /window\.history\.replaceState/);
+  assert.match(settings, /<AppShell hasUnsavedChanges=\{hasUnsavedChanges\}>/);
+  assert.match(settings, /window\.addEventListener\("beforeunload"/);
+  assert.match(settings, /aria-live="polite" aria-atomic="true" aria-busy=\{saving\}/);
+  assert.match(settings, /Mentés folyamatban…/);
   assert.match(settings, /activeSection === "automation" && <div id="automation"/);
 });

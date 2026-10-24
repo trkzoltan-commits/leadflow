@@ -9,6 +9,11 @@ import { roleLabel } from "@/lib/user-preferences";
 type AppShellProps = {
   children: ReactNode;
   width?: "standard" | "wide";
+  hasUnsavedChanges?: boolean;
+};
+
+type NavigationEvent = {
+  preventDefault(): void;
 };
 
 type ShellProfile = {
@@ -43,7 +48,7 @@ function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function AppShell({ children, width = "standard" }: AppShellProps) {
+export function AppShell({ children, width = "standard", hasUnsavedChanges = false }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -107,8 +112,19 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
     return () => window.removeEventListener("leadflow:company-profile-updated", updateCompanyProfile);
   }, []);
 
+  function handleNavigation(event: NavigationEvent, href: string, closeMenu = false) {
+    if (href !== pathname && hasUnsavedChanges && !window.confirm("Mentetlen módosításaid vannak. Biztosan elhagyod ezt az oldalt?")) {
+      event.preventDefault();
+      return;
+    }
+    if (closeMenu) setMenuOpen(false);
+  }
+
   async function signOut() {
-    if (!window.confirm("Biztosan kijelentkezel a LeadFlow-ból?")) return;
+    const confirmation = hasUnsavedChanges
+      ? "Mentetlen módosításaid vannak. Biztosan kijelentkezel a LeadFlow-ból?"
+      : "Biztosan kijelentkezel a LeadFlow-ból?";
+    if (!window.confirm(confirmation)) return;
     setSigningOut(true);
     await supabase.auth.signOut();
     router.replace("/login");
@@ -121,7 +137,7 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
 
   const sidebar = <div className="flex h-full flex-col">
     <div className="border-b border-slate-200 px-5 py-5">
-      <Link href="/" onClick={() => setMenuOpen(false)} aria-label="LeadFlow Dashboard – Áttekintés" className="accent-text text-xl font-bold tracking-tight">LeadFlow</Link>
+      <Link href="/" onNavigate={event => handleNavigation(event, "/", true)} aria-label="LeadFlow Dashboard – Áttekintés" className="accent-text text-xl font-bold tracking-tight">LeadFlow</Link>
       <div className="mt-4 flex min-w-0 items-center gap-3 rounded-xl border bg-slate-50 p-3" style={{ borderColor: profile.brandPrimary, backgroundColor: `${profile.brandSecondary}55` }}>
         {profile.companyLogoUrl
           // eslint-disable-next-line @next/next/no-img-element
@@ -135,13 +151,13 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
     </div>
 
     <nav aria-label="Fő navigáció" className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-      {navigation.map(item => <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)} aria-current={isActive(pathname, item.href) ? "page" : undefined} className={navClass(isActive(pathname, item.href))}>
+      {navigation.map(item => <Link key={item.href} href={item.href} onNavigate={event => handleNavigation(event, item.href, true)} aria-current={isActive(pathname, item.href) ? "page" : undefined} className={navClass(isActive(pathname, item.href))}>
         <NavIcon name={item.icon} /><span>{item.label}</span>
       </Link>)}
     </nav>
 
     <div className="border-t border-slate-200 p-3">
-      <Link href="/settings" onClick={() => setMenuOpen(false)} aria-current={isActive(pathname, "/settings") ? "page" : undefined} className={navClass(isActive(pathname, "/settings"))}>
+      <Link href="/settings" onNavigate={event => handleNavigation(event, "/settings", true)} aria-current={isActive(pathname, "/settings") ? "page" : undefined} className={navClass(isActive(pathname, "/settings"))}>
         <NavIcon name="settings" /><span>Beállítások</span>
       </Link>
       <div className="mt-3 border-t border-slate-200 px-3 pt-3">
@@ -160,7 +176,7 @@ export function AppShell({ children, width = "standard" }: AppShellProps) {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 bg-white lg:block">{sidebar}</aside>
 
       <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 shadow-sm lg:hidden">
-        <Link href="/" aria-label="LeadFlow Dashboard – Áttekintés" className="accent-text text-lg font-bold">LeadFlow</Link>
+        <Link href="/" onNavigate={event => handleNavigation(event, "/")} aria-label="LeadFlow Dashboard – Áttekintés" className="accent-text text-lg font-bold">LeadFlow</Link>
         <button type="button" onClick={() => setMenuOpen(true)} aria-expanded={menuOpen} aria-controls="mobile-navigation"
           className="rounded-lg border border-slate-200 p-2 text-slate-700" aria-label="Menü megnyitása">
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
