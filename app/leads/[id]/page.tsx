@@ -52,6 +52,7 @@ type Message = {
 };
 
 type DeliveryAudit = { status: string | null; attemptCount: number; lastAttemptAt: string | null; updatedAt: string | null };
+type LeadAssignee = { id: string; email: string; role: string };
 
 const messageSelect = "id, direction, sender, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at, delivery_resolution_source";
 
@@ -113,6 +114,7 @@ export default function LeadDetailsPage() {
   const [nextActionSuccess, setNextActionSuccess] = useState("");
   const [nextActionCurrentUserId, setNextActionCurrentUserId] = useState<string | null>(null);
   const [nextActionManagerAccess, setNextActionManagerAccess] = useState(false);
+  const [leadAssignees, setLeadAssignees] = useState<LeadAssignee[]>([]);
 
   async function handleRetryLeadAutomation() {
     if (!lead || lead.new_lead_dispatch_status !== "unconfigured" || dispatchRetrying) return;
@@ -226,7 +228,17 @@ export default function LeadDetailsPage() {
           cache: "no-store",
         });
         if (accessResponse.ok) {
-          const accessResult = await accessResponse.json() as { currentUserId?: unknown; canAssign?: unknown };
+          const accessResult = await accessResponse.json() as { members?: unknown; currentUserId?: unknown; canAssign?: unknown };
+          const members = Array.isArray(accessResult.members)
+            ? accessResult.members.filter((member): member is LeadAssignee => Boolean(
+              member &&
+              typeof member === "object" &&
+              typeof (member as LeadAssignee).id === "string" &&
+              typeof (member as LeadAssignee).email === "string" &&
+              typeof (member as LeadAssignee).role === "string"
+            ))
+            : [];
+          setLeadAssignees(members);
           setNextActionCurrentUserId(typeof accessResult.currentUserId === "string" ? accessResult.currentUserId : null);
           setNextActionManagerAccess(accessResult.canAssign === true);
         }
@@ -804,6 +816,25 @@ export default function LeadDetailsPage() {
     return source || "—";
   }
 
+  function getLeadStatusLabel(leadStatus: string | null) {
+    if (leadStatus === "new") return "Új";
+    if (leadStatus === "contacted") return "Kapcsolatfelvétel megtörtént";
+    if (leadStatus === "waiting") return "Válaszra vár";
+    if (leadStatus === "offer_sent") return "Ajánlat elküldve";
+    if (leadStatus === "decision") return "Döntésre vár";
+    if (leadStatus === "processed") return "Feldolgozott";
+
+    return leadStatus || "—";
+  }
+
+  function getPriorityLabel(leadPriority: string | null) {
+    if (leadPriority === "low") return "Alacsony";
+    if (leadPriority === "medium") return "Közepes";
+    if (leadPriority === "high") return "Magas";
+
+    return leadPriority || "—";
+  }
+
   function getMessageStatusLabel(
     messageStatus: string | null
   ) {
@@ -960,10 +991,15 @@ export default function LeadDetailsPage() {
       : currentNextActionDueState === "soon"
         ? "next-action-due-soon"
         : "bg-slate-100 text-slate-700";
+  const assignedAssignee = lead.assigned_user_id
+    ? leadAssignees.find((assignee) => assignee.id === lead.assigned_user_id) ?? null
+    : null;
+  const assignedAssigneeLabel = assignedAssignee?.email
+    ?? (lead.assigned_user_id ? "Kijelölt felelős" : "Nincs kijelölve");
 
   return (
     <AppShell>
-        <div className="mb-8">
+        <header id="lead-summary" className="mb-8 scroll-mt-24">
           <button
             onClick={() => router.push("/leads")}
             className="mb-4 block text-sm font-medium text-violet-600 hover:text-violet-700"
@@ -981,7 +1017,44 @@ export default function LeadDetailsPage() {
           <p className="mt-2 text-sm text-slate-600">
             Érkezett: <time dateTime={lead.created_at}>{displayReceivedAt(lead.created_at)}</time>
           </p>
-        </div>
+
+          <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-blue-50 px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-blue-700">Állapot</dt>
+              <dd className="mt-1 truncate font-bold text-slate-900" title={getLeadStatusLabel(status)}>{getLeadStatusLabel(status)}</dd>
+            </div>
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Felelős</dt>
+              <dd className="mt-1 truncate font-bold text-slate-900" title={assignedAssigneeLabel}>{assignedAssigneeLabel}</dd>
+            </div>
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-amber-50 px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-amber-700">Prioritás</dt>
+              <dd className="mt-1 font-bold text-slate-900">{getPriorityLabel(priority)}</dd>
+            </div>
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-green-50 px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-green-700">Szolgáltatás</dt>
+              <dd className="mt-1 truncate font-bold text-slate-900" title={service || "Nincs megadva"}>{service || "Nincs megadva"}</dd>
+            </div>
+            <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Forrás</dt>
+              <dd className="mt-1 font-bold text-slate-900">{getSourceLabel(lead.source)}</dd>
+            </div>
+          </dl>
+
+          <nav aria-label="Ugrás az adatlap szakaszaihoz" className="mt-4 flex gap-2 overflow-x-auto pb-1">
+            {[
+              ["#next-action", "Teendő"],
+              ["#lead-data", "Ügyféladatok"],
+              ["#ai-response", "AI és válasz"],
+              ["#lead-communication", "Előzmények"],
+              ["#internal-notes", "Belső jegyzetek"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-blue-300 hover:text-blue-700">
+                {label}
+              </a>
+            ))}
+          </nav>
+        </header>
 
         {dispatchWarning && <section role="alert" className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
           <h2 className="font-bold">Az automatizálás indítása figyelmet igényel</h2>
@@ -999,8 +1072,8 @@ export default function LeadDetailsPage() {
           <p className="mt-2 text-sm leading-6">{draftWarning}</p>
         </section>}
 
-        <section aria-label="Aktuális állapot" className={delayedSending || messageStatus === "failed" ? "mb-6 rounded-2xl border border-red-200 bg-red-50 p-6 shadow-sm" : "mb-6 rounded-2xl border border-violet-100 bg-white p-6 shadow-sm"}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Következő lépés</p>
+        <section aria-label="Válasz állapota" className={delayedSending || messageStatus === "failed" ? "mb-8 rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm sm:p-6" : "mb-8 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm sm:p-6"}>
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600">Válasz állapota</p>
           <h2 role="status" className="mt-2 text-xl font-bold text-slate-900">
             {messageStatus === "failed" ? "A válasz küldése sikertelen" : delayedSending ? "A küldési visszaigazolás késik" : messageStatus === "sending" ? "Küldés visszaigazolására várunk" : messageStatus === "sent" ? "Válasz elküldve" : replyLoading ? "Válasz készül…" : replyDraft ? "Válasz ellenőrzése" : "Még nincs választervezet"}
           </h2>
@@ -1014,688 +1087,737 @@ export default function LeadDetailsPage() {
           </p>
         </section>
         <form onSubmit={handleSave}>
-          <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
-            <div className="space-y-6">
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-6 text-xl font-bold">
-                  Kapcsolattartási adatok
-                </h2>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Név
-                    </label>
-
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) =>
-                        setName(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Telefonszám
-                    </label>
-
-                    <input
-                      type="text"
-                      value={phone}
-                      onChange={(e) =>
-                        setPhone(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      E-mail
-                    </label>
-
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) =>
-                        setEmail(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Helyszín
-                    </label>
-
-                    <input
-                      type="text"
-                      value={location}
-                      onChange={(e) =>
-                        setLocation(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    />
-                  </div>
-                </div>
+          <div className="space-y-10">
+            <section aria-labelledby="daily-work-title">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Napi munka</p>
+                <h2 id="daily-work-title" className="mt-1 text-2xl font-bold text-slate-900">Munkafókusz</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Rögzítsd a következő teendőt, majd tartsd naprakészen az ügy állapotát és prioritását.</p>
               </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-6 text-xl font-bold">
-                  Érdeklődés
-                </h2>
-
-                <div className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Szolgáltatás
-                    </label>
-
-                    <input
-                      type="text"
-                      value={service}
-                      onChange={(e) =>
-                        setService(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Leírás
-                    </label>
-
-                    <textarea
-                      value={description}
-                      onChange={(e) =>
-                        setDescription(e.target.value)
-                      }
-                      className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="text-sm font-medium text-slate-700">
-                      Forrás
+              <div className="mt-5 grid items-start gap-6 lg:grid-cols-2">
+                <section id="next-action" className="h-full scroll-mt-24 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">Következő teendő</h2>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">Az ügyhöz tartozó aktuális feladat és határidő.</p>
                     </div>
-
-                    <div className="mt-2 rounded-xl bg-slate-50 px-4 py-3 text-slate-700">
-                      {getSourceLabel(lead.source)}
-                    </div>
+                    {!nextActionEditorOpen && lead.status !== "processed" && canEditNextAction && <button type="button" onClick={openNextActionEditor}
+                      className="rounded-xl border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+                      {lead.next_action ? "Módosítás" : "+ Teendő"}
+                    </button>}
                   </div>
 
-                  {lead.source === "web" && <div>
-                    <div className="text-sm font-medium text-slate-700">
-                      Adatkezelési tájékoztató
-                    </div>
-
-                    {lead.privacy_notice_acknowledged_at ? <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-                      <p className="font-semibold">Elolvasás visszaigazolva</p>
-                      <p className="mt-1">
-                        Rögzítve: <time dateTime={lead.privacy_notice_acknowledged_at}>{displayReceivedAt(lead.privacy_notice_acknowledged_at)}</time>
-                      </p>
-                      {lead.privacy_notice_version && <details className="mt-2 text-xs text-emerald-800">
-                        <summary className="cursor-pointer font-medium">Naplózási részletek</summary>
-                        <p className="mt-1 break-all">Tájékoztató verziója: {lead.privacy_notice_version}</p>
-                      </details>}
-                    </div> : <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
-                      Ehhez az ajánlatkéréshez nincs rögzített visszaigazolás. Régebbi, az adatkezelési tájékoztató aktiválása előtt érkezett érdeklődés lehet.
-                    </div>}
-                  </div>}
-                </div>
-              </div>
-
-              <LeadNotes leadId={lead.id} />
-
-              <div id="reply" className="scroll-mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-slate-900">
-                  Válasz az érdeklődőnek
-                </h2>
-
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Az AI az érdeklődő adatai és a korábbi
-                  elemzés alapján elkészíti a
-                  választervezetet.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={handleGenerateReply}
-                  disabled={
-                    replyLoading ||
-                    messageStatus === "sending"
-                  }
-                  className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {replyLoading
-                    ? "Válasz készítése..."
-                    : replyDraft
-                      ? "Új választervezet készítése"
-                      : "Választervezet készítése"}
-                </button>
-
-                {replyError && (
-                  <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                    {replyError}
-                  </div>
-                )}
-
-                {replyDraft && (
-                  <div className="mt-5">
-                    <p className="mb-3 text-sm text-slate-600">Címzett: {lead.email || "Nincs e-mail-cím megadva"}{replyDirty ? " · Nem mentett módosítás" : ""}</p>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Válasz
-                    </label>
-
-                    <textarea
-                      value={replyDraft}
-                      onChange={(e) => {
-                        setReplyDirty(true);
-                        setReplyDraft(e.target.value);
-                        setDraftSaveSuccess(false);
-                      }}
-                      disabled={messageLocked}
-                      className="min-h-64 w-full rounded-xl border border-slate-200 px-4 py-3 leading-7 outline-none focus:border-violet-400 disabled:bg-slate-50 disabled:text-slate-600"
-                    />
-
-                    {!messageLocked && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleSaveDraft}
-                          disabled={
-                            draftSaving ||
-                            !replyDraft.trim()
-                          }
-                          className="mt-4 w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {draftSaving
-                            ? "Piszkozat mentése..."
-                            : "Piszkozat mentése"}
+                  {lead.status === "processed" ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">A lezárt ügyhöz nincs aktív teendő.</p>
+                    : nextActionEditorOpen ? <div className="mt-5 space-y-4">
+                      <label className="block text-sm font-semibold text-slate-700">Mit kell elintézni?
+                        <textarea rows={4} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
+                          onChange={event => setNextActionDraft(event.target.value)} disabled={nextActionSaving}
+                          className="mt-2 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          placeholder="Például: Telefonos egyeztetés az ajánlat részleteiről" />
+                      </label>
+                      <p className="text-right text-xs text-slate-500">{nextActionDraft.length}/{NEXT_ACTION_MAX_LENGTH}</p>
+                      <label className="block text-sm font-semibold text-slate-700">Határidő
+                        <input type="date" value={nextActionDueDateDraft} onChange={event => setNextActionDueDateDraft(event.target.value)} disabled={nextActionSaving}
+                          className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                      </label>
+                      <div className="flex flex-wrap gap-2" aria-label="Gyors határidő választás">
+                        {([[0, "Ma"], [1, "Holnap"], [3, "+3 nap"]] as const).map(([days, label]) => <button key={days} type="button"
+                          disabled={nextActionSaving} onClick={() => setNextActionDueDateDraft(budapestDateOffset(days))}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
+                          {label}
+                        </button>)}
+                      </div>
+                      {nextActionError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <button type="button" onClick={() => void persistNextAction()} disabled={nextActionSaving || !nextActionDraft.trim() || !isValidDateOnly(nextActionDueDateDraft)}
+                          className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">
+                          {nextActionSaving ? "Mentés…" : "Teendő mentése"}
                         </button>
+                        <button type="button" onClick={closeNextActionEditor} disabled={nextActionSaving}
+                          className="rounded-xl border border-slate-200 px-4 py-3 font-semibold text-slate-700 disabled:opacity-50">Mégse</button>
+                      </div>
+                      {lead.next_action && <button type="button" disabled={nextActionSaving}
+                        onClick={() => { if (window.confirm("Biztosan törlöd az aktuális teendőt?")) void persistNextAction(true); }}
+                        className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
+                        Teendő törlése
+                      </button>}
+                    </div> : lead.next_action ? <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="break-words font-semibold text-slate-900">{lead.next_action}</p>
+                      <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${currentNextActionDueClass}`}>
+                        {displayNextActionDueDate(lead.next_action_due_date)}
+                      </span>
+                    </div> : <p className="mt-5 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">Ehhez az ügyhöz még nincs következő teendő.</p>}
 
-                        {draftMessageId &&
-                          (messageStatus === "draft" || messageStatus === "failed") && (
-                            <button
-                              type="button"
-                              onClick={handleMarkAsSent}
-                              disabled={markingSent || replyDirty || draftSaving}
-                              className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {markingSent
-                                ? "Küldés folyamatban..."
-                                : messageStatus === "failed" ? "Küldés újrapróbálása" : "Válasz elküldése"}
-                            </button>
-                          )}
+                  {!canEditNextAction && lead.status !== "processed" && <p className="mt-4 text-xs leading-5 text-slate-500">A teendőt a felelős, a tulajdonos vagy egy adminisztrátor módosíthatja.</p>}
+                  {nextActionSuccess && !nextActionEditorOpen && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">✓ {nextActionSuccess}</p>}
+                  {nextActionError && !nextActionEditorOpen && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
+                  <Link href="/pipeline" className="accent-text mt-4 inline-flex text-sm font-semibold">Pipeline megnyitása →</Link>
+                </section>
 
-                        <p className="mt-3 text-xs leading-5 text-slate-500">
-                          A „Válasz elküldése” gomb
-                          ténylegesen elküldi a jóváhagyott
-                          e-mailt az érdeklődőnek.
+                <div className="h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                  <h2 className="mb-6 text-xl font-bold">
+                    Ügy állapota
+                  </h2>
+
+                  <div className="space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Állapot
+                      </label>
+
+                      <select
+                        value={status}
+                        onChange={(e) => {
+                          setStatus(e.target.value);
+                          if (e.target.value !== "processed") setOutcome("");
+                          setSaveError("");
+                        }}
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      >
+                        <option value="new">Új</option>
+
+                        <option value="contacted">
+                          Kapcsolatfelvétel megtörtént
+                        </option>
+
+                        <option value="waiting">
+                          Válaszra vár
+                        </option>
+
+                        <option value="offer_sent">
+                          Ajánlat elküldve
+                        </option>
+
+                        <option value="decision">
+                          Döntésre vár
+                        </option>
+
+                        <option value="processed">
+                          Feldolgozott
+                        </option>
+                      </select>
+                    </div>
+
+                    {status === "processed" && (
+                      <div>
+                        <label htmlFor="lead-outcome" className="mb-2 block text-sm font-medium text-slate-700">
+                          Eredmény
+                        </label>
+                        <select id="lead-outcome" value={outcome}
+                          onChange={(e) => { setOutcome(e.target.value); setSaveError(""); }}
+                          required
+                          className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                        >
+                          <option value="">Válassz eredményt</option>
+                          <option value="won">Megvalósult</option>
+                          <option value="lost">Nem valósult meg</option>
+                        </select>
+                        {!lead.outcome && <p className="mt-2 text-xs text-slate-500">A korábban lezárt ügyek eredménye csak rögzítés után jelenik meg a riportokban.</p>}
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Prioritás
+                      </label>
+
+                      <select
+                        value={priority}
+                        onChange={(e) =>
+                          setPriority(e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      >
+                        <option value="low">
+                          Alacsony
+                        </option>
+                        <option value="medium">
+                          Közepes
+                        </option>
+                        <option value="high">
+                          Magas
+                        </option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {saving
+                        ? "Mentés..."
+                        : "Módosítások mentése"}
+                    </button>
+
+                    {saveSuccess && (
+                      <div className="rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+                        ✓ A módosítások elmentve.
+                      </div>
+                    )}
+                    {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section id="lead-data" aria-labelledby="lead-data-title" className="scroll-mt-24">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">Ügyfél és igény</p>
+                <h2 id="lead-data-title" className="mt-1 text-2xl font-bold text-slate-900">Érdeklődő adatai</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Az elérhetőségek, az igény és az adatkezelési visszaigazolás egy helyen.</p>
+              </div>
+              <div className="mt-5 grid items-start gap-6 xl:grid-cols-2">
+                <div className="h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                  <h2 className="mb-6 text-xl font-bold">
+                    Kapcsolattartási adatok
+                  </h2>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Név
+                      </label>
+
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) =>
+                          setName(e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Telefonszám
+                      </label>
+
+                      <input
+                        type="text"
+                        value={phone}
+                        onChange={(e) =>
+                          setPhone(e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        E-mail
+                      </label>
+
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) =>
+                          setEmail(e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Helyszín
+                      </label>
+
+                      <input
+                        type="text"
+                        value={location}
+                        onChange={(e) =>
+                          setLocation(e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                  <h2 className="mb-6 text-xl font-bold">
+                    Érdeklődés
+                  </h2>
+
+                  <div className="space-y-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Szolgáltatás
+                      </label>
+
+                      <input
+                        type="text"
+                        value={service}
+                        onChange={(e) =>
+                          setService(e.target.value)
+                        }
+                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Leírás
+                      </label>
+
+                      <textarea
+                        value={description}
+                        onChange={(e) =>
+                          setDescription(e.target.value)
+                        }
+                        className="min-h-40 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="text-sm font-medium text-slate-700">
+                        Forrás
+                      </div>
+
+                      <div className="mt-2 rounded-xl bg-slate-50 px-4 py-3 text-slate-700">
+                        {getSourceLabel(lead.source)}
+                      </div>
+                    </div>
+
+                    {lead.source === "web" && <div>
+                      <div className="text-sm font-medium text-slate-700">
+                        Adatkezelési tájékoztató
+                      </div>
+
+                      {lead.privacy_notice_acknowledged_at ? <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
+                        <p className="font-semibold">Elolvasás visszaigazolva</p>
+                        <p className="mt-1">
+                          Rögzítve: <time dateTime={lead.privacy_notice_acknowledged_at}>{displayReceivedAt(lead.privacy_notice_acknowledged_at)}</time>
                         </p>
-                      </>
+                        {lead.privacy_notice_version && <details className="mt-2 text-xs text-emerald-800">
+                          <summary className="cursor-pointer font-medium">Naplózási részletek</summary>
+                          <p className="mt-1 break-all">Tájékoztató verziója: {lead.privacy_notice_version}</p>
+                        </details>}
+                      </div> : <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+                        Ehhez az ajánlatkéréshez nincs rögzített visszaigazolás. Régebbi, az adatkezelési tájékoztató aktiválása előtt érkezett érdeklődés lehet.
+                      </div>}
+                    </div>}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-slate-900">Az adatlap módosításainak mentése</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">A kapcsolati adatok, az igény, az állapot és a prioritás együtt kerül mentésre.</p>
+                  {saveSuccess && <p className="mt-2 text-sm font-semibold text-green-700">✓ A módosítások elmentve.</p>}
+                  {saveError && <p className="mt-2 text-sm font-semibold text-red-700">{saveError}</p>}
+                </div>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="shrink-0 rounded-xl bg-violet-600 px-5 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? "Mentés..." : "Adatok mentése"}
+                </button>
+              </div>
+            </section>
+
+            <section id="ai-response" aria-labelledby="ai-response-title" className="scroll-mt-24">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-600">AI támogatás</p>
+                <h2 id="ai-response-title" className="mt-1 text-2xl font-bold text-slate-900">Elemzés és válasz</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">Az elemzés és a biztonsági értékelés segíti a kiküldendő válasz ellenőrzését.</p>
+              </div>
+              <div className="mt-5 grid items-start gap-6 lg:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.5fr)]">
+                <div className="space-y-6">
+                  <div className="h-full rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 p-4 text-white shadow-lg sm:p-6">
+                    <div className="text-lg font-bold">
+                      ✨ AI feldolgozás
+                    </div>
+
+                    {!aiResult && !aiError && (
+                      <p className="mt-3 leading-7 text-violet-50">
+                        Az AI elemzi az érdeklődőt,
+                        összefoglalja az igényt, megkeresi a
+                        hiányzó információkat és javaslatot ad
+                        a következő lépésre.
+                      </p>
                     )}
 
-                    {messageStatus === "sending" && (
-                      <div className={delayedSending ? "mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" : "mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"}>
-                        {delayedSending ? "A küldési visszaigazolás késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ezután rögzítsd a tényleges eredményt." : "A küldés visszaigazolására várunk. Az üzenetet jelenleg nem lehet módosítani vagy újra elküldeni. Az állapot automatikusan frissül."}
-                        {delayedSending && <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                          <button type="button" disabled={resolvingDelivery} onClick={() => handleResolveDelivery("sent")}
-                            className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-                            Megtaláltam az elküldött levelet
-                          </button>
-                          <button type="button" disabled={resolvingDelivery} onClick={() => handleResolveDelivery("failed")}
-                            className="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
-                            Biztosan nem ment ki
-                          </button>
-                        </div>}
+                    <button
+                      type="button"
+                      onClick={handleAiAnalysis}
+                      disabled={aiLoading}
+                      className="mt-5 w-full rounded-xl bg-white px-4 py-3 font-semibold text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {aiLoading
+                        ? "AI dolgozik..."
+                        : aiResult
+                          ? "AI elemzés újra"
+                          : "AI feldolgozás indítása"}
+                    </button>
+
+                    {aiError && (
+                      <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700">
+                        {aiError}
                       </div>
                     )}
 
-                    {messageStatus === "failed" && (
-                      <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-                        {deliveryFailedAt
-                          ? `A Gmail ${displayReceivedAt(deliveryFailedAt)} időpontban igazolta, hogy a küldés sikertelen volt. Ellenőrzés után az újrapróbálás gombbal ismét elindíthatod.`
-                          : "A Gmail-küldés igazoltan sikertelen volt. Ellenőrzés után az újrapróbálás gombbal ismét elindíthatod."}
-                      </div>
-                    )}
+                    {aiResult && (
+                      <div className="mt-5 rounded-xl bg-white/10 p-4">
+                        <div className="mb-2 font-semibold">
+                          AI eredmény
+                        </div>
 
-                    {draftSaveSuccess && (
-                      <div className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-                        ✓ A piszkozat elmentve.
-                      </div>
-                    )}
-
-                    {draftSaveError && (
-                      <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                        {draftSaveError}
-                      </div>
-                    )}
-
-                    {markSentError && (
-                      <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-                        {markSentError}
-                      </div>
-                    )}
-
-                    {messageStatus === "sent" && (
-                      <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-                        {deliveryConfirmedAt
-                          ? deliveryResolutionSource === "manual"
-                            ? `✓ Kézzel ellenőrizve elküldött: ${displayReceivedAt(deliveryConfirmedAt)}.`
-                            : `✓ A Gmail visszaigazolta a küldést: ${displayReceivedAt(deliveryConfirmedAt)}.`
-                          : "✓ Az üzenet elküldöttként van rögzítve."}
+                        <div className="whitespace-pre-wrap text-sm leading-6 text-white">
+                          {aiResult}
+                        </div>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
+                  <div className="h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
                     <h2 className="text-xl font-bold text-slate-900">
-                      Kommunikációs előzmények
+                      AI biztonsági döntés
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      Az érdeklődőhöz tartozó korábbi
-                      üzenetek.
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      A rendszer értékeli, hogy az AI-válasz
+                      emberi ellenőrzés nélkül elküldhető-e.
                     </p>
-                  </div>
 
-                  <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                    {messageHistory.length} üzenet
-                  </div>
-                </div>
-
-                {messageHistory.length === 0 ? (
-                  <div className="mt-6 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
-                    Még nincs mentett kommunikáció ehhez
-                    az érdeklődőhöz.
-                  </div>
-                ) : (
-                  <div className="mt-6 space-y-4">
-                    {messageHistory.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`rounded-2xl border p-5 ${
-                          message.direction === "incoming"
-                            ? "border-blue-100 bg-blue-50"
-                            : "border-slate-200 bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                              {getDirectionLabel(
-                                message.direction
-                              )}
-                            </span>
-
-                            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
-                              {getMessageStatusLabel(
-                                message.status
-                              )}
-                            </span>
-
-                            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
-                              {getChannelLabel(
-                                message.channel
-                              )}
-                            </span>
+                    {!hasRiskEvaluation ? (
+                      <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                        Ehhez az érdeklődőhöz még nincs AI
+                        kockázati értékelés.
+                      </div>
+                    ) : (
+                      <div className="mt-5 space-y-4">
+                        <div
+                          className={`rounded-xl border p-4 ${
+                            lead.ai_requires_human_review
+                              ? "border-amber-200 bg-amber-50"
+                              : "border-emerald-200 bg-emerald-50"
+                          }`}
+                        >
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            AI döntés
                           </div>
 
-                          <div className="text-xs text-slate-500">
-                            {formatMessageDate(
-                              message.created_at
+                          <div
+                            className={`mt-1 font-bold ${
+                              lead.ai_requires_human_review
+                                ? "text-amber-800"
+                                : "text-emerald-800"
+                            }`}
+                          >
+                            {lead.ai_requires_human_review
+                              ? "Kézi ellenőrzés szükséges"
+                              : lead.ai_safe_to_send
+                                ? "Automatikusan küldhető"
+                                : "Automatikus küldés nem javasolt"}
+                          </div>
+                        </div>
+
+                        <div
+                          className={`rounded-xl border p-4 ${getRiskLevelClasses(
+                            lead.ai_risk_level
+                          )}`}
+                        >
+                          <div className="text-xs font-semibold uppercase tracking-wide opacity-70">
+                            Kockázati szint
+                          </div>
+
+                          <div className="mt-1 font-bold">
+                            {getRiskLevelLabel(
+                              lead.ai_risk_level
                             )}
                           </div>
                         </div>
 
-                        <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                          {message.content}
-                        </div>
-                        {message.direction === "outgoing" && message.delivery_confirmed_at && (
-                          <p className="mt-3 text-xs font-semibold text-emerald-700">
-                            {message.delivery_resolution_source === "manual" ? "Kézzel ellenőrizve elküldött" : "Gmail-visszaigazolás"}: {displayReceivedAt(message.delivery_confirmed_at)}
-                          </p>
-                        )}
-                        {message.direction === "outgoing" && message.delivery_failed_at && (
-                          <p className="mt-3 text-xs font-semibold text-red-700">
-                            {message.delivery_resolution_source === "manual" ? "Kézzel ellenőrizve sikertelen" : "Sikertelen Gmail-küldés visszaigazolva"}: {displayReceivedAt(message.delivery_failed_at)}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Indoklás
+                          </div>
 
-            <div className="space-y-6">
-              <section id="next-action" className="scroll-mt-6 rounded-2xl border border-blue-200 bg-white p-6 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">Következő teendő</h2>
-                    <p className="mt-1 text-sm leading-6 text-slate-500">Az ügyhöz tartozó aktuális feladat és határidő.</p>
+                          <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                            {lead.ai_risk_reason ||
+                              "Nincs megadott indoklás."}
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">
+                              Válasz biztonságos
+                            </div>
+
+                            <div className="mt-1 font-semibold text-slate-900">
+                              {lead.ai_safe_to_send === true
+                                ? "Igen"
+                                : lead.ai_safe_to_send ===
+                                    false
+                                  ? "Nem"
+                                  : "—"}
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">
+                              Emberi döntés kell
+                            </div>
+
+                            <div className="mt-1 font-semibold text-slate-900">
+                              {lead.ai_requires_human_review ===
+                              true
+                                ? "Igen"
+                                : lead.ai_requires_human_review ===
+                                    false
+                                  ? "Nem"
+                                  : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {!nextActionEditorOpen && lead.status !== "processed" && canEditNextAction && <button type="button" onClick={openNextActionEditor}
-                    className="rounded-xl border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
-                    {lead.next_action ? "Módosítás" : "+ Teendő"}
-                  </button>}
                 </div>
 
-                {lead.status === "processed" ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">A lezárt ügyhöz nincs aktív teendő.</p>
-                  : nextActionEditorOpen ? <div className="mt-5 space-y-4">
-                    <label className="block text-sm font-semibold text-slate-700">Mit kell elintézni?
-                      <textarea rows={4} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
-                        onChange={event => setNextActionDraft(event.target.value)} disabled={nextActionSaving}
-                        className="mt-2 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                        placeholder="Például: Telefonos egyeztetés az ajánlat részleteiről" />
-                    </label>
-                    <p className="text-right text-xs text-slate-500">{nextActionDraft.length}/{NEXT_ACTION_MAX_LENGTH}</p>
-                    <label className="block text-sm font-semibold text-slate-700">Határidő
-                      <input type="date" value={nextActionDueDateDraft} onChange={event => setNextActionDueDateDraft(event.target.value)} disabled={nextActionSaving}
-                        className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
-                    </label>
-                    <div className="flex flex-wrap gap-2" aria-label="Gyors határidő választás">
-                      {([[0, "Ma"], [1, "Holnap"], [3, "+3 nap"]] as const).map(([days, label]) => <button key={days} type="button"
-                        disabled={nextActionSaving} onClick={() => setNextActionDueDateDraft(budapestDateOffset(days))}
-                        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50">
-                        {label}
-                      </button>)}
-                    </div>
-                    {nextActionError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <button type="button" onClick={() => void persistNextAction()} disabled={nextActionSaving || !nextActionDraft.trim() || !isValidDateOnly(nextActionDueDateDraft)}
-                        className="rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white disabled:opacity-50">
-                        {nextActionSaving ? "Mentés…" : "Teendő mentése"}
-                      </button>
-                      <button type="button" onClick={closeNextActionEditor} disabled={nextActionSaving}
-                        className="rounded-xl border border-slate-200 px-4 py-3 font-semibold text-slate-700 disabled:opacity-50">Mégse</button>
-                    </div>
-                    {lead.next_action && <button type="button" disabled={nextActionSaving}
-                      onClick={() => { if (window.confirm("Biztosan törlöd az aktuális teendőt?")) void persistNextAction(true); }}
-                      className="w-full rounded-xl px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">
-                      Teendő törlése
-                    </button>}
-                  </div> : lead.next_action ? <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="break-words font-semibold text-slate-900">{lead.next_action}</p>
-                    <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${currentNextActionDueClass}`}>
-                      {displayNextActionDueDate(lead.next_action_due_date)}
-                    </span>
-                  </div> : <p className="mt-5 rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500">Ehhez az ügyhöz még nincs következő teendő.</p>}
+                <div id="reply" className="h-full scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                  <h2 className="text-xl font-bold text-slate-900">
+                    Válasz az érdeklődőnek
+                  </h2>
 
-                {!canEditNextAction && lead.status !== "processed" && <p className="mt-4 text-xs leading-5 text-slate-500">A teendőt a felelős, a tulajdonos vagy egy adminisztrátor módosíthatja.</p>}
-                {nextActionSuccess && !nextActionEditorOpen && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700">✓ {nextActionSuccess}</p>}
-                {nextActionError && !nextActionEditorOpen && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800">{nextActionError}</p>}
-                <Link href="/pipeline" className="accent-text mt-4 inline-flex text-sm font-semibold">Pipeline megnyitása →</Link>
-              </section>
-
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="mb-6 text-xl font-bold">
-                  Érdeklődő kezelése
-                </h2>
-
-                <div className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Állapot
-                    </label>
-
-                    <select
-                      value={status}
-                      onChange={(e) => {
-                        setStatus(e.target.value);
-                        if (e.target.value !== "processed") setOutcome("");
-                        setSaveError("");
-                      }}
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    >
-                      <option value="new">Új</option>
-
-                      <option value="contacted">
-                        Kapcsolatfelvétel megtörtént
-                      </option>
-
-                      <option value="waiting">
-                        Válaszra vár
-                      </option>
-
-                      <option value="offer_sent">
-                        Ajánlat elküldve
-                      </option>
-
-                      <option value="decision">
-                        Döntésre vár
-                      </option>
-
-                      <option value="processed">
-                        Feldolgozott
-                      </option>
-                    </select>
-                  </div>
-
-                  {status === "processed" && (
-                    <div>
-                      <label htmlFor="lead-outcome" className="mb-2 block text-sm font-medium text-slate-700">
-                        Eredmény
-                      </label>
-                      <select id="lead-outcome" value={outcome}
-                        onChange={(e) => { setOutcome(e.target.value); setSaveError(""); }}
-                        required
-                        className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                      >
-                        <option value="">Válassz eredményt</option>
-                        <option value="won">Megvalósult</option>
-                        <option value="lost">Nem valósult meg</option>
-                      </select>
-                      {!lead.outcome && <p className="mt-2 text-xs text-slate-500">A korábban lezárt ügyek eredménye csak rögzítés után jelenik meg a riportokban.</p>}
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">
-                      Prioritás
-                    </label>
-
-                    <select
-                      value={priority}
-                      onChange={(e) =>
-                        setPriority(e.target.value)
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400"
-                    >
-                      <option value="low">
-                        Alacsony
-                      </option>
-                      <option value="medium">
-                        Közepes
-                      </option>
-                      <option value="high">
-                        Magas
-                      </option>
-                    </select>
-                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    Az AI az érdeklődő adatai és a korábbi
+                    elemzés alapján elkészíti a
+                    választervezetet.
+                  </p>
 
                   <button
-                    type="submit"
-                    disabled={saving}
-                    className="w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    type="button"
+                    onClick={handleGenerateReply}
+                    disabled={
+                      replyLoading ||
+                      messageStatus === "sending"
+                    }
+                    className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {saving
-                      ? "Mentés..."
-                      : "Módosítások mentése"}
+                    {replyLoading
+                      ? "Válasz készítése..."
+                      : replyDraft
+                        ? "Új választervezet készítése"
+                        : "Választervezet készítése"}
                   </button>
 
-                  {saveSuccess && (
-                    <div className="rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-                      ✓ A módosítások elmentve.
+                  {replyError && (
+                    <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                      {replyError}
                     </div>
                   )}
-                  {saveError && <p role="alert" className="text-sm text-red-700">{saveError}</p>}
+
+                  {replyDraft && (
+                    <div className="mt-5">
+                      <p className="mb-3 text-sm text-slate-600">Címzett: {lead.email || "Nincs e-mail-cím megadva"}{replyDirty ? " · Nem mentett módosítás" : ""}</p>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">
+                        Válasz
+                      </label>
+
+                      <textarea
+                        value={replyDraft}
+                        onChange={(e) => {
+                          setReplyDirty(true);
+                          setReplyDraft(e.target.value);
+                          setDraftSaveSuccess(false);
+                        }}
+                        disabled={messageLocked}
+                        className="min-h-64 w-full rounded-xl border border-slate-200 px-4 py-3 leading-7 outline-none focus:border-violet-400 disabled:bg-slate-50 disabled:text-slate-600"
+                      />
+
+                      {!messageLocked && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleSaveDraft}
+                            disabled={
+                              draftSaving ||
+                              !replyDraft.trim()
+                            }
+                            className="mt-4 w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {draftSaving
+                              ? "Piszkozat mentése..."
+                              : "Piszkozat mentése"}
+                          </button>
+
+                          {draftMessageId &&
+                            (messageStatus === "draft" || messageStatus === "failed") && (
+                              <button
+                                type="button"
+                                onClick={handleMarkAsSent}
+                                disabled={markingSent || replyDirty || draftSaving}
+                                className="mt-3 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {markingSent
+                                  ? "Küldés folyamatban..."
+                                  : messageStatus === "failed" ? "Küldés újrapróbálása" : "Válasz elküldése"}
+                              </button>
+                            )}
+
+                          <p className="mt-3 text-xs leading-5 text-slate-500">
+                            A „Válasz elküldése” gomb
+                            ténylegesen elküldi a jóváhagyott
+                            e-mailt az érdeklődőnek.
+                          </p>
+                        </>
+                      )}
+
+                      {messageStatus === "sending" && (
+                        <div className={delayedSending ? "mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700" : "mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700"}>
+                          {delayedSending ? "A küldési visszaigazolás késik. Ellenőrizd a saját Make-futást és a Gmail Elküldött levelek mappát. Ezután rögzítsd a tényleges eredményt." : "A küldés visszaigazolására várunk. Az üzenetet jelenleg nem lehet módosítani vagy újra elküldeni. Az állapot automatikusan frissül."}
+                          {delayedSending && <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <button type="button" disabled={resolvingDelivery} onClick={() => handleResolveDelivery("sent")}
+                              className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                              Megtaláltam az elküldött levelet
+                            </button>
+                            <button type="button" disabled={resolvingDelivery} onClick={() => handleResolveDelivery("failed")}
+                              className="rounded-xl border border-red-300 bg-white px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50">
+                              Biztosan nem ment ki
+                            </button>
+                          </div>}
+                        </div>
+                      )}
+
+                      {messageStatus === "failed" && (
+                        <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                          {deliveryFailedAt
+                            ? `A Gmail ${displayReceivedAt(deliveryFailedAt)} időpontban igazolta, hogy a küldés sikertelen volt. Ellenőrzés után az újrapróbálás gombbal ismét elindíthatod.`
+                            : "A Gmail-küldés igazoltan sikertelen volt. Ellenőrzés után az újrapróbálás gombbal ismét elindíthatod."}
+                        </div>
+                      )}
+
+                      {draftSaveSuccess && (
+                        <div className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
+                          ✓ A piszkozat elmentve.
+                        </div>
+                      )}
+
+                      {draftSaveError && (
+                        <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                          {draftSaveError}
+                        </div>
+                      )}
+
+                      {markSentError && (
+                        <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                          {markSentError}
+                        </div>
+                      )}
+
+                      {messageStatus === "sent" && (
+                        <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                          {deliveryConfirmedAt
+                            ? deliveryResolutionSource === "manual"
+                              ? `✓ Kézzel ellenőrizve elküldött: ${displayReceivedAt(deliveryConfirmedAt)}.`
+                              : `✓ A Gmail visszaigazolta a küldést: ${displayReceivedAt(deliveryConfirmedAt)}.`
+                            : "✓ Az üzenet elküldöttként van rögzítve."}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
+            </section>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <h2 className="text-xl font-bold text-slate-900">
-                  AI biztonsági döntés
-                </h2>
-
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  A rendszer értékeli, hogy az AI-válasz
-                  emberi ellenőrzés nélkül elküldhető-e.
-                </p>
-
-                {!hasRiskEvaluation ? (
-                  <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-                    Ehhez az érdeklődőhöz még nincs AI
-                    kockázati értékelés.
-                  </div>
-                ) : (
-                  <div className="mt-5 space-y-4">
-                    <div
-                      className={`rounded-xl border p-4 ${
-                        lead.ai_requires_human_review
-                          ? "border-amber-200 bg-amber-50"
-                          : "border-emerald-200 bg-emerald-50"
-                      }`}
-                    >
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        AI döntés
-                      </div>
-
-                      <div
-                        className={`mt-1 font-bold ${
-                          lead.ai_requires_human_review
-                            ? "text-amber-800"
-                            : "text-emerald-800"
-                        }`}
-                      >
-                        {lead.ai_requires_human_review
-                          ? "Kézi ellenőrzés szükséges"
-                          : lead.ai_safe_to_send
-                            ? "Automatikusan küldhető"
-                            : "Automatikus küldés nem javasolt"}
-                      </div>
-                    </div>
-
-                    <div
-                      className={`rounded-xl border p-4 ${getRiskLevelClasses(
-                        lead.ai_risk_level
-                      )}`}
-                    >
-                      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">
-                        Kockázati szint
-                      </div>
-
-                      <div className="mt-1 font-bold">
-                        {getRiskLevelLabel(
-                          lead.ai_risk_level
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Indoklás
-                      </div>
-
-                      <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
-                        {lead.ai_risk_reason ||
-                          "Nincs megadott indoklás."}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-xl bg-slate-50 p-3">
-                        <div className="text-xs text-slate-500">
-                          Válasz biztonságos
-                        </div>
-
-                        <div className="mt-1 font-semibold text-slate-900">
-                          {lead.ai_safe_to_send === true
-                            ? "Igen"
-                            : lead.ai_safe_to_send ===
-                                false
-                              ? "Nem"
-                              : "—"}
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl bg-slate-50 p-3">
-                        <div className="text-xs text-slate-500">
-                          Emberi döntés kell
-                        </div>
-
-                        <div className="mt-1 font-semibold text-slate-900">
-                          {lead.ai_requires_human_review ===
-                          true
-                            ? "Igen"
-                            : lead.ai_requires_human_review ===
-                                false
-                              ? "Nem"
-                              : "—"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
+            <section id="lead-communication" aria-labelledby="lead-communication-title" className="scroll-mt-24">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">Kapcsolattartás</p>
+                <h2 id="lead-communication-title" className="mt-1 text-2xl font-bold text-slate-900">Előzmények és belső jegyzetek</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">A kiküldött üzenetek és a csapat belső feljegyzései elkülönítve maradnak.</p>
               </div>
+              <div className="mt-5 grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
+                <div className="h-full rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-xl font-bold text-slate-900">
+                        Kommunikációs előzmények
+                      </h2>
 
-              <div className="rounded-2xl bg-gradient-to-br from-violet-600 to-purple-500 p-6 text-white shadow-lg">
-                <div className="text-lg font-bold">
-                  ✨ AI feldolgozás
+                      <p className="mt-1 text-sm text-slate-500">
+                        Az érdeklődőhöz tartozó korábbi
+                        üzenetek.
+                      </p>
+                    </div>
+
+                    <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+                      {messageHistory.length} üzenet
+                    </div>
+                  </div>
+
+                  {messageHistory.length === 0 ? (
+                    <div className="mt-6 rounded-xl bg-slate-50 p-5 text-sm text-slate-500">
+                      Még nincs mentett kommunikáció ehhez
+                      az érdeklődőhöz.
+                    </div>
+                  ) : (
+                    <div className="mt-6 space-y-4">
+                      {messageHistory.map((message) => (
+                        <div
+                          key={message.id}
+                          className={`rounded-2xl border p-5 ${
+                            message.direction === "incoming"
+                              ? "border-blue-100 bg-blue-50"
+                              : "border-slate-200 bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                                {getDirectionLabel(
+                                  message.direction
+                                )}
+                              </span>
+
+                              <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+                                {getMessageStatusLabel(
+                                  message.status
+                                )}
+                              </span>
+
+                              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500">
+                                {getChannelLabel(
+                                  message.channel
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-slate-500">
+                              {formatMessageDate(
+                                message.created_at
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                            {message.content}
+                          </div>
+                          {message.direction === "outgoing" && message.delivery_confirmed_at && (
+                            <p className="mt-3 text-xs font-semibold text-emerald-700">
+                              {message.delivery_resolution_source === "manual" ? "Kézzel ellenőrizve elküldött" : "Gmail-visszaigazolás"}: {displayReceivedAt(message.delivery_confirmed_at)}
+                            </p>
+                          )}
+                          {message.direction === "outgoing" && message.delivery_failed_at && (
+                            <p className="mt-3 text-xs font-semibold text-red-700">
+                              {message.delivery_resolution_source === "manual" ? "Kézzel ellenőrizve sikertelen" : "Sikertelen Gmail-küldés visszaigazolva"}: {displayReceivedAt(message.delivery_failed_at)}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                {!aiResult && !aiError && (
-                  <p className="mt-3 leading-7 text-violet-50">
-                    Az AI elemzi az érdeklődőt,
-                    összefoglalja az igényt, megkeresi a
-                    hiányzó információkat és javaslatot ad
-                    a következő lépésre.
-                  </p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleAiAnalysis}
-                  disabled={aiLoading}
-                  className="mt-5 w-full rounded-xl bg-white px-4 py-3 font-semibold text-violet-700 transition hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {aiLoading
-                    ? "AI dolgozik..."
-                    : aiResult
-                      ? "AI elemzés újra"
-                      : "AI feldolgozás indítása"}
-                </button>
-
-                {aiError && (
-                  <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm font-medium text-red-700">
-                    {aiError}
-                  </div>
-                )}
-
-                {aiResult && (
-                  <div className="mt-5 rounded-xl bg-white/10 p-4">
-                    <div className="mb-2 font-semibold">
-                      AI eredmény
-                    </div>
-
-                    <div className="whitespace-pre-wrap text-sm leading-6 text-white">
-                      {aiResult}
-                    </div>
-                  </div>
-                )}
+                <LeadNotes leadId={lead.id} />
               </div>
-            </div>
+            </section>
           </div>
         </form>
     </AppShell>

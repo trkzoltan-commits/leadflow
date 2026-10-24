@@ -114,7 +114,7 @@ export function LeadNotes({ leadId }: { leadId: string }) {
   const remaining = LEAD_NOTE_MAX_LENGTH - content.length;
 
   return (
-    <section id="internal-notes" className="rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+    <section id="internal-notes" className="scroll-mt-24 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Belső megjegyzések</h2>
