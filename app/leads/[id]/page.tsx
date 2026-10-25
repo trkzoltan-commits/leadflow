@@ -8,6 +8,7 @@ import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDisp
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, NEXT_ACTION_MAX_LENGTH, nextActionDueState } from "@/lib/lead-next-action";
 import { AppShell } from "@/components/app-shell";
 import { LeadNotes } from "@/components/lead-notes";
+import { VoiceDictationButton } from "@/components/voice-dictation-button";
 
 type Lead = {
   id: string;
@@ -1145,12 +1146,17 @@ export default function LeadDetailsPage() {
 
                   {lead.status === "processed" ? <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">A lezárt ügyhöz nincs aktív teendő.</p>
                     : nextActionEditorOpen ? <div className="mt-5 space-y-4">
-                      <label className="block text-sm font-semibold text-slate-700">Mit kell elintézni?
-                        <textarea rows={4} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <label htmlFor="lead-next-action" className="text-sm font-semibold text-slate-700">Mit kell elintézni?</label>
+                          <VoiceDictationButton value={nextActionDraft} onChange={setNextActionDraft} disabled={nextActionSaving}
+                            maxLength={NEXT_ACTION_MAX_LENGTH} fieldLabel="Következő teendő" />
+                        </div>
+                        <textarea id="lead-next-action" rows={4} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
                           onChange={event => setNextActionDraft(event.target.value)} disabled={nextActionSaving}
                           className="mt-2 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                           placeholder="Például: Telefonos egyeztetés az ajánlat részleteiről" />
-                      </label>
+                      </div>
                       <p className="text-right text-xs text-slate-500">{nextActionDraft.length}/{NEXT_ACTION_MAX_LENGTH}</p>
                       <label className="block text-sm font-semibold text-slate-700">Határidő
                         <input type="date" value={nextActionDueDateDraft} onChange={event => setNextActionDueDateDraft(event.target.value)} disabled={nextActionSaving}
@@ -1395,11 +1401,15 @@ export default function LeadDetailsPage() {
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Leírás
-                      </label>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <label htmlFor="lead-description" className="block text-sm font-medium text-slate-700">
+                          Leírás
+                        </label>
+                        <VoiceDictationButton value={description} onChange={setDescription} fieldLabel="Érdeklődés leírása" />
+                      </div>
 
                       <textarea
+                        id="lead-description"
                         value={description}
                         onChange={(e) =>
                           setDescription(e.target.value)
@@ -1653,11 +1663,24 @@ export default function LeadDetailsPage() {
                   {replyDraft && (
                     <div className="mt-5">
                       <p className="mb-3 text-sm text-slate-600">Címzett: {lead.email || "Nincs e-mail-cím megadva"}{replyDirty ? " · Nem mentett módosítás" : ""}</p>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">
-                        Válasz
-                      </label>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <label htmlFor="lead-reply-draft" className="block text-sm font-medium text-slate-700">
+                          Válasz
+                        </label>
+                        <VoiceDictationButton
+                          value={replyDraft}
+                          onChange={value => {
+                            setReplyDirty(true);
+                            setReplyDraft(value);
+                            setDraftSaveSuccess(false);
+                          }}
+                          disabled={messageLocked}
+                          fieldLabel="Válaszpiszkozat"
+                        />
+                      </div>
 
                       <textarea
+                        id="lead-reply-draft"
                         value={replyDraft}
                         onChange={(e) => {
                           setReplyDirty(true);

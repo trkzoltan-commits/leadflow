@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LEAD_NOTE_MAX_LENGTH } from "@/lib/lead-notes";
 import { supabase } from "@/lib/supabase";
+import { VoiceDictationButton } from "@/components/voice-dictation-button";
 
 type LeadNote = {
   id: string;
@@ -132,9 +133,21 @@ export function LeadNotes({ leadId, onDirtyChange }: { leadId: string; onDirtyCh
       </div>
 
       <div className="mt-5">
-        <label htmlFor="lead-note-content" className="mb-2 block text-sm font-semibold text-slate-700">
-          Új belső megjegyzés
-        </label>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <label htmlFor="lead-note-content" className="block text-sm font-semibold text-slate-700">
+            Új belső megjegyzés
+          </label>
+          <VoiceDictationButton
+            value={content}
+            onChange={value => {
+              setContent(value);
+              setSuccess("");
+            }}
+            disabled={saving}
+            maxLength={LEAD_NOTE_MAX_LENGTH}
+            fieldLabel="Belső megjegyzés"
+          />
+        </div>
         <textarea
           id="lead-note-content"
           value={content}

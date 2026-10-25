@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
+import { VoiceDictationButton } from "@/components/voice-dictation-button";
 import { displayReceivedAt, isDelayedSending, missingAiDraftWarning, newLeadDispatchWarning, outcomeLabel, replyLabel, searchLeads, type OverviewLead } from "@/lib/lead-overview";
 import {
   budapestDateOffset,
@@ -559,12 +560,17 @@ export default function PipelinePage() {
         <h2 id="next-action-title" className="text-xl font-bold">Következő teendő</h2>
         <p className="mt-1 text-sm text-slate-600">{pendingNextAction.name || "Névtelen érdeklődő"}</p>
 
-        <label className="mt-5 block text-sm font-semibold text-slate-700">Mit kell elintézni?
-          <textarea autoFocus rows={3} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
+        <div className="mt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label htmlFor="pipeline-next-action" className="text-sm font-semibold text-slate-700">Mit kell elintézni?</label>
+            <VoiceDictationButton value={nextActionDraft} onChange={setNextActionDraft}
+              disabled={savingNextActionLeadId === pendingNextAction.id} maxLength={NEXT_ACTION_MAX_LENGTH} fieldLabel="Következő teendő" />
+          </div>
+          <textarea id="pipeline-next-action" autoFocus rows={3} maxLength={NEXT_ACTION_MAX_LENGTH} value={nextActionDraft}
             onChange={event => setNextActionDraft(event.target.value)} disabled={savingNextActionLeadId === pendingNextAction.id}
             className="mt-2 w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             placeholder="Például: Telefonos egyeztetés az ajánlat részleteiről" />
-        </label>
+        </div>
         <div className="mt-1 text-right text-xs text-slate-500">{nextActionDraft.length}/{NEXT_ACTION_MAX_LENGTH}</div>
 
         <label className="mt-4 block text-sm font-semibold text-slate-700">Határidő
