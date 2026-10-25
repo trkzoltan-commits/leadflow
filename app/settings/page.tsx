@@ -8,6 +8,7 @@ import { applyPreferences, readLocalPreferences } from "@/components/theme-prefe
 import { normalizePreferences, roleLabel, type AccentTheme, type ColorMode } from "@/lib/user-preferences";
 import { AppShell } from "@/components/app-shell";
 import { TeamManagement } from "@/components/team-management";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { useAutomationHealth } from "@/lib/use-automation-health";
 import type { DataRetentionStatus } from "@/lib/data-retention";
 import {
@@ -18,10 +19,11 @@ import {
 
 type AutoReplyMode = "manual" | "safe" | "automatic";
 type MakeConnectionStatus = "company_active" | "legacy" | "setup_required";
-type SettingsSection = "account" | "company" | "team" | "messages" | "privacy" | "automation";
-type PersistedSettingsSection = Exclude<SettingsSection, "team" | "automation">;
+type SettingsSection = "onboarding" | "account" | "company" | "team" | "messages" | "privacy" | "automation";
+type PersistedSettingsSection = Exclude<SettingsSection, "onboarding" | "team" | "automation">;
 
 const settingsSections: { id: SettingsSection; label: string; description: string }[] = [
+  { id: "onboarding", label: "Indulás", description: "Pilot ellenőrzőlista" },
   { id: "account", label: "Saját fiók", description: "Profil és megjelenés" },
   { id: "company", label: "Vállalkozás", description: "Cégnév és ajánlatkérő" },
   { id: "team", label: "Csapat", description: "Felhasználók és jogosultságok" },
@@ -134,6 +136,9 @@ export default function SettingsPage() {
   const activeSectionDirty = isPersistedSettingsSection(activeSection) && dirtySections.includes(activeSection);
   const hasUnsavedChanges = dirtySections.length > 0;
   const showSaveSuccess = saveSuccess && !hasUnsavedChanges;
+  const visibleSettingsSections = userRole === "owner"
+    ? settingsSections
+    : settingsSections.filter(section => section.id !== "onboarding");
   const makeStatus: MakeConnectionStatus | null = automationHealth?.connectionStatus === "legacy_fallback"
     ? "legacy" : automationHealth?.connectionStatus ?? null;
   const makeStatusError = Boolean(automationHealthError);
@@ -181,12 +186,16 @@ export default function SettingsPage() {
   useEffect(() => {
     function selectSectionFromHash() {
       const requested = window.location.hash.slice(1) as SettingsSection;
-      if (settingsSections.some(section => section.id === requested)) setActiveSection(requested);
+      if (settingsSections.some(section => section.id === requested) && (requested !== "onboarding" || userRole === "owner")) {
+        setActiveSection(requested);
+      } else if (requested === "onboarding") {
+        setActiveSection("account");
+      }
     }
     selectSectionFromHash();
     window.addEventListener("hashchange", selectSectionFromHash);
     return () => window.removeEventListener("hashchange", selectSectionFromHash);
-  }, []);
+  }, [userRole]);
 
   function selectSection(section: SettingsSection) {
     setActiveSection(section);
@@ -553,8 +562,8 @@ export default function SettingsPage() {
           </p>
         </div>
 
-        <nav aria-label="Beállítások kategóriái" className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:grid-cols-3 xl:grid-cols-6">
-          {settingsSections.map(section => <button key={section.id} type="button"
+        <nav aria-label="Beállítások kategóriái" className="mb-6 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm md:grid-cols-3 xl:grid-cols-7">
+          {visibleSettingsSections.map(section => <button key={section.id} type="button"
             aria-current={activeSection === section.id ? "page" : undefined}
             onClick={() => selectSection(section.id)}
             className={activeSection === section.id
@@ -570,6 +579,8 @@ export default function SettingsPage() {
             <span className="mt-1 hidden text-xs opacity-75 sm:block">{section.description}</span>
           </button>)}
         </nav>
+
+        {activeSection === "onboarding" && userRole === "owner" && <OnboardingChecklist companySlug={companySlug} onSelectSection={selectSection} />}
 
         {activeSection === "account" && <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-xl font-bold text-slate-900">Saját fiók</h2>
