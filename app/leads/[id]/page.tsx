@@ -9,6 +9,7 @@ import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, NEXT_ACT
 import { AppShell } from "@/components/app-shell";
 import { LeadNotes } from "@/components/lead-notes";
 import { VoiceDictationButton } from "@/components/voice-dictation-button";
+import { StructuredVoiceCapture } from "@/components/structured-voice-capture";
 
 type Lead = {
   id: string;
@@ -117,6 +118,7 @@ export default function LeadDetailsPage() {
   const [nextActionManagerAccess, setNextActionManagerAccess] = useState(false);
   const [leadAssignees, setLeadAssignees] = useState<LeadAssignee[]>([]);
   const [noteDirty, setNoteDirty] = useState(false);
+  const [structuredCaptureDirty, setStructuredCaptureDirty] = useState(false);
 
   async function handleRetryLeadAutomation() {
     if (!lead || lead.new_lead_dispatch_status !== "unconfigured" || dispatchRetrying) return;
@@ -922,7 +924,7 @@ export default function LeadDetailsPage() {
     nextActionDraft !== (nextActionExpected.nextAction ?? "") ||
     nextActionDueDateDraft !== (nextActionExpected.dueDate ?? "")
   );
-  const hasUnsavedChanges = hasUnsavedLeadChanges || hasUnsavedNextAction || replyDirty || noteDirty;
+  const hasUnsavedChanges = hasUnsavedLeadChanges || hasUnsavedNextAction || replyDirty || noteDirty || structuredCaptureDirty;
 
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -1383,6 +1385,17 @@ export default function LeadDetailsPage() {
                   <h2 className="mb-6 text-xl font-bold">
                     Érdeklődés
                   </h2>
+
+                  <StructuredVoiceCapture
+                    leadId={lead.id}
+                    currentValues={{ service, location, description }}
+                    onApply={suggestions => {
+                      if (suggestions.service !== undefined) setService(suggestions.service);
+                      if (suggestions.location !== undefined) setLocation(suggestions.location);
+                      if (suggestions.description !== undefined) setDescription(suggestions.description);
+                    }}
+                    onDirtyChange={setStructuredCaptureDirty}
+                  />
 
                   <div className="space-y-5">
                     <div>
