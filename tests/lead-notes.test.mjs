@@ -72,7 +72,7 @@ test("lead notes API authenticates active members and scopes every lead to their
 });
 
 test("lead detail labels notes as internal and provides no edit or delete action", () => {
-  assert.match(leadDetail, /<LeadNotes leadId=\{lead\.id\} \/>/);
+  assert.match(leadDetail, /<LeadNotes leadId=\{lead\.id\} onDirtyChange=\{setNoteDirty\} \/>/);
   assert.match(component, /Belső megjegyzések/);
   assert.match(component, /Nem kerül AI-feldolgozásba, e-mailbe vagy Make-be/);
   assert.match(component, /authorEmail/);

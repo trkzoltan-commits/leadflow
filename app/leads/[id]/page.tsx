@@ -115,6 +115,7 @@ export default function LeadDetailsPage() {
   const [nextActionCurrentUserId, setNextActionCurrentUserId] = useState<string | null>(null);
   const [nextActionManagerAccess, setNextActionManagerAccess] = useState(false);
   const [leadAssignees, setLeadAssignees] = useState<LeadAssignee[]>([]);
+  const [noteDirty, setNoteDirty] = useState(false);
 
   async function handleRetryLeadAutomation() {
     if (!lead || lead.new_lead_dispatch_status !== "unconfigured" || dispatchRetrying) return;
@@ -748,6 +749,9 @@ export default function LeadDetailsPage() {
 
   function closeNextActionEditor() {
     if (nextActionSaving) return;
+    const hasDraftChanges = nextActionDraft !== (nextActionExpected.nextAction ?? "")
+      || nextActionDueDateDraft !== (nextActionExpected.dueDate ?? "");
+    if (hasDraftChanges && !window.confirm("A teendő módosításai nincsenek elmentve. Biztosan elveted őket?")) return;
     setNextActionEditorOpen(false);
     setNextActionError("");
   }
@@ -902,6 +906,38 @@ export default function LeadDetailsPage() {
     }).format(new Date(date));
   }
 
+  const hasUnsavedLeadChanges = Boolean(lead && (
+    name !== (lead.name ?? "") ||
+    email !== (lead.email ?? "") ||
+    phone !== (lead.phone ?? "") ||
+    service !== (lead.service ?? "") ||
+    description !== (lead.description ?? "") ||
+    location !== (lead.location ?? "") ||
+    status !== (lead.status ?? "new") ||
+    outcome !== (lead.outcome ?? "") ||
+    priority !== (lead.priority ?? "medium")
+  ));
+  const hasUnsavedNextAction = nextActionEditorOpen && (
+    nextActionDraft !== (nextActionExpected.nextAction ?? "") ||
+    nextActionDueDateDraft !== (nextActionExpected.dueDate ?? "")
+  );
+  const hasUnsavedChanges = hasUnsavedLeadChanges || hasUnsavedNextAction || replyDirty || noteDirty;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    function warnBeforeLeaving(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [hasUnsavedChanges]);
+
+  function returnToLeadList() {
+    if (hasUnsavedChanges && !window.confirm("Mentetlen módosításaid vannak. Biztosan visszalépsz az érdeklődők listájához?")) return;
+    router.push("/leads");
+  }
+
   if (loading) {
     return (
       <AppShell>
@@ -998,10 +1034,10 @@ export default function LeadDetailsPage() {
     ?? (lead.assigned_user_id ? "Kijelölt felelős" : "Nincs kijelölve");
 
   return (
-    <AppShell>
+    <AppShell hasUnsavedChanges={hasUnsavedChanges}>
         <header id="lead-summary" className="mb-8 scroll-mt-24">
           <button
-            onClick={() => router.push("/leads")}
+            onClick={returnToLeadList}
             className="mb-4 block text-sm font-medium text-violet-600 hover:text-violet-700"
           >
             ← Vissza az érdeklődőkhöz
@@ -1815,7 +1851,7 @@ export default function LeadDetailsPage() {
                   )}
                 </div>
 
-                <LeadNotes leadId={lead.id} />
+                <LeadNotes leadId={lead.id} onDirtyChange={setNoteDirty} />
               </div>
             </section>
           </div>

@@ -41,13 +41,17 @@ function displayNoteDate(value: string) {
   }).format(new Date(value));
 }
 
-export function LeadNotes({ leadId }: { leadId: string }) {
+export function LeadNotes({ leadId, onDirtyChange }: { leadId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const [notes, setNotes] = useState<LeadNote[]>([]);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    onDirtyChange?.(content.length > 0);
+  }, [content, onDirtyChange]);
 
   useEffect(() => {
     let cancelled = false;
