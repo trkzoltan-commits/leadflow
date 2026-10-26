@@ -10,6 +10,7 @@ import { AppShell } from "@/components/app-shell";
 import { LeadNotes } from "@/components/lead-notes";
 import { VoiceDictationButton } from "@/components/voice-dictation-button";
 import { StructuredVoiceCapture } from "@/components/structured-voice-capture";
+import { buildApprovedReplyHtml, type EmailSignature } from "@/lib/email-html";
 
 type Lead = {
   id: string;
@@ -78,6 +79,9 @@ export default function LeadDetailsPage() {
   const [replyDraft, setReplyDraft] = useState("");
   const [replyError, setReplyError] = useState("");
   const [replyDirty, setReplyDirty] = useState(false);
+  const [emailSignature, setEmailSignature] = useState<EmailSignature | null>(null);
+  const [emailPreviewLoading, setEmailPreviewLoading] = useState(true);
+  const [emailPreviewError, setEmailPreviewError] = useState("");
   const [riskLoading, setRiskLoading] = useState(false);
   const [riskError, setRiskError] = useState("");
   const [riskSuccess, setRiskSuccess] = useState("");
@@ -219,15 +223,49 @@ export default function LeadDetailsPage() {
       setPriority(data.priority ?? "medium");
       setAiResult(data.ai_summary ?? "");
 
-      const { data: messagesData, error: messagesError } = await supabase
-        .from("messages")
-        .select(messageSelect)
-        .eq("lead_id", leadId)
-        .order("created_at", { ascending: true });
+      const [messagesResult, companyResult, signatureResult] = await Promise.all([
+        supabase
+          .from("messages")
+          .select(messageSelect)
+          .eq("lead_id", leadId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("companies")
+          .select("name,logo_url,brand_primary")
+          .eq("id", data.company_id)
+          .single(),
+        supabase
+          .from("company_settings")
+          .select("email_signature_enabled,email_signature_show_logo,email_signoff,email_signer_name,email_signer_role,email_phone,email_address,email_website,email_legal_text")
+          .eq("company_id", data.company_id)
+          .single(),
+      ]);
+
+      const { data: messagesData, error: messagesError } = messagesResult;
 
       if (messagesError) {
         console.error("Üzenetek betöltési hiba:", messagesError);
       }
+
+      if (companyResult.error || signatureResult.error || !companyResult.data?.name || !signatureResult.data) {
+        setEmailPreviewError("A céges aláírás előnézete most nem tölthető be. Küldés előtt ellenőrizd az Üzenetek beállításait.");
+      } else {
+        setEmailSignature({
+          enabled: signatureResult.data.email_signature_enabled,
+          showLogo: signatureResult.data.email_signature_show_logo,
+          logoUrl: companyResult.data.logo_url,
+          companyName: companyResult.data.name,
+          signoff: signatureResult.data.email_signoff,
+          signerName: signatureResult.data.email_signer_name,
+          signerRole: signatureResult.data.email_signer_role,
+          phone: signatureResult.data.email_phone,
+          email: signatureResult.data.email_address,
+          website: signatureResult.data.email_website,
+          legalText: signatureResult.data.email_legal_text,
+          brandColor: companyResult.data.brand_primary,
+        });
+      }
+      setEmailPreviewLoading(false);
 
       try {
         const accessResponse = await fetch("/api/lead-assignees", {
@@ -1836,6 +1874,27 @@ export default function LeadDetailsPage() {
                         disabled={messageLocked}
                         className="min-h-64 w-full rounded-xl border border-slate-200 px-4 py-3 leading-7 outline-none focus:border-violet-400 disabled:bg-slate-50 disabled:text-slate-600"
                       />
+
+                      <section aria-labelledby="approved-reply-preview-heading" className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 id="approved-reply-preview-heading" className="font-semibold text-slate-900">Elküldés előtti előnézet</h3>
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">Válasz és céges aláírás</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-slate-500">A jelenlegi szöveg és az Üzenetek beállításaiban megadott aláírás együtt. Küldéskor az elmentett piszkozat kerül továbbításra.</p>
+                        {emailPreviewLoading ? <p role="status" className="mt-4 text-sm text-slate-500">Az előnézet betöltése…</p>
+                          : emailPreviewError ? <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+                            <p>{emailPreviewError}</p>
+                            <Link href="/settings#messages" className="mt-2 inline-block font-semibold underline">Üzenetek beállításainak megnyitása →</Link>
+                          </div>
+                            : emailSignature && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                              <div
+                                aria-label="A kimenő e-mail tartalmi előnézete"
+                                className="pointer-events-none min-w-0 break-words text-sm leading-6 text-slate-800 [&_img]:max-w-full"
+                                dangerouslySetInnerHTML={{ __html: buildApprovedReplyHtml(replyDraft, emailSignature) }}
+                              />
+                            </div>}
+                        {replyDirty && <p className="mt-3 text-xs font-semibold text-amber-700">Az előnézet a nem mentett módosítást is mutatja. Küldés előtt mentsd el a piszkozatot.</p>}
+                      </section>
 
                       {!messageLocked && (
                         <>
