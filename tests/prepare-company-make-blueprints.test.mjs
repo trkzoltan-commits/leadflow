@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import test from "node:test";
 import {
   clearBlueprintProviderBindings,
+  patchApprovedReplySubject,
   patchBlueprintSecrets,
   prepareCompanyMakeBlueprints,
   validateExternalPath,
@@ -61,6 +62,13 @@ test("rejects invalid keys and blueprints without a LeadFlow header", () => {
   assert.throws(() => patchBlueprintSecrets({ flow: [] }, token));
 });
 
+test("maps the approved reply Gmail subject from the tenant webhook payload", () => {
+  const source = unifiedBlueprint();
+  assert.equal(patchApprovedReplySubject(source), 1);
+  assert.equal(source.flow[1].routes[1].flow[0].mapper.subject, "{{1.subject}}");
+  assert.throws(() => patchApprovedReplySubject({ flow: [] }), /Gmail-küldő modul/);
+});
+
 test("clears tenant-specific Make bindings and literal notification recipients", () => {
   const source = unifiedBlueprint();
   const result = clearBlueprintProviderBindings(source);
@@ -97,6 +105,7 @@ test("writes unified events and reconciliation blueprints outside the repository
     await writeFile(reconciliationInput, JSON.stringify(reconciliationBlueprint()));
     const results = await prepareCompanyMakeBlueprints({ slug: "pelda-kft", keyPath, unifiedInput, reconciliationInput, outputDirectory, projectRoot: process.cwd() });
     assert.deepEqual(results.map(result => result.replaced), [2, 2]);
+    assert.deepEqual(results.map(result => result.approvedReplySubjectsPatched), [1, 0]);
     assert.deepEqual(results.map(result => result.output), [
       join(outputDirectory, "pelda-kft-leadflow-events.blueprint.json"),
       join(outputDirectory, "pelda-kft-delivery-reconciliation.blueprint.json"),
@@ -107,6 +116,8 @@ test("writes unified events and reconciliation blueprints outside the repository
       assert.doesNotMatch(output, /pilot@example\.com/);
       assert.equal(validatePreparedBlueprint(JSON.parse(output), token), true);
     }
+    const preparedEvents = JSON.parse(await readFile(results[0].output, "utf8"));
+    assert.equal(preparedEvents.flow[1].routes[1].flow[0].mapper.subject, "{{1.subject}}");
     await assert.rejects(prepareCompanyMakeBlueprints({ slug: "pelda-kft", keyPath, unifiedInput, reconciliationInput, outputDirectory, projectRoot: process.cwd() }));
   } finally {
     await rm(folder, { recursive: true, force: true });

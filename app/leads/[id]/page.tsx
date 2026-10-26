@@ -11,6 +11,7 @@ import { LeadNotes } from "@/components/lead-notes";
 import { VoiceDictationButton } from "@/components/voice-dictation-button";
 import { StructuredVoiceCapture } from "@/components/structured-voice-capture";
 import { buildApprovedReplyHtml, type EmailSignature } from "@/lib/email-html";
+import { APPROVED_REPLY_SUBJECT_MAX_LENGTH, defaultApprovedReplySubject, normalizeApprovedReplySubject } from "@/lib/email-subject";
 
 type Lead = {
   id: string;
@@ -44,6 +45,7 @@ type Message = {
   id: string;
   direction: string;
   sender: string | null;
+  subject: string | null;
   content: string;
   channel: string | null;
   status: string | null;
@@ -57,7 +59,7 @@ type Message = {
 type DeliveryAudit = { status: string | null; attemptCount: number; lastAttemptAt: string | null; updatedAt: string | null };
 type LeadAssignee = { id: string; email: string; role: string };
 
-const messageSelect = "id, direction, sender, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at, delivery_resolution_source";
+const messageSelect = "id, direction, sender, subject, content, channel, status, created_at, sending_started_at, delivery_confirmed_at, delivery_failed_at, delivery_resolution_source";
 
 export default function LeadDetailsPage() {
   const router = useRouter();
@@ -76,6 +78,7 @@ export default function LeadDetailsPage() {
   const [aiError, setAiError] = useState("");
 
   const [replyLoading, setReplyLoading] = useState(false);
+  const [replySubject, setReplySubject] = useState("");
   const [replyDraft, setReplyDraft] = useState("");
   const [replyError, setReplyError] = useState("");
   const [replyDirty, setReplyDirty] = useState(false);
@@ -228,6 +231,7 @@ export default function LeadDetailsPage() {
           .from("messages")
           .select(messageSelect)
           .eq("lead_id", leadId)
+          .eq("company_id", data.company_id)
           .order("created_at", { ascending: true }),
         supabase
           .from("companies")
@@ -296,11 +300,15 @@ export default function LeadDetailsPage() {
       setMessageHistory(messages);
 
       const selectedOutgoing = preferredReplyMessage(messages);
+      const defaultSubject = defaultApprovedReplySubject(companyResult.data?.name ?? "");
 
       if (selectedOutgoing) {
         setDraftMessageId(selectedOutgoing.id);
+        setReplySubject(normalizeApprovedReplySubject(selectedOutgoing.subject, companyResult.data?.name ?? ""));
         setReplyDraft(selectedOutgoing.content ?? "");
         setMessageStatus(selectedOutgoing.status ?? "draft");
+      } else {
+        setReplySubject(defaultSubject);
       }
 
       setLoading(false);
@@ -311,6 +319,7 @@ export default function LeadDetailsPage() {
 
   useEffect(() => {
     if (loading || !lead || saving || draftSaving || replyLoading || aiLoading || riskLoading || markingSent || resolvingDelivery) return;
+    const companyId = lead.company_id;
     let cancelled = false;
     let running = false;
     async function refresh() {
@@ -319,7 +328,7 @@ export default function LeadDetailsPage() {
       try {
         const [leadResult, messagesResult] = await Promise.all([
           supabase.from("leads").select("status, assigned_user_id, next_action, next_action_due_date, new_lead_dispatch_status, anonymized_at, ai_summary, ai_safe_to_send, ai_requires_human_review, ai_risk_level, ai_risk_reason").eq("id", leadId).single(),
-          supabase.from("messages").select(messageSelect).eq("lead_id", leadId).order("created_at", { ascending: true }),
+          supabase.from("messages").select(messageSelect).eq("lead_id", leadId).eq("company_id", companyId).order("created_at", { ascending: true }),
         ]);
         if (cancelled) return;
         if (leadResult.error || messagesResult.error || !leadResult.data) {
@@ -340,6 +349,7 @@ export default function LeadDetailsPage() {
           // Preserve unsaved text, but still reflect a send completed elsewhere.
           if (!replyDirty) {
             setDraftMessageId(selected.id);
+            setReplySubject(normalizeApprovedReplySubject(selected.subject, emailSignature?.companyName ?? ""));
             setReplyDraft(selected.content ?? "");
           }
           if (!replyDirty || selected.id === draftMessageId) setMessageStatus(selected.status);
@@ -356,7 +366,7 @@ export default function LeadDetailsPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, riskLoading, markingSent, resolvingDelivery]);
+  }, [loading, lead, leadId, draftMessageId, replyDirty, emailSignature, saving, draftSaving, replyLoading, aiLoading, riskLoading, markingSent, resolvingDelivery]);
 
   useEffect(() => {
     if (!draftMessageId) return;
@@ -565,6 +575,9 @@ export default function LeadDetailsPage() {
       }
 
       setReplyDirty(true);
+      if (!replySubject.trim()) {
+        setReplySubject(defaultApprovedReplySubject(emailSignature?.companyName ?? ""));
+      }
       setReplyDraft(
         data.reply ||
           "Az AI nem adott vissza választervezetet."
@@ -574,6 +587,7 @@ export default function LeadDetailsPage() {
         messageStatus === "sent" ||
         messageStatus === "sending"
       ) {
+        setReplySubject(defaultApprovedReplySubject(emailSignature?.companyName ?? ""));
         setDraftMessageId(null);
         setDeliveryAudit(null);
         setMessageStatus(null);
@@ -594,6 +608,11 @@ export default function LeadDetailsPage() {
   async function handleSaveDraft() {
     if (!lead || !replyDraft.trim()) return;
 
+    if (!replySubject.trim()) {
+      setDraftSaveError("A levél tárgya nem lehet üres.");
+      return;
+    }
+
     if (messageStatus === "sending") {
       setDraftSaveError(
         "Küldés közben a válasz már nem módosítható."
@@ -605,6 +624,7 @@ export default function LeadDetailsPage() {
     setDraftSaveSuccess(false);
     setDraftSaveError("");
     setMarkSentError("");
+    const normalizedSubject = normalizeApprovedReplySubject(replySubject, emailSignature?.companyName ?? "");
 
     try {
       if (
@@ -614,9 +634,11 @@ export default function LeadDetailsPage() {
         const { error } = await supabase
           .from("messages")
           .update({
+            subject: normalizedSubject,
             content: replyDraft,
           })
-          .eq("id", draftMessageId);
+          .eq("id", draftMessageId)
+          .eq("company_id", lead.company_id);
 
         if (error) {
           throw error;
@@ -627,6 +649,7 @@ export default function LeadDetailsPage() {
             message.id === draftMessageId
               ? {
                   ...message,
+                  subject: normalizedSubject,
                   content: replyDraft,
                 }
               : message
@@ -640,6 +663,7 @@ export default function LeadDetailsPage() {
             lead_id: lead.id,
             direction: "outgoing",
             sender: "company",
+            subject: normalizedSubject,
             content: replyDraft,
             channel: lead.source || "manual",
             status: "draft",
@@ -660,6 +684,7 @@ export default function LeadDetailsPage() {
         ]);
       }
 
+      setReplySubject(normalizedSubject);
       setReplyDirty(false);
       setDraftSaveSuccess(true);
 
@@ -1847,7 +1872,24 @@ export default function LeadDetailsPage() {
                   {replyDraft && (
                     <div className="mt-5">
                       <p className="mb-3 text-sm text-slate-600">Címzett: {lead.email || "Nincs e-mail-cím megadva"}{replyDirty ? " · Nem mentett módosítás" : ""}</p>
-                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                      <label htmlFor="lead-reply-subject" className="block text-sm font-medium text-slate-700">
+                        Tárgy
+                      </label>
+                      <input
+                        id="lead-reply-subject"
+                        value={replySubject}
+                        required
+                        maxLength={APPROVED_REPLY_SUBJECT_MAX_LENGTH}
+                        onChange={(event) => {
+                          setReplyDirty(true);
+                          setReplySubject(event.target.value);
+                          setDraftSaveSuccess(false);
+                        }}
+                        disabled={messageLocked}
+                        className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-violet-400 disabled:bg-slate-50 disabled:text-slate-600"
+                      />
+                      {!replySubject.trim() && <p className="mt-2 text-xs font-semibold text-red-700">A levél tárgya nem lehet üres.</p>}
+                      <div className="mb-2 mt-4 flex flex-wrap items-center justify-between gap-2">
                         <label htmlFor="lead-reply-draft" className="block text-sm font-medium text-slate-700">
                           Válasz
                         </label>
@@ -1887,6 +1929,10 @@ export default function LeadDetailsPage() {
                             <Link href="/settings#messages" className="mt-2 inline-block font-semibold underline">Üzenetek beállításainak megnyitása →</Link>
                           </div>
                             : emailSignature && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                              <div className="mb-4 border-b border-slate-200 pb-3">
+                                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Tárgy</span>
+                                <p className="mt-1 break-words font-semibold text-slate-900">{replySubject.trim() || "Nincs megadva"}</p>
+                              </div>
                               <div
                                 aria-label="A kimenő e-mail tartalmi előnézete"
                                 className="pointer-events-none min-w-0 break-words text-sm leading-6 text-slate-800 [&_img]:max-w-full"
@@ -1903,6 +1949,7 @@ export default function LeadDetailsPage() {
                             onClick={handleSaveDraft}
                             disabled={
                               draftSaving ||
+                              !replySubject.trim() ||
                               !replyDraft.trim()
                             }
                             className="mt-4 w-full rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -2060,6 +2107,11 @@ export default function LeadDetailsPage() {
                             </div>
                           </div>
 
+                          {message.direction === "outgoing" && (
+                            <p className="mt-4 text-sm font-semibold text-slate-800">
+                              Tárgy: {normalizeApprovedReplySubject(message.subject, emailSignature?.companyName ?? "")}
+                            </p>
+                          )}
                           <div className="mt-4 whitespace-pre-wrap text-sm leading-7 text-slate-700">
                             {message.content}
                           </div>

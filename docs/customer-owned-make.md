@@ -423,6 +423,14 @@ azonos Message-ID önmagában nem garantál duplikációmentességet.
 
 ## Bizonytalan jóváhagyott küldés
 
+A jóváhagyott válasz webhookja a levél HTML-tartalma mellett a LeadFlow-ban
+ellenőrzött `subject` mezőt is átadja. A Gmail küldőmodul Subject/Tárgy mezőjét
+közvetlenül a webhook `subject` értékére kell térképezni (`{{1.subject}}` a
+referencia-blueprintben). A `prepare-company-make-blueprints.mjs` ezt a
+hozzárendelést automatikusan beállítja az új ügyfélnek készített esemény-
+blueprintben. A régi pilot scenario Gmail modulját egyszer kézzel kell átállítani;
+fix tárgysor nem maradhat benne.
+
 A Make HTTP- vagy hálózati hibája után az üzenet sending állapotban marad;
 a szerver nem állítja vissza piszkozatra. A felület zárolja az újraküldést,
 és visszaigazolásra várást jelez. Későbbi állapothoz az adatlap frissíthető.

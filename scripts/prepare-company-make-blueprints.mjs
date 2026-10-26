@@ -7,6 +7,7 @@ const keyPattern = /^lfmk_[a-f0-9]{64}$/;
 const embeddedKeyPattern = /lfmk_[a-f0-9]{64}/g;
 const literalEmailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const internalEmailPlaceholder = "BEALLITANDO_BELSO_ERTESITESI_EMAIL";
+const approvedReplySubjectMapping = "{{1.subject}}";
 
 export function validateExternalPath(filePath, projectRoot = process.cwd()) {
   if (!filePath || !isAbsolute(filePath)) throw new Error("Minden fájlútvonalnak abszolútnak kell lennie.");
@@ -36,6 +37,33 @@ export function patchBlueprintSecrets(blueprint, token) {
   visit(blueprint);
   if (replaced === 0) throw new Error("A blueprint nem tartalmaz x-leadflow-secret fejlécet.");
   return { blueprint, replaced };
+}
+
+export function patchApprovedReplySubject(blueprint) {
+  let patched = 0;
+  function visit(value) {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (value.filter?.label === "approved_reply.send" && Array.isArray(value.flow)) {
+      const gmail = value.flow.find(module =>
+        typeof module?.module === "string" &&
+        module.module.startsWith("google-email:") &&
+        /send/i.test(module.module)
+      );
+      if (gmail) {
+        gmail.mapper = gmail.mapper && typeof gmail.mapper === "object" ? gmail.mapper : {};
+        gmail.mapper.subject = approvedReplySubjectMapping;
+        patched += 1;
+      }
+    }
+    Object.values(value).forEach(visit);
+  }
+  visit(blueprint);
+  if (patched === 0) throw new Error("Az egységes esemény-blueprint jóváhagyott válasz ágában nincs Gmail-küldő modul.");
+  return patched;
 }
 
 function deleteRestoreParameter(module, name) {
@@ -133,9 +161,10 @@ function prepareBlueprint(source, token, { kind, slug }) {
     source.name = `${slug} - LeadFlow Delivery Reconciliation`;
   }
   const patched = patchBlueprintSecrets(source, token);
+  const approvedReplySubjectsPatched = kind === "events" ? patchApprovedReplySubject(patched.blueprint) : 0;
   const cleared = clearBlueprintProviderBindings(patched.blueprint);
   validatePreparedBlueprint(patched.blueprint, token);
-  return { blueprint: patched.blueprint, replaced: patched.replaced, ...cleared };
+  return { blueprint: patched.blueprint, replaced: patched.replaced, approvedReplySubjectsPatched, ...cleared };
 }
 
 export async function prepareCompanyMakeBlueprints(options) {
@@ -175,6 +204,7 @@ export async function prepareCompanyMakeBlueprints(options) {
       results.push({
         output: input.output,
         replaced: prepared.replaced,
+        approvedReplySubjectsPatched: prepared.approvedReplySubjectsPatched,
         gmailConnectionsCleared: prepared.gmailConnectionsCleared,
         webhooksCleared: prepared.webhooksCleared,
         literalRecipientsCleared: prepared.literalRecipientsCleared,
@@ -197,7 +227,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     const results = await prepareCompanyMakeBlueprints({ slug, keyPath, unifiedInput, reconciliationInput, outputDirectory });
     for (const result of results) {
-      process.stdout.write(`${result.replaced} hitelesítési fejléc frissítve, ${result.gmailConnectionsCleared} Gmail-kapcsolat és ${result.webhooksCleared} webhook-hozzárendelés eltávolítva: ${result.output}\n`);
+      process.stdout.write(`${result.replaced} hitelesítési fejléc és ${result.approvedReplySubjectsPatched} jóváhagyott-válasz tárgyminta frissítve, ${result.gmailConnectionsCleared} Gmail-kapcsolat és ${result.webhooksCleared} webhook-hozzárendelés eltávolítva: ${result.output}\n`);
     }
     process.stdout.write("A két blueprint importálható a cég saját Make-fiókjába. Importálás után állítsd be az új webhookot, a cég Gmail-kapcsolatát és a belső értesítési címet, majd töröld a kulcsfájlt és az előkészített blueprinteket.\n");
   } catch (error) {

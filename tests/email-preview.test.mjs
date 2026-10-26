@@ -26,6 +26,8 @@ test("lead detail renders the same formatted content that sending uses", () => {
   assert.match(leadDetail, /buildApprovedReplyHtml\(replyDraft, emailSignature\)/);
   assert.match(leadDetail, /Elküldés előtti előnézet/);
   assert.match(leadDetail, /Válasz és céges aláírás/);
+  assert.match(leadDetail, /id="lead-reply-subject"/);
+  assert.match(leadDetail, /replySubject\.trim\(\) \|\| "Nincs megadva"/);
   assert.match(leadDetail, /Küldéskor az elmentett piszkozat kerül továbbításra/);
   assert.match(leadDetail, /email_signature_enabled,email_signature_show_logo,email_signoff/);
   assert.match(leadDetail, /href="\/settings#messages"/);

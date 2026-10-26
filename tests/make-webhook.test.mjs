@@ -8,7 +8,7 @@ import ts from "typescript";
 const compiled = new Map();
 const urlA = "https://hook.eu1.make.com/test-company-a";
 const urlB = "https://hook.eu2.make.com/test-company-b";
-function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft", messageContent = "Test", duplicateLeadSubmission = false } = {}) {
+function setup({ mode = "company", enabled = true, missing = false, broken = false, urls = true, sendFailure = null, initialMessageStatus = "draft", messageContent = "Test", messageSubject = null, duplicateLeadSubmission = false } = {}) {
   const calls = [];
   const claims = [];
   let messageStatus = initialMessageStatus;
@@ -40,7 +40,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
           if (table === "leads" && operation === "insert" && duplicateLeadSubmission) return { data: null, error: { code: "23505" } };
           if (table === "leads") return { data: { id: "lead-a", company_id: "a", email: "test@example.invalid", ...mutation }, error: null };
           if (mutation) { claims.push(mutation); messageStatus = mutation.status; }
-          return { data: { id: "6ba7b810-9dad-4f96-80b1-3c995b1ca567", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", content: messageContent }, error: null };
+          return { data: { id: "6ba7b810-9dad-4f96-80b1-3c995b1ca567", company_id: "a", lead_id: "lead-a", status: messageStatus, direction: "outgoing", subject: messageSubject, content: messageContent }, error: null };
         },
         async maybeSingle() { return this.single(); },
       };
@@ -67,6 +67,7 @@ function setup({ mode = "company", enabled = true, missing = false, broken = fal
             : { status: "uncertain", httpStatus: response?.status ?? null, errorCode: response ? "http" : "network" },
         };
         if (name === "@/lib/email-html") return load("lib/email-html.ts");
+        if (name === "@/lib/email-subject") return load("lib/email-subject.ts");
         if (name === "@/lib/delivery-reconciliation") return load("lib/delivery-reconciliation.ts");
         if (name === "@supabase/supabase-js") return { createClient: () => client };
         if (name === "next/server") return { NextResponse: Response };
@@ -219,6 +220,7 @@ test("approved reply is safely formatted as HTML with preserved blank lines", as
   }));
   assert.equal(response.status, 200);
   const payload = JSON.parse(state.calls[0].options.body);
+  assert.equal(payload.subject, "Válasz az ajánlatkérésére – Teszt Kft.");
   assert.equal(payload.delivery_header_name, "X-LeadFlow-Message-ID");
   assert.equal(payload.delivery_header_value, "6ba7b810-9dad-4f96-80b1-3c995b1ca567");
   assert.equal(payload.delivery_search_query, "in:sent header:X-LeadFlow-Message-ID:6ba7b810-9dad-4f96-80b1-3c995b1ca567");
@@ -229,4 +231,13 @@ test("approved reply is safely formatted as HTML with preserved blank lines", as
   assert.match(payload.content, /mailto:info@example\.invalid/);
   assert.match(payload.content, /tel:\+36301234567/);
   assert.match(payload.content, /https:\/\/example\.invalid\/logo\.png/);
+});
+
+test("approved reply forwards a normalized custom subject without header injection", async () => {
+  const state = setup({ messageSubject: "  Egyedi pilotválasz\r\nBcc: hidden@example.invalid  " });
+  const response = await state.load("app/api/send-approved-reply/route.ts").POST(new Request("https://example.invalid", {
+    method: "POST", headers: { Authorization: "Bearer test" }, body: JSON.stringify({ message_id: "message-a" }),
+  }));
+  assert.equal(response.status, 200);
+  assert.equal(JSON.parse(state.calls[0].options.body).subject, "Egyedi pilotválasz Bcc: hidden@example.invalid");
 });

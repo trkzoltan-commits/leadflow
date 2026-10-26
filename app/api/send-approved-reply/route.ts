@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getMakeWebhook } from "@/lib/make-webhook";
 import { beginAutomationDispatch, finishAutomationDispatch, webhookAttemptResult } from "@/lib/automation-dispatch";
 import { buildApprovedReplyHtml } from "@/lib/email-html";
+import { normalizeApprovedReplySubject } from "@/lib/email-subject";
 import { deliveryReference } from "@/lib/delivery-reconciliation";
 
 const supabaseAdmin = createClient(
@@ -99,6 +100,7 @@ export async function POST(request: Request) {
           lead_id,
           direction,
           sender,
+          subject,
           content,
           channel,
           status
@@ -197,6 +199,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const subject = normalizeApprovedReplySubject(message.subject, company.name);
+
     const webhookUrl = await getMakeWebhook(companyId, "approved_reply");
 
     if (!webhookUrl) {
@@ -294,6 +298,7 @@ export async function POST(request: Request) {
         company_id: lead.company_id,
         recipient_email: lead.email,
         recipient_name: lead.name,
+        subject,
         delivery_header_name: reference.headerName,
         delivery_header_value: reference.headerValue,
         delivery_search_query: reference.gmailSearchQuery,
