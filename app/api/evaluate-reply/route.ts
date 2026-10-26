@@ -1,4 +1,5 @@
 import { authenticateMake } from "@/lib/make-auth";
+import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
@@ -8,12 +9,130 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const auth = await authenticateMake(request);
-    if (!auth.ok) return auth.response;
+    const body = await request.json().catch(() => null);
 
-    const body = await request.json();
+    if (!body || typeof body !== "object") {
+      return NextResponse.json(
+        { error: "Hiányzó vagy érvénytelen kérés." },
+        { status: 400 }
+      );
+    }
 
-    const {
+    type Evaluation = {
+      safe_to_send: boolean;
+      requires_human_review: boolean;
+      risk_reason: string;
+      risk_level: "low" | "medium" | "high";
+    };
+    type EvaluatedLead = {
+      name: string | null;
+      email: string | null;
+      phone: string | null;
+      service: string | null;
+      description: string | null;
+      location: string | null;
+      priority: string | null;
+      source: string | null;
+    };
+
+    let userLead: EvaluatedLead | null = null;
+    let saveUserEvaluation: ((evaluation: Evaluation) => Promise<boolean>) | null = null;
+
+    if (request.headers.has("x-leadflow-secret")) {
+      const auth = await authenticateMake(request);
+      if (!auth.ok) return auth.response;
+    } else {
+      const authorization = request.headers.get("authorization");
+      const accessToken = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+
+      if (!accessToken) {
+        return NextResponse.json(
+          { error: "Nincs jogosultság." },
+          { status: 401 }
+        );
+      }
+
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: { headers: { Authorization: `Bearer ${accessToken}` } },
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        }
+      );
+
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser(accessToken);
+
+      if (userError || !user) {
+        return NextResponse.json(
+          { error: "Nincs jogosultság." },
+          { status: 401 }
+        );
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("company_id,is_active")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError || !profile?.company_id || profile.is_active === false) {
+        return NextResponse.json(
+          { error: "A felhasználó vállalkozása nem azonosítható." },
+          { status: 403 }
+        );
+      }
+
+      if (
+        typeof body.lead_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.lead_id)
+      ) {
+        return NextResponse.json(
+          { error: "Hiányzó vagy érvénytelen lead azonosító." },
+          { status: 400 }
+        );
+      }
+
+      const { data: lead, error: leadError } = await supabase
+        .from("leads")
+        .select("id,name,email,phone,service,description,location,priority,source")
+        .eq("id", body.lead_id)
+        .eq("company_id", profile.company_id)
+        .single();
+
+      if (leadError || !lead) {
+        return NextResponse.json(
+          { error: "A lead nem található." },
+          { status: 404 }
+        );
+      }
+
+      userLead = lead;
+      saveUserEvaluation = async (evaluation) => {
+        const { error: saveError } = await supabase
+          .from("leads")
+          .update({
+            ai_safe_to_send: evaluation.safe_to_send,
+            ai_requires_human_review: evaluation.requires_human_review,
+            ai_risk_reason: evaluation.risk_reason,
+            ai_risk_level: evaluation.risk_level,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", body.lead_id)
+          .eq("company_id", profile.company_id);
+
+        return !saveError;
+      };
+    }
+
+    let {
       name,
       email,
       phone,
@@ -22,14 +141,27 @@ export async function POST(request: Request) {
       location,
       priority,
       source,
-      reply,
     } = body;
+    const reply = body.reply;
 
     if (!reply?.trim()) {
       return NextResponse.json(
         { error: "Hiányzik az értékelendő választervezet." },
         { status: 400 }
       );
+    }
+
+    if (userLead) {
+      ({
+        name,
+        email,
+        phone,
+        service,
+        description,
+        location,
+        priority,
+        source,
+      } = userLead);
     }
 
     const response = await openai.responses.create({
@@ -163,7 +295,18 @@ Ha bizonytalan vagy, inkább állítsd a REQUIRES_HUMAN_REVIEW értékét true-r
       throw new Error("Az AI nem adott vissza értékelést.");
     }
 
-    const evaluation = JSON.parse(response.output_text);
+    const evaluation = JSON.parse(response.output_text) as Evaluation;
+
+    if (saveUserEvaluation) {
+      const saved = await saveUserEvaluation(evaluation);
+
+      if (!saved) {
+        return NextResponse.json(
+          { error: "Az értékelés elkészült, de nem sikerült elmenteni." },
+          { status: 503 }
+        );
+      }
+    }
 
     return NextResponse.json({
       success: true,

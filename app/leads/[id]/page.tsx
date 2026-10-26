@@ -78,6 +78,9 @@ export default function LeadDetailsPage() {
   const [replyDraft, setReplyDraft] = useState("");
   const [replyError, setReplyError] = useState("");
   const [replyDirty, setReplyDirty] = useState(false);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskError, setRiskError] = useState("");
+  const [riskSuccess, setRiskSuccess] = useState("");
   const [syncError, setSyncError] = useState(false);
   const [dispatchRetrying, setDispatchRetrying] = useState(false);
   const [dispatchRetryError, setDispatchRetryError] = useState("");
@@ -269,7 +272,7 @@ export default function LeadDetailsPage() {
   }, [leadId, router]);
 
   useEffect(() => {
-    if (loading || !lead || saving || draftSaving || replyLoading || aiLoading || markingSent || resolvingDelivery) return;
+    if (loading || !lead || saving || draftSaving || replyLoading || aiLoading || riskLoading || markingSent || resolvingDelivery) return;
     let cancelled = false;
     let running = false;
     async function refresh() {
@@ -315,7 +318,7 @@ export default function LeadDetailsPage() {
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, markingSent, resolvingDelivery]);
+  }, [loading, lead, leadId, draftMessageId, replyDirty, saving, draftSaving, replyLoading, aiLoading, riskLoading, markingSent, resolvingDelivery]);
 
   useEffect(() => {
     if (!draftMessageId) return;
@@ -622,6 +625,42 @@ export default function LeadDetailsPage() {
       setReplyDirty(false);
       setDraftSaveSuccess(true);
 
+      if (
+        lead.ai_safe_to_send !== null ||
+        lead.ai_requires_human_review !== null ||
+        lead.ai_risk_level ||
+        lead.ai_risk_reason
+      ) {
+        const { error: resetRiskError } = await supabase
+          .from("leads")
+          .update({
+            ai_safe_to_send: null,
+            ai_requires_human_review: null,
+            ai_risk_level: null,
+            ai_risk_reason: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", lead.id)
+          .eq("company_id", lead.company_id);
+
+        if (resetRiskError) {
+          throw new Error(
+            "A piszkozat elmentve, de a korábbi kockázatértékelést nem sikerült törölni. Frissítsd az oldalt, majd indíts új értékelést."
+          );
+        }
+
+        setLead((current) => current ? {
+          ...current,
+          ai_safe_to_send: null,
+          ai_requires_human_review: null,
+          ai_risk_level: null,
+          ai_risk_reason: null,
+        } : current);
+      }
+
+      setRiskError("");
+      setRiskSuccess("");
+
       setTimeout(() => {
         setDraftSaveSuccess(false);
       }, 2500);
@@ -629,10 +668,67 @@ export default function LeadDetailsPage() {
       console.error("Piszkozat mentési hiba:", error);
 
       setDraftSaveError(
-        "Nem sikerült elmenteni a választervezetet."
+        error instanceof Error
+          ? error.message
+          : "Nem sikerült elmenteni a választervezetet."
       );
     } finally {
       setDraftSaving(false);
+    }
+  }
+
+  async function handleEvaluateReply() {
+    if (!lead || !draftMessageId || replyDirty || !replyDraft.trim() || riskLoading) return;
+
+    setRiskLoading(true);
+    setRiskError("");
+    setRiskSuccess("");
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        throw new Error("A felhasználói munkamenet nem érhető el.");
+      }
+
+      const response = await fetch("/api/evaluate-reply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          lead_id: lead.id,
+          reply: replyDraft,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "A válasz biztonsági értékelése sikertelen."
+        );
+      }
+
+      setLead((current) => current ? {
+        ...current,
+        ai_safe_to_send: data.safe_to_send,
+        ai_requires_human_review: data.requires_human_review,
+        ai_risk_reason: data.risk_reason,
+        ai_risk_level: data.risk_level,
+      } : current);
+      setRiskSuccess("A kockázatértékelés elkészült.");
+    } catch (error) {
+      setRiskError(
+        error instanceof Error
+          ? error.message
+          : "A válasz biztonsági értékelése sikertelen."
+      );
+    } finally {
+      setRiskLoading(false);
     }
   }
 
@@ -1636,6 +1732,43 @@ export default function LeadDetailsPage() {
                           </div>
                         </div>
                       </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleEvaluateReply}
+                      disabled={riskLoading || !draftMessageId || replyDirty || !replyDraft.trim() || messageLocked}
+                      className="mt-5 w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {riskLoading
+                        ? "Kockázatértékelés készítése..."
+                        : hasRiskEvaluation
+                          ? "Kockázatértékelés frissítése"
+                          : "Kockázatértékelés indítása"}
+                    </button>
+
+                    {!draftMessageId && (
+                      <p className="mt-3 text-xs leading-5 text-slate-500">
+                        Előbb készíts és ments el egy választervezetet.
+                      </p>
+                    )}
+
+                    {replyDirty && draftMessageId && (
+                      <p className="mt-3 text-xs leading-5 text-amber-700">
+                        A módosított piszkozatot mentsd el az értékelés előtt.
+                      </p>
+                    )}
+
+                    {riskError && (
+                      <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                        {riskError}
+                      </p>
+                    )}
+
+                    {riskSuccess && (
+                      <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                        {riskSuccess}
+                      </p>
                     )}
                   </div>
                 </div>
