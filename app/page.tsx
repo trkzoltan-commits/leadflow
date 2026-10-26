@@ -67,9 +67,9 @@ export default function Home() {
   const automationValue = automationUnavailable
     ? "Nem ellenőrizhető"
     : automationHealth?.status === "attention_required" ? "Figyelmet igényel"
-    : automationHealthLoading ? "Ellenőrzés…"
+      : automationHealthLoading ? "Ellenőrzés…"
       : automationHealth?.status === "processing" ? "Folyamatban"
-        : automationHealth?.status === "healthy" ? "Rendben" : "Még nincs futás";
+        : automationHealth?.status === "healthy" ? "Nincs ismert hiba" : "Még nincs futás";
   const automationDetail = automationUnavailable
     ? "Az állapot most nem ellenőrizhető."
     : automationHealthLoading ? "A működési állapot betöltése folyamatban van."
@@ -80,7 +80,7 @@ export default function Home() {
           : automationHealth?.status === "processing"
             ? `${automationHealth.totals.processing} feldolgozás vagy levélküldés visszaigazolásra vár.`
             : automationHealth?.status === "healthy"
-              ? "Nincs észlelt elakadás."
+              ? "A LeadFlow naplóiban nincs észlelt elakadás. A Make-fiók elérhetősége és kreditje innen nem ellenőrizhető."
               : "Még nincs naplózott automatizálási futás.";
   const focusCards: DashboardFocusCard[] = [
     {

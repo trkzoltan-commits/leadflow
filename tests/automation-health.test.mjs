@@ -343,7 +343,9 @@ test("partner UI uses the aggregate endpoint without adding an automatic retry a
   assert.match(dashboard, /Figyelmet igényel/);
   assert.match(dashboard, /Nem ellenőrizhető/);
   assert.match(dashboard, /\/settings#automation/);
-  assert.match(dashboard, /Nincs észlelt elakadás/);
+  assert.match(dashboard, /Nincs ismert hiba/);
+  assert.match(dashboard, /A Make-fiók elérhetősége és kreditje innen nem ellenőrizhető/);
+  assert.match(settings, /A Make-fiók elérhetősége és kreditje innen nem ellenőrizhető/);
   assert.match(settings, /id="automation"/);
   assert.match(settings, /Legutóbbi működés/);
   assert.match(hook, /runningPromise/);

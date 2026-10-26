@@ -151,7 +151,7 @@ export default function SettingsPage() {
     : automationHealth?.status === "attention_required" ? "Figyelmet igényel"
     : automationHealthLoading ? "Ellenőrzés…"
       : automationHealth?.status === "processing" ? "Folyamatban"
-        : automationHealth?.status === "healthy" ? "Rendben" : "Még nincs futás";
+        : automationHealth?.status === "healthy" ? "Nincs ismert hiba" : "Még nincs futás";
   const automationRuntimeText = makeStatusError
     ? "Az állapot most nem ellenőrizhető."
     : automationHealthLoading ? "A tényleges működési állapot betöltése folyamatban van."
@@ -162,7 +162,7 @@ export default function SettingsPage() {
           : automationHealth?.status === "processing"
             ? `${automationHealth.totals.processing} feldolgozás vagy levélküldés visszaigazolásra vár.`
             : automationHealth?.status === "healthy"
-              ? `Nincs észlelt elakadás. Az elmúlt 24 órában ${automationHealth.totals.completed24h} sikeres folyamat fejeződött be.`
+              ? `A LeadFlow naplóiban nincs észlelt elakadás. Az elmúlt 24 órában ${automationHealth.totals.completed24h} sikeres folyamat fejeződött be. A Make-fiók elérhetősége és kreditje innen nem ellenőrizhető.`
               : "Még nincs naplózott automatizálási futás.";
 
   const refreshRetentionStatus = useCallback(async (accessToken: string) => {
