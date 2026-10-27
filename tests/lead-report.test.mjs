@@ -9,7 +9,7 @@ const source = ts.transpileModule(readFileSync(new URL("../lib/lead-report.ts", 
 }).outputText;
 const context = { exports: {}, Intl, Date, Number, Set, URLSearchParams };
 vm.runInNewContext(source, context);
-const { annualReport, annualReportCsv, reportYears, filterReportLeads, parseReportSelection } = context.exports;
+const { annualReport, annualReportCsv, reportYears, filterReportLeads, monthlyPerformance, parseReportSelection } = context.exports;
 
 test("report drill-down matches monthly and annual counts at Budapest month boundaries", () => {
   const leads = [
@@ -56,4 +56,35 @@ test("annual report CSV is Excel-compatible and contains only aggregate monthly 
   assert.match(csv, /Január;2;1;0;1;0/);
   assert.match(csv, /Éves összesen;2;1;0;1;0/);
   assert.doesNotMatch(csv, /@|ügyfél|customer/i);
+});
+
+test("monthly performance compares Budapest calendar months and outcome conversion", () => {
+  const performance = monthlyPerformance([
+    { created_at: "2025-12-15T12:00:00Z", status: "processed", outcome: "won" },
+    { created_at: "2025-12-20T12:00:00Z", status: "processed", outcome: "lost" },
+    { created_at: "2026-01-01T00:30:00Z", status: "processed", outcome: "won" },
+    { created_at: "2026-01-10T12:00:00Z", status: "processed", outcome: "won" },
+    { created_at: "2026-01-11T12:00:00Z", status: "processed", outcome: "lost" },
+    { created_at: "2026-01-12T12:00:00Z", status: "waiting", outcome: null },
+  ], new Date("2026-01-20T12:00:00Z"));
+
+  assert.deepEqual({ ...performance.currentPeriod }, { year: 2026, month: 1 });
+  assert.deepEqual({ ...performance.previousPeriod }, { year: 2025, month: 12 });
+  assert.deepEqual({ ...performance.current }, { total: 4, won: 2, lost: 1, active: 1, unknown: 0 });
+  assert.deepEqual({ ...performance.previous }, { total: 2, won: 1, lost: 1, active: 0, unknown: 0 });
+  assert.equal(performance.conversionRate, 66.7);
+  assert.equal(performance.previousConversionRate, 50);
+  assert.equal(performance.totalDifference, 2);
+  assert.equal(performance.conversionPointDifference, 16.7);
+});
+
+test("monthly performance avoids misleading conversion when no outcomes are recorded", () => {
+  const performance = monthlyPerformance([
+    { created_at: "2026-03-01T12:00:00Z", status: "waiting", outcome: null },
+    { created_at: "2026-02-15T12:00:00Z", status: "processed", outcome: null },
+  ], new Date("2026-03-20T12:00:00Z"));
+
+  assert.equal(performance.conversionRate, null);
+  assert.equal(performance.previousConversionRate, null);
+  assert.equal(performance.conversionPointDifference, null);
 });

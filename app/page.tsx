@@ -9,6 +9,7 @@ import { dailyCounts, dashboardRecentLeads, displayDate, filterLeads, isDelayedS
 import { budapestDateOffset, displayNextActionDueDate, isValidDateOnly, nextActionDueState, urgentNextActionLeads } from "@/lib/lead-next-action";
 import { useLeadAssignees } from "@/lib/use-lead-assignees";
 import { useAutomationHealth } from "@/lib/use-automation-health";
+import { monthlyPerformance } from "@/lib/lead-report";
 
 type DashboardTaskScope = "mine" | "unassigned" | "team";
 type DashboardFocusCard = {
@@ -19,6 +20,25 @@ type DashboardFocusCard = {
   tone: string;
   compactValue?: boolean;
 };
+
+const dashboardMonthNames = [
+  "január", "február", "március", "április", "május", "június",
+  "július", "augusztus", "szeptember", "október", "november", "december",
+];
+
+function countComparison(current: number, previous: number) {
+  const difference = current - previous;
+  if (difference === 0) return "Nincs változás az előző hónaphoz képest.";
+  return `${difference > 0 ? "+" : ""}${difference} az előző hónaphoz képest.`;
+}
+
+function conversionComparison(current: number | null, previous: number | null, difference: number | null) {
+  if (current === null) return "Még nincs rögzített lezárási eredmény.";
+  if (previous === null || difference === null) return "Az előző hónapban nem volt összehasonlítható eredmény.";
+  if (difference === 0) return "Nem változott az előző hónaphoz képest.";
+  const formatted = Math.abs(difference).toLocaleString("hu-HU", { maximumFractionDigits: 1 });
+  return `${difference > 0 ? "+" : "−"}${formatted} százalékpont az előző hónaphoz képest.`;
+}
 
 export default function Home() {
   const { leads, messages, replies, loading, error, updatedAt, refresh } = useLeadOverview();
@@ -39,6 +59,9 @@ export default function Home() {
   const makeAttention = filterLeads(leads, replies, "make");
   const missingDraftCount = makeAttention.filter(lead => missingAiDraftWarning(lead, replies.has(lead.id)) !== null).length;
   const now = new Date();
+  const performance = monthlyPerformance(leads, now);
+  const currentPeriodQuery = `year=${performance.currentPeriod.year}&month=${performance.currentPeriod.month}`;
+  const currentMonthLabel = `${performance.currentPeriod.year}. ${dashboardMonthNames[performance.currentPeriod.month - 1]}`;
   const allUrgentNextActions = urgentNextActionLeads(leads, now);
   const myUrgentNextActions = currentUserId
     ? allUrgentNextActions.filter(lead => lead.assigned_user_id === currentUserId)
@@ -113,6 +136,40 @@ export default function Home() {
         ? "dashboard-focus-orange"
         : automationHealth?.status === "healthy" ? "dashboard-focus-green" : "dashboard-focus-accent",
       compactValue: true,
+    },
+  ];
+  const monthlyResultCards = [
+    {
+      label: "Havi érdeklődők",
+      value: performance.current.total,
+      detail: countComparison(performance.current.total, performance.previous.total),
+      href: `/leads?${currentPeriodQuery}&segment=total`,
+      borderColor: "var(--leadflow-accent)",
+      valueClass: "accent-text",
+    },
+    {
+      label: "Megvalósult",
+      value: performance.current.won,
+      detail: countComparison(performance.current.won, performance.previous.won),
+      href: `/leads?${currentPeriodQuery}&segment=won`,
+      borderColor: "#149a02",
+      valueClass: "text-green-700",
+    },
+    {
+      label: "Nem valósult meg",
+      value: performance.current.lost,
+      detail: countComparison(performance.current.lost, performance.previous.lost),
+      href: `/leads?${currentPeriodQuery}&segment=lost`,
+      borderColor: "#dc2626",
+      valueClass: "text-red-700",
+    },
+    {
+      label: "Megvalósulási arány",
+      value: performance.conversionRate === null ? "—" : `${performance.conversionRate.toLocaleString("hu-HU", { maximumFractionDigits: 1 })}%`,
+      detail: conversionComparison(performance.conversionRate, performance.previousConversionRate, performance.conversionPointDifference),
+      href: "/reports",
+      borderColor: "#e99800",
+      valueClass: "text-amber-700",
     },
   ];
 
@@ -218,6 +275,28 @@ export default function Home() {
                 <span className="pb-1 text-xs font-bold accent-text">Megnyitás →</span>
               </div>
               <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500 sm:text-xs">{card.detail}</p>
+            </Link>)}
+          </div>
+        </section>
+        <section aria-labelledby="monthly-results-heading" className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider accent-text">{currentMonthLabel}</p>
+              <h2 id="monthly-results-heading" className="mt-1 text-2xl font-bold">Havi eredmények</h2>
+              <p className="mt-2 text-sm text-slate-500">A megvalósulási arány a rögzített eredményű lezárt ügyek alapján készül.</p>
+            </div>
+            <Link href="/reports" className="text-sm font-semibold accent-text">Részletes riportok →</Link>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {monthlyResultCards.map(card => <Link key={card.label} href={card.href}
+              className="group rounded-xl border border-t-4 border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
+              style={{ borderTopColor: card.borderColor }}>
+              <p className="text-xs font-bold leading-5 text-slate-600 sm:text-sm">{card.label}</p>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+                <p className={`text-2xl font-bold tracking-tight sm:text-3xl ${card.valueClass}`}>{card.value}</p>
+                <span className="pb-1 text-xs font-bold accent-text">Megnyitás →</span>
+              </div>
+              <p className="mt-2 text-[11px] font-medium leading-4 text-slate-500 sm:text-xs">{card.detail}</p>
             </Link>)}
           </div>
         </section>

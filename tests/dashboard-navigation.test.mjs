@@ -61,6 +61,12 @@ test("dashboard keeps the daily workflow actions", () => {
   assert.match(dashboard, /expectedNextAction: lead\.next_action/);
   assert.match(dashboard, /az érdeklődő és a riportadatai megmaradnak/i);
   assert.match(dashboard, /recentActivities\(leads, messages\)/);
+  assert.match(dashboard, /monthlyPerformance\(leads, now\)/);
+  assert.match(dashboard, /Havi eredmények/);
+  assert.match(dashboard, /Megvalósulási arány/);
+  assert.match(dashboard, /a rögzített eredményű lezárt ügyek alapján/i);
+  assert.match(dashboard, /segment=won/);
+  assert.match(dashboard, /segment=lost/);
   assert.doesNotMatch(dashboard, /title: "Kimenő üzenet létrehozva"/);
 });
 

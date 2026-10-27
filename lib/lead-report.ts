@@ -3,6 +3,17 @@ import type { OverviewLead } from "./lead-overview";
 export type ReportCounts = { total: number; won: number; lost: number; active: number; unknown: number };
 export type ReportSegment = keyof ReportCounts;
 export type ReportSelection = { year: number; month: number | null; segment: ReportSegment };
+export type ReportPeriod = { year: number; month: number };
+export type MonthlyPerformance = {
+  currentPeriod: ReportPeriod;
+  previousPeriod: ReportPeriod;
+  current: ReportCounts;
+  previous: ReportCounts;
+  conversionRate: number | null;
+  previousConversionRate: number | null;
+  totalDifference: number;
+  conversionPointDifference: number | null;
+};
 
 const reportMonthNames = [
   "Január", "Február", "Március", "Április", "Május", "Június",
@@ -61,6 +72,48 @@ function periodInBudapest(value: string) {
 
 function emptyCounts(): ReportCounts {
   return { total: 0, won: 0, lost: 0, active: 0, unknown: 0 };
+}
+
+function monthlyCounts(leads: OverviewLead[], period: ReportPeriod) {
+  const counts = emptyCounts();
+  for (const lead of leads) {
+    const leadPeriod = periodInBudapest(lead.created_at);
+    if (!leadPeriod || leadPeriod.year !== period.year || leadPeriod.month !== period.month) continue;
+    counts.total++;
+    if (lead.status !== "processed") counts.active++;
+    else if (lead.outcome === "won") counts.won++;
+    else if (lead.outcome === "lost") counts.lost++;
+    else counts.unknown++;
+  }
+  return counts;
+}
+
+function conversionRate(counts: ReportCounts) {
+  const decided = counts.won + counts.lost;
+  return decided === 0 ? null : Math.round((counts.won / decided) * 1000) / 10;
+}
+
+export function monthlyPerformance(leads: OverviewLead[], currentDate = new Date()): MonthlyPerformance {
+  const currentPeriod = periodInBudapest(currentDate.toISOString())!;
+  const previousPeriod = currentPeriod.month === 1
+    ? { year: currentPeriod.year - 1, month: 12 }
+    : { year: currentPeriod.year, month: currentPeriod.month - 1 };
+  const current = monthlyCounts(leads, currentPeriod);
+  const previous = monthlyCounts(leads, previousPeriod);
+  const currentRate = conversionRate(current);
+  const previousRate = conversionRate(previous);
+  return {
+    currentPeriod,
+    previousPeriod,
+    current,
+    previous,
+    conversionRate: currentRate,
+    previousConversionRate: previousRate,
+    totalDifference: current.total - previous.total,
+    conversionPointDifference: currentRate === null || previousRate === null
+      ? null
+      : Math.round((currentRate - previousRate) * 10) / 10,
+  };
 }
 
 export function reportYears(leads: OverviewLead[], currentDate = new Date()) {
